@@ -45,8 +45,8 @@ export function createDeepseekWhaleInitialState({ sessionId = 'deepseek-whale' }
   }
 }
 
-/** Convert a completed Galgame input into a deterministic PPL domain event. */
-export function classifyDeepseekWhaleEvent({ text = '', choice = null, eventId, source = 'galgame' } = {}) {
+/** Convert a completed companion message into a deterministic PPL domain event. */
+export function classifyDeepseekWhaleEvent({ text = '', choice = null, eventId, source = 'companion' } = {}) {
   const input = String(text || '').trim()
   let type = 'MESSAGE'
   if (CONFESSION_TEXT.test(input)) type = 'CONFESSION'
