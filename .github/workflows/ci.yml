@@ -30,6 +30,9 @@ jobs:
         run: |
           npm install --prefix .ppl-toolchain/components/foundation/core --no-audit --no-fund
           npm run build --prefix .ppl-toolchain/components/foundation/core
+      - name: Diagnose DeepSeek Whale PPL source
+        run: |
+          node --input-type=module -e "import { compileFile } from './.ppl-toolchain/components/foundation/core/dist/src/fs-project.js'; const r=compileFile('personas/deepseek-whale.ppl',{moduleRoot:'.ppl-toolchain/components/foundation/core/modules'}); console.log(JSON.stringify(r.diagnostics,null,2));"
       - name: Compile and test DeepSeek Whale persona
         run: |
           node .ppl-toolchain/components/foundation/core/dist/src/cli.js check personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules
