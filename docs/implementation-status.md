@@ -97,3 +97,18 @@
 - Conversation history now groups messages by local calendar date and displays an explicit empty state.
 - Memory and conversation-search panels show actionable empty-result guidance.
 - These are UI-only changes except the existing profile-set API; relationship scoring and memory ranking semantics remain unchanged.
+
+
+## P2 consolidated implementation record (2026-11-11)
+
+### Merged evidence
+- PR #11 merged conversation search and relationship-history timeline. Run #399 passed Node 22.19 / 24.
+- PR #12 merged explainable relationship deltas and memory search/filters. Run #410 passed Node 22.19 / 24.
+- PR #13 merged profile settings grouping, Chinese help/limits, restore-default action, date-grouped history and empty states. Run #418 passed Node 22.19 / 24.
+- Merge commits: PR #11 `70dbebdba0d6d4ed50d864eb43a7e159de63c69f`; PR #12 `c1b358ea42de4edff2205d071cf9e1b28e92fefd`; PR #13 `9ec0c1a2e28dc8a09dbde5ac2e61d4df2058c144`.
+
+### P2 interaction follow-up
+- Add explicit loading states and disabled actions for history pagination, conversation search, relationship history and memory filters.
+- Prevent duplicate concurrent fetches for those panels.
+- This PR is UI feedback only; it does not change stored data or relationship scoring.
+- Real DSH Web/Desktop visual acceptance remains outstanding.
