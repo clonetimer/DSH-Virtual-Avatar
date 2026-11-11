@@ -70,6 +70,13 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(chat.body.reply, '主人也辛苦啦，我一直在这里哦。')
     assert.equal(chat.body.view.character.relationship.trust, 0.51)
     assert.equal(chat.body.view.character.chatLines.length, 2)
+    const historyPage = await call(route.handler, { action: 'history', args: { limit: 1 } })
+    assert.equal(historyPage.status, 200)
+    assert.equal(historyPage.body.total, 2)
+    assert.equal(historyPage.body.lines.length, 1)
+    assert.equal(historyPage.body.lines[0].who, 'heroine')
+    assert.equal(historyPage.body.nextBefore, 1)
+
     const history = await call(route.handler, { action: 'history', args: { limit: 1 } })
     assert.equal(history.status, 200)
     assert.equal(history.body.total, 2)
