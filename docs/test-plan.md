@@ -77,3 +77,13 @@ Galgame 章节、剧情分支、剧情结局、游戏式回复选项、小剧场
 
 ### Evidence record
 For each platform capture: DSH version/build, OS, install route, package filename + SHA-256, bundle patch result, plugin load log, model test result (credential-free), chat screenshot, reload persistence, backup restore result, disable/uninstall data-retention result, tester/date, blockers. Mark PASS only with evidence; use BLOCKED when the target runtime/build is unavailable.
+
+
+## DSH 0.2.2-rc.1 compatibility target
+
+- Bundle declares `engines.dsh: >=0.2.2-rc.1 <0.2.3-0`; installation/profile startup should reject versions outside this range.
+- Runtime requirement raised to Node.js >=24.9.0, matching the 0.2.2 RC host baseline.
+- CI matrix is Node 24.9.0 and current Node 24, replacing the unsupported Node 22.19 lane.
+- Install using the supported Bundle/Profile workflow: `dsh plugin --profile web add <local-path-or-tarball>`; restart `dsh web`; inspect `dsh --profile web --dump-config`.
+- Bundle patch references the package name `dsh-virtual-avatar`; package must include `cordis.patch.yml` and both host/client entry points.
+- Desktop compatibility is not inferred from Web. Repeat the same install and client injection test in the target Desktop 0.2.2-rc.1 distribution.
