@@ -142,22 +142,27 @@ async function generateChoices(llm, model, reply, userText, signal) {
   }
 }
 
-async function streamReply(llm, model, system, history, userText, signal) {
+async function streamReply(llm, model, system, contextMessages, userText, signal) {
   if (!llm || typeof llm.stream !== 'function') throw new Error('DSH LLM stream service is unavailable')
   const messages = [{
     role: 'user',
-    content: [{ type: 'text', text: '（场景：深海女仆工坊的会客厅，暖黄的灯光。当前角色正在和主人聊天。只扮演 DeepSeek 鲸鱼娘。）' }],
+    content: [{ type: 'text', text: '（场景：深海女仆工坊的会客厅，暖黄的灯光。只扮演 DeepSeek 鲸鱼娘；这是持续陪伴对话，不存在必须推进的剧情任务。）' }],
     source: { kind: 'user' },
   }]
-  for (const row of [...history, { role: 'user', text: userText }].slice(-MAX_HISTORY)) {
+  for (const row of contextMessages || []) {
     messages.push({
       role: row.role === 'assistant' ? 'assistant' : 'user',
-      content: [{ type: 'text', text: String(row.text || '') }],
+      content: [{ type: 'text', text: String(row.content || '') }],
       source: row.role === 'assistant'
         ? { kind: 'model', provider: model.provider, model: model.model }
         : { kind: 'user' },
     })
   }
+  messages.push({
+    role: 'user',
+    content: [{ type: 'text', text: String(userText || '') }],
+    source: { kind: 'user' },
+  })
   let output = ''
   let terminalReason = 'completed'
   const iterable = llm.stream({
@@ -313,55 +318,6 @@ export function apply(ctx, config = {}) {
         return
       }
 
-      if (action === 'story-run-get') {
-        json(res, 200, { ok: true, ...service.getStoryRun() })
-        return
-      }
-
-      if (action === 'story-choice') {
-        const choiceId = typeof args.choiceId === 'string' ? args.choiceId : ''
-        const eventId = typeof args.eventId === 'string' && args.eventId ? args.eventId : randomUUID()
-        const result = service.chooseStory({ choiceId, eventId })
-        json(res, 200, { ok: true, ...result })
-        return
-      }
-
-      if (action === 'story-get') {
-        json(res, 200, { ok: true, storyMemory: service.getStoryMemory() })
-        return
-      }
-
-      if (action === 'story-fact-confirm') {
-        const text = typeof args.text === 'string' ? args.text.trim() : ''
-        const sourceEventId = typeof args.sourceEventId === 'string' ? args.sourceEventId.trim() : ''
-        if (!text || !sourceEventId) {
-          json(res, 400, { ok: false, error: 'text and sourceEventId are required' })
-          return
-        }
-        const result = service.addConfirmedStoryFact({
-          id: typeof args.id === 'string' && args.id.trim() ? args.id.trim() : randomUUID(),
-          text,
-          sourceEventId,
-          category: typeof args.category === 'string' ? args.category : 'fact',
-        })
-        json(res, 200, { ok: true, ...result })
-        return
-      }
-
-      if (action === 'story-summary-set') {
-        const summary = typeof args.summary === 'string' ? args.summary.trim() : ''
-        if (!summary) {
-          json(res, 400, { ok: false, error: 'summary is required' })
-          return
-        }
-        const result = service.updateStorySummary({
-          summary,
-          expectedStoryRevision: Number.isSafeInteger(args.expectedStoryRevision) ? args.expectedStoryRevision : undefined,
-        })
-        json(res, 200, { ok: true, ...result })
-        return
-      }
-
       if (action === 'history') {
         const loaded = service.loadState()
         const lines = loaded.state.conversation?.chatLines || []
@@ -418,7 +374,7 @@ export function apply(ctx, config = {}) {
             llm,
             model,
             prepared.system,
-            prepared.baseState.conversation?.log || [],
+            prepared.contextMessages,
             text,
             controller.signal,
           )
@@ -441,6 +397,26 @@ export function apply(ctx, config = {}) {
           view: publicView(service, memoryService, runtimeConfig),
           duplicate: committed.duplicate === true,
         })
+        return
+      }
+
+      if (action === 'summary-candidate') {
+        const candidate = service.createMemorySummaryCandidate()
+        json(res, 200, { ok: true, candidate })
+        return
+      }
+
+      if (action === 'summary-confirm') {
+        const summary = typeof args.summary === 'string' ? args.summary.trim() : ''
+        if (!summary) {
+          json(res, 400, { ok: false, error: 'summary is required' })
+          return
+        }
+        const result = service.updateStorySummary({
+          summary,
+          expectedStoryRevision: Number.isSafeInteger(args.expectedStoryRevision) ? args.expectedStoryRevision : undefined,
+        })
+        json(res, 200, { ok: true, ...result })
         return
       }
 
