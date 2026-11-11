@@ -6,9 +6,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply } from '../../src/host/plugin.mjs'
 
-function request(body) {
+function request(body, headers = {}) {
   const req = Readable.from([Buffer.from(JSON.stringify(body), 'utf8')])
   req.method = 'POST'
+  req.headers = headers
   return req
 }
 
@@ -85,6 +86,44 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     })
     assert.equal(profile.status, 200)
     assert.equal(profile.body.profile.displayName, '小鲸鱼')
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+
+test('DSH companion API rejects cross-site and mismatched Origin requests', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-origin-'))
+  let route
+  let cleanup
+  const llm = { stream: async function* () { yield { type: 'text-delta', text: '你好' }; yield { type: 'finish', reason: { kind: 'stop' } } } }
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm,
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject() {},
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    const invoke = async headers => {
+      let status = 0
+      let raw = ''
+      await route.handler(request({ action: 'view' }, headers), {
+        writeHead(value) { status = value },
+        end(value) { raw = value },
+      })
+      return { status, body: JSON.parse(raw) }
+    }
+    const crossSite = await invoke({ host: 'localhost', 'sec-fetch-site': 'cross-site' })
+    assert.equal(crossSite.status, 403)
+    assert.equal(crossSite.body.code, 'CROSS_SITE_REQUEST')
+    const wrongOrigin = await invoke({ host: 'localhost', origin: 'https://evil.example' })
+    assert.equal(wrongOrigin.status, 403)
+    assert.equal(wrongOrigin.body.code, 'ORIGIN_MISMATCH')
+    const sameOrigin = await invoke({ host: 'localhost', origin: 'http://localhost' })
+    assert.equal(sameOrigin.status, 200)
   } finally {
     if (typeof cleanup === 'function') cleanup()
     rmSync(home, { recursive: true, force: true })
