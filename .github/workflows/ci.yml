@@ -49,7 +49,7 @@ jobs:
       - name: Commit generated DeepSeek Whale PPL IR
         if: matrix.node == '22.19.0'
         run: |
-          if [ ! -f personas/deepseek-whale.pir.json ] || ! cmp -s personas/deepseek-whale.pir.json .ppl-artifacts/deepseek-whale.pir.json; then
+          if ! git ls-files --error-unmatch personas/deepseek-whale.pir.json >/dev/null 2>&1 || ! cmp -s personas/deepseek-whale.pir.json .ppl-artifacts/deepseek-whale.pir.json; then
             cp .ppl-artifacts/deepseek-whale.pir.json personas/deepseek-whale.pir.json
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
