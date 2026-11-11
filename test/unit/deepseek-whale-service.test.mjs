@@ -138,3 +138,28 @@ test('daily positive growth cap is enforced by committed companion turns', () =>
     store.close()
   }
 })
+
+
+test('explicit rejection is negative and does not grant positive affection', () => {
+  const store = new SqliteAvatarStore(':memory:')
+  try {
+    const service = new DeepseekWhaleService({ store })
+    const prepared = service.prepareTurn({
+      text: '我不喜欢你',
+      eventId: 'negative-companion-turn',
+      sessionId: 'negative-companion-session',
+    })
+    assert.equal(prepared.event.type, 'NEGATIVE_INTERACTION')
+    const result = service.finalizeTurn(prepared, {
+      reply: '我知道了，会尊重主人的感受。',
+      occurredAt: '2026-11-11T12:00:00.000Z',
+    })
+    assert.equal(result.requestedAffectionDelta, -1)
+    assert.equal(result.affectionDelta, -1)
+    const state = service.loadState().state
+    assert.equal(state.affection, 0)
+    assert.equal(state.relationship.attachment, 0.095)
+  } finally {
+    store.close()
+  }
+})
