@@ -426,7 +426,29 @@ export class SqliteAvatarStore {
         INSERT INTO domain_events(event_id,character_id,event_type,payload_hash,payload_json,occurred_at,applied_at)
         VALUES(?,?,?,?,?,?,?)
       `).run(id,characterId,'TURN_COMPLETED',payloadHash,stableJson(payload || {}),occurredAt,now)
-      this.#recordAudit('character',characterId,'TURN_COMPLETED',id,before?.state || null,saved.state,{})
+      const beforeState = before?.state || {}
+      const beforeRelationship = beforeState.relationship || {}
+      const afterRelationship = saved.state.relationship || {}
+      const requestedDelta = Number(payload?.requestedAffectionDelta || 0)
+      const appliedDelta = Number(payload?.affectionDelta || 0)
+      const relationshipDetails = {
+        source: 'companion-chat',
+        requestedAffectionDelta: requestedDelta,
+        appliedAffectionDelta: appliedDelta,
+        affectionBefore: Number(beforeState.affection || 0),
+        affectionAfter: Number(saved.state.affection || 0),
+        levelBefore: Number(beforeState.level || 1),
+        levelAfter: Number(saved.state.level || 1),
+        trustBefore: Number(beforeRelationship.trust || 0),
+        trustAfter: Number(afterRelationship.trust || 0),
+        attachmentBefore: Number(beforeRelationship.attachment || 0),
+        attachmentAfter: Number(afterRelationship.attachment || 0),
+        stageBefore: String(beforeRelationship.stage || 'acquaintance'),
+        stageAfter: String(afterRelationship.stage || 'acquaintance'),
+        stageChanged: String(beforeRelationship.stage || 'acquaintance') !== String(afterRelationship.stage || 'acquaintance'),
+        levelChanged: Number(beforeState.level || 1) !== Number(saved.state.level || 1),
+      }
+      this.#recordAudit('character',characterId,'TURN_COMPLETED',id,beforeState,saved.state,relationshipDetails)
       return { duplicate: false, state: saved.state, revision: saved.revision, updatedAt: saved.updatedAt }
     })
   }
