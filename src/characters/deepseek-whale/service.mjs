@@ -1,5 +1,6 @@
 import { createDeepseekWhaleRuntime } from '../../ppl/index.mjs'
 import { MemoryService } from '../../memory/service.mjs'
+import { addConfirmedStoryFact, appendStoryEvent, createStoryMemory, renderStoryContinuity, updateStorySummary } from './story-memory.mjs'
 import {
   DEEPSEEK_WHALE_ID,
   DEEPSEEK_WHALE_PROFILE,
@@ -28,6 +29,7 @@ export class DeepseekWhaleService {
 
   #initialState(sessionId) {
     const state = createDeepseekWhaleInitialState({ sessionId })
+    state.storyMemory = createStoryMemory()
     state.pplRuntime = this.ppl.initialState(sessionId)
     return state
   }
@@ -38,6 +40,7 @@ export class DeepseekWhaleService {
     const state = structuredClone(loaded.state)
     if (!state.pplRuntime) state.pplRuntime = this.ppl.initialState(sessionId)
     if (!state.conversation) state.conversation = { log: [], chatLines: [], choices: [] }
+    if (!state.storyMemory) state.storyMemory = createStoryMemory()
     return { state, revision: loaded.revision, updatedAt: loaded.updatedAt, persisted: true }
   }
 
@@ -131,7 +134,7 @@ export class DeepseekWhaleService {
       emotion: String(emotion || 'normal'),
       at: Date.now(),
     })
-    reconciled.conversation.choices = Array.isArray(choices) ? structuredClone(choices) : []
+    reconciled.conversation.choices = Array.isArray(choices) ? structuredClone(choices) : []\n    reconciled.storyMemory = reconciled.storyMemory || createStoryMemory()\n    if (prepared.choice) {\n      const eventResult = appendStoryEvent(reconciled.storyMemory, {\n        id: 'choice:' + prepared.eventId,\n        title: '主人选择了：' + prepared.choice.text,\n        detail: '互动选项 effect=' + String(prepared.choice.effect),\n        sourceEventId: prepared.eventId,\n      })\n      reconciled.storyMemory = eventResult.storyMemory\n    }
     if (affectionResult.levelUps.length) {
       for (const levelUp of affectionResult.levelUps) {
         reconciled.conversation.chatLines.push({
@@ -168,6 +171,26 @@ export class DeepseekWhaleService {
       levelUps: affectionResult.levelUps,
       relationship: reconciled.relationship,
     }
+  }
+
+  addConfirmedStoryFact({ id, text, sourceEventId, category = 'fact' } = {}) {
+    const loaded = this.loadState()
+    const result = addConfirmedStoryFact(loaded.state.storyMemory, { id, text, sourceEventId, category })
+    if (result.duplicate) return { duplicate: true, revision: loaded.revision, storyMemory: result.storyMemory }
+    const next = { ...loaded.state, storyMemory: result.storyMemory }
+    const saved = this.store.saveCharacterState(DEEPSEEK_WHALE_ID, next, loaded.revision)
+    return { duplicate: false, revision: saved.revision, storyMemory: result.storyMemory }
+  }
+
+  updateStorySummary({ summary, expectedStoryRevision } = {}) {
+    const loaded = this.loadState()
+    const storyMemory = updateStorySummary(loaded.state.storyMemory, { summary, expectedRevision: expectedStoryRevision })
+    const saved = this.store.saveCharacterState(DEEPSEEK_WHALE_ID, { ...loaded.state, storyMemory }, loaded.revision)
+    return { revision: saved.revision, storyMemory }
+  }
+
+  getStoryMemory() {
+    return this.loadState().state.storyMemory || createStoryMemory()
   }
 
   remember(text, { eventId, source = 'user' } = {}) {
