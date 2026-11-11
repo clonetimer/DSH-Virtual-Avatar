@@ -23,7 +23,7 @@ GitHub Actions run #183：
 | Memory candidate workflow | PASS（模块级） | 自动只提出候选，需用户点击确认才写入 |
 | Whale DeepSeek legacy import | PARTIAL | 保留完整原始 JSON，导入 DeepSeek 的关系/对话字段；图片 data URL 尚未提取成文件 |
 | DSH host API | PASS（mock contract） | Host plugin integration test；尚未在真实 DSH Web/Desktop 安装验收 |
-| Web overlay UI | PARTIAL | 对话、关系摘要、记忆管理、人格设定编辑；未达到 Whale 原 Galgame UI 全功能平移 |
+| Web overlay UI | PARTIAL | 对话、动态回复选项、关系摘要、记忆管理、人格设定编辑；未达到 Whale 原 Galgame UI 全功能平移 |
 | Original Whale Galgame | NOT YET | 剧情、小剧场、历史/CG 图鉴与音效等需逐项移植 |
 | Desktop pet | NOT YET | spritesheet 动画与桌面生命周期尚未接入 |
 | Settings / diagnostics | PARTIAL | API 具备 profile / memory endpoints，完整插件设置和诊断页未完成 |
@@ -46,3 +46,10 @@ GitHub Actions run #183：
 4. 移植 Whale Galgame 原 UI 的对话呈现、表情、背景切换、历史、CG、小剧场和桌宠。
 5. 增加设置/诊断页面、隐私说明、Origin 校验和数据导出/删除。
 6. 完成 DSH Web 与 Desktop 实机安装验收，再判断是否进入下一发布阶段。
+
+## 最新增量（PR #1 后续提交）
+
+- 增加上下文驱动的三选项生成；模型输出格式异常或请求失败时回退至三条安全的本地选项。
+- 补充 Host API 集成测试，检查三个选项的 effect 分布为 -1 / 0 / 1。
+- README 增加 DSH 插件包结构与本地开发接入说明：Cordis Host entry、bundle patch、Web Client injection 与 API 前缀。
+- 仍未宣称真实 DSH 插件安装通过；插件管理器目录和具体安装方式需按目标 DSH 发行版实测。
