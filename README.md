@@ -50,6 +50,7 @@
 - [实施路线与验收门槛](docs/roadmap.md)
 - [数据模型与迁移策略](docs/data-migration.md)
 - [测试计划](docs/test-plan.md)
+- [当前实施状态与验收证据](docs/implementation-status.md)
 - [功能基线与来源矩阵](docs/feature-baseline.md)
 
 ## 开发状态
