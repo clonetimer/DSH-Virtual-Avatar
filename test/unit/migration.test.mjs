@@ -44,6 +44,7 @@ test('migration preview performs no writes and requires explicit confirmation', 
   ])
   assert.equal(result.writesPerformed, false)
   assert.equal(result.requiresExplicitConfirmation, true)
-  assert.equal(result.totalRecords, 8)
+  assert.equal(result.totalRecords, 3)
   assert.deepEqual(result.sources[0].warnings, ['UNKNOWN_MEMORY_LINES:1'])
+  assert.deepEqual(result.sources[1].warnings, ['MEDIA_EXTRACTION_REQUIRED:1', 'DEFERRED_CHARACTERS:5'])
 })
