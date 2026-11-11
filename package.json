@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Unified virtual persona and companion plugin for DeepSeek Harness",
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.2-rc.1 <0.2.3-0"
   },
   "scripts": {
     "test": "node --test",
