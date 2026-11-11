@@ -32,7 +32,7 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     stream: async function* (input) {
       assert.equal(input.provider, 'deepseek-official')
       assert.equal(input.model, 'deepseek-v4-flash')
-      assert.match(input.system, /DeepSeek 鲸鱼娘/)
+      if (!input.system.includes('生成三个自然')) assert.match(input.system, /DeepSeek 鲸鱼娘/)
       yield { type: 'text-delta', text: '主人也辛苦啦，我一直在这里哦。' }
       yield { type: 'finish', reason: { kind: 'stop' } }
       if (input.system.includes('生成三个自然')) {
