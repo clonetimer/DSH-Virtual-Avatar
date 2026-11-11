@@ -257,6 +257,24 @@ export class DeepseekWhaleService {
     return this.memory.remove({ ownerKind: 'character', ownerId: DEEPSEEK_WHALE_ID, memoryId })
   }
 
+  editMemory(memoryId, text) {
+    const clean = String(text || '').trim()
+    if (!clean) throw new TypeError('memory text required')
+    if (Array.from(clean).length > 400) throw new RangeError('memory text exceeds 400 characters')
+    const current = this.store.getMemoryItem(memoryId)
+    if (!current || current.ownerKind !== 'character' || current.ownerId !== DEEPSEEK_WHALE_ID) return null
+    return this.store.updateMemoryItem(memoryId, { text: clean, rawText: current.rawText || current.text })
+  }
+
+  exportMemories() {
+    return {
+      schema: 'dsh-virtual-avatar.memories/1',
+      exportedAt: new Date().toISOString(),
+      characterId: DEEPSEEK_WHALE_ID,
+      memories: this.listMemories(),
+    }
+  }
+
   updateProfile(overrides, { expectedRevision } = {}) {
     const loaded = this.loadState()
     const profile = resolveDeepseekWhaleProfile(overrides)
