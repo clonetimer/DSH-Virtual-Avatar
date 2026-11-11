@@ -119,7 +119,6 @@ export class DeepseekWhaleService {
       { role: 'user', text: prepared.input },
       { role: 'assistant', text: response },
     )
-    if (reconciled.conversation.log.length > 24) reconciled.conversation.log = reconciled.conversation.log.slice(-24)
     reconciled.conversation.chatLines.push({
       who: 'user',
       text: prepared.input,
