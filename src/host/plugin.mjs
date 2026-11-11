@@ -204,6 +204,13 @@ function publicView(service, memoryService, config) {
       affection: state.affection,
       affectionCap: affectionCap(state.level),
       relationship: state.relationship,
+      growth: {
+        affectionLifetime: Number(state.growth?.affectionLifetime || 0),
+        dailyInteractionCount: Number(state.growth?.dailyInteractionCount || 0),
+        dailyPositiveCount: Number(state.growth?.dailyBonusCount || 0),
+        dailyKey: String(state.growth?.dailyKey || ''),
+        interactionStreak: Number(state.growth?.interactionStreak || 0),
+      },
       chatLines: state.conversation?.chatLines || [],
       choices: state.conversation?.choices || [],
     },
