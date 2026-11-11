@@ -32,12 +32,10 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     stream: async function* (input) {
       assert.equal(input.provider, 'deepseek-official')
       assert.equal(input.model, 'deepseek-v4-flash')
-      if (!input.system.includes('生成三个自然')) assert.match(input.system, /DeepSeek 鲸鱼娘/)
+      assert.match(input.system, /日常陪伴对话场景/)
+      assert.doesNotMatch(input.system, /Galgame/)
       yield { type: 'text-delta', text: '主人也辛苦啦，我一直在这里哦。' }
       yield { type: 'finish', reason: { kind: 'stop' } }
-      if (input.system.includes('生成三个自然')) {
-        yield { type: 'text-delta', text: '[{"text":"再聊一会儿","effect":0},{"text":"给她一个拥抱","effect":1},{"text":"让她休息","effect":-1}]' }
-      }
     },
   }
   const ctx = {
@@ -70,22 +68,6 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(chat.body.reply, '主人也辛苦啦，我一直在这里哦。')
     assert.equal(chat.body.view.character.relationship.trust, 0.51)
     assert.equal(chat.body.view.character.chatLines.length, 2)
-    const storyView = await call(route.handler, { action: 'story-get' })
-    assert.equal(storyView.status, 200)
-    assert.equal(storyView.body.storyMemory.confirmedFacts.length, 0)
-    const storyFact = await call(route.handler, {
-      action: 'story-fact-confirm',
-      args: { id: 'host-fact-1', text: '主人喜欢海边夜景', sourceEventId: 'explicit-user-confirmation' },
-    })
-    assert.equal(storyFact.status, 200)
-    assert.equal(storyFact.body.storyMemory.confirmedFacts.length, 1)
-    const storySummary = await call(route.handler, {
-      action: 'story-summary-set',
-      args: { summary: '主人和鲸鱼娘正在熟悉彼此。', expectedStoryRevision: 1 },
-    })
-    assert.equal(storySummary.status, 200)
-    assert.equal(storySummary.body.storyMemory.summary, '主人和鲸鱼娘正在熟悉彼此。')
-
     const summaryCandidate = await call(route.handler, { action: 'summary-candidate' })
     assert.equal(summaryCandidate.status, 200)
     assert.equal(summaryCandidate.body.candidate.requiresUserConfirmation, true)
@@ -103,12 +85,6 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(historyPage.body.lines[0].who, 'heroine')
     assert.equal(historyPage.body.nextBefore, 1)
 
-    const history = await call(route.handler, { action: 'history', args: { limit: 1 } })
-    assert.equal(history.status, 200)
-    assert.equal(history.body.total, 2)
-    assert.equal(history.body.lines.length, 1)
-    assert.equal(history.body.lines[0].who, 'heroine')
-    assert.equal(history.body.nextBefore, 1)
 
     assert.deepEqual(chat.body.choices, [])
 
@@ -131,7 +107,7 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
       args: { background: 'bg-deepseek-seaside-study' },
     })
     assert.equal(background.status, 200)
-    assert.match(background.body.view.character.backgroundUrl, /bg-deepseek-seaside-study\\.webp$/)
+    assert.match(background.body.view.character.backgroundUrl, /bg-deepseek-seaside-study\.webp$/)
     const invalidBackground = await call(route.handler, {
       action: 'background-set',
       args: { background: '../outside' },
@@ -159,8 +135,8 @@ test('DeepSeek Whale view exposes a character-art launcher asset', async () => {
   try {
     apply(ctx, {})
     const result = await call(route.handler, { action: 'view' })
-    assert.match(result.body.character.imageUrl, /maid-left\\.webp$/)
-    assert.match(result.body.character.backgroundUrl, /palace-night\\.webp$/)
+    assert.match(result.body.character.imageUrl, /maid-left\.webp$/)
+    assert.match(result.body.character.backgroundUrl, /palace-night\.webp$/)
   } finally {
     if (typeof cleanup === 'function') cleanup()
     rmSync(home, { recursive: true, force: true })
