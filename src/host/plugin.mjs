@@ -304,6 +304,7 @@ export function apply(ctx, config = {}) {
       return
     }
     try {
+      validateBrowserOrigin(req)
       const body = await readJsonBody(req)
       const action = typeof body.action === 'string' ? body.action : 'view'
       const args = body.args && typeof body.args === 'object' ? body.args : {}
