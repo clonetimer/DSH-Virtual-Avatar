@@ -19,3 +19,26 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm run verify
+
+      # PPL Core is used only as a pinned build-time compiler. Its private
+      # reference implementation is not vendored into the distributed plugin.
+      - uses: actions/checkout@v4
+        with:
+          repository: clonetimer/PPL
+          ref: a587e5b6ffb62fd005ac67e98eed79fac3dd66de
+          path: .ppl-toolchain
+      - name: Build pinned PPL compiler
+        run: |
+          npm install --prefix .ppl-toolchain/components/foundation/core --no-audit --no-fund
+          npm run build --prefix .ppl-toolchain/components/foundation/core
+      - name: Compile and test DeepSeek Whale persona
+        run: |
+          node .ppl-toolchain/components/foundation/core/dist/src/cli.js check personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules
+          node .ppl-toolchain/components/foundation/core/dist/src/cli.js test personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules
+          mkdir -p .ppl-artifacts
+          node .ppl-toolchain/components/foundation/core/dist/src/cli.js build personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules --out .ppl-artifacts/deepseek-whale.pir.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-whale-pir-node-${{ matrix.node }}
+          path: .ppl-artifacts/deepseek-whale.pir.json
+          if-no-files-found: error
