@@ -44,9 +44,12 @@
 
 ## 文档
 
+- [产品需求规格](docs/requirements.md)
 - [架构决策与模块边界](docs/architecture.md)
+- [内部接口契约](docs/interface-contracts.md)
 - [实施路线与验收门槛](docs/roadmap.md)
 - [数据模型与迁移策略](docs/data-migration.md)
+- [测试计划](docs/test-plan.md)
 - [功能基线与来源矩阵](docs/feature-baseline.md)
 
 ## 开发状态
