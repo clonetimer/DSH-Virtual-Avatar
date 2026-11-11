@@ -6,7 +6,7 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -15,6 +15,8 @@ jobs:
         node: ["22.19.0", "24"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
@@ -43,6 +45,17 @@ jobs:
             cmp personas/deepseek-whale.pir.json .ppl-artifacts/deepseek-whale.pir.json
           else
             cp .ppl-artifacts/deepseek-whale.pir.json personas/deepseek-whale.pir.json
+          fi
+      - name: Commit generated DeepSeek Whale PPL IR
+        if: matrix.node == '22.19.0'
+        run: |
+          if [ ! -f personas/deepseek-whale.pir.json ] || ! cmp -s personas/deepseek-whale.pir.json .ppl-artifacts/deepseek-whale.pir.json; then
+            cp .ppl-artifacts/deepseek-whale.pir.json personas/deepseek-whale.pir.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add personas/deepseek-whale.pir.json
+            git commit -m "build: update compiled DeepSeek Whale PPL IR"
+            git push origin "HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           fi
       - run: npm run verify
       - uses: actions/upload-artifact@v4
