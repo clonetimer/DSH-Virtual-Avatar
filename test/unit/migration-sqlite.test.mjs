@@ -68,6 +68,7 @@ test('Whale migration extracts DeepSeek media, verifies hashes and preserves the
     assert.equal(assets.length, 1)
     assert.equal(assets[0].mimeType, 'image/png')
     assert.equal(assets[0].byteLength, 5)
+    assert.ok(assets[0].relativePath.startsWith('deepseek/'))
     const loaded = store.readMediaAsset(assets[0].id)
     assert.equal(loaded.bytes.toString('utf8'), 'hello')
     assert.equal(loaded.asset.sha256, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824')
