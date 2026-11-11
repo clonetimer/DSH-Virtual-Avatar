@@ -14,7 +14,8 @@ test('DeepSeek Whale companion turn is prepared, committed once and durably relo
       turn: 1,
     })
     assert.match(prepared.system, /DeepSeek 鲸鱼娘/)
-    assert.match(prepared.system, /Galgame 陪伴场景/)
+    assert.match(prepared.system, /日常陪伴对话场景/)
+    assert.doesNotMatch(prepared.system, /Galgame/)
     assert.equal(prepared.event.type, 'COMFORT')
 
     const aborted = service.finalizeTurn(prepared, { reply: '先等等', terminalReason: 'aborted' })
@@ -60,31 +61,12 @@ test('confirmed story facts are persisted and injected into later companion turn
       sessionId: 'story-session',
     })
     assert.match(prepared.system, /主人的生日在五月/)
-    assert.match(prepared.system, /已确认的重要事实/)
+    assert.match(prepared.system, /已确认的用户事实/)
     assert.equal(service.getStoryMemory().confirmedFacts.length, 1)
   } finally {
     store.close()
   }
 })
-
-test('choice selections become idempotent story events after completed turns', () => {
-  const store = new SqliteAvatarStore(':memory:')
-  try {
-    const service = new DeepseekWhaleService({ store })
-    const prepared = service.prepareTurn({
-      text: '给她一个拥抱',
-      choice: { id: 'choice-hug', text: '给她一个拥抱', effect: 1 },
-      eventId: 'story-choice-turn',
-    })
-    service.finalizeTurn(prepared, { reply: '（轻轻靠近主人）谢谢主人。' })
-    const events = service.getStoryMemory().keyEvents
-    assert.equal(events.length, 1)
-    assert.match(events[0].title, /给她一个拥抱/)
-  } finally {
-    store.close()
-  }
-})
-
 
 test('prepared turn retrieves relevant pinned memories and bounds recent context', () => {
   const store = new SqliteAvatarStore(':memory:')
@@ -117,4 +99,42 @@ test('summary candidates include source hash and current revision without overwr
     assert.equal(candidate.expectedRevision, 1)
     assert.equal(service.getStoryMemory().summary, '')
   } finally { store.close() }
+})
+
+
+test('daily positive growth cap is enforced by committed companion turns', () => {
+  const store = new SqliteAvatarStore(':memory:')
+  try {
+    const service = new DeepseekWhaleService({ store })
+    for (let index = 0; index < 4; index++) {
+      const prepared = service.prepareTurn({
+        text: '我喜欢和你聊天',
+        eventId: 'daily-growth-' + index,
+        sessionId: 'daily-growth-session',
+      })
+      const result = service.finalizeTurn(prepared, {
+        reply: '我也很开心能陪着主人。',
+        occurredAt: '2026-11-11T0' + index + ':00:00.000Z',
+      })
+      assert.equal(result.affectionDelta, index < 2 ? 1 : 0)
+    }
+    const state = service.loadState().state
+    assert.equal(state.affection, 2)
+    assert.equal(state.growth.affectionLifetime, 2)
+    assert.equal(state.growth.dailyBonusCount, 2)
+
+    const nextDay = service.prepareTurn({
+      text: '今天也喜欢和你聊天',
+      eventId: 'daily-growth-next-day',
+      sessionId: 'daily-growth-session',
+    })
+    service.finalizeTurn(nextDay, {
+      reply: '新的一天也要一起加油哦。',
+      occurredAt: '2026-11-12T01:00:00.000Z',
+    })
+    assert.equal(service.loadState().state.affection, 3)
+    assert.equal(service.loadState().state.growth.interactionStreak, 2)
+  } finally {
+    store.close()
+  }
 })
