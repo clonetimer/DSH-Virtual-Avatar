@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -224,6 +224,9 @@ export function apply(ctx, config = {}) {
   }
 
   const dshHomePath = resolveDshHomePath(ctx)
+  const storageRoot = dshHomePath('storages', 'dsh-virtual-avatar')
+  const backupRoot = join(storageRoot, 'backups')
+  mkdirSync(backupRoot, { recursive: true, mode: 0o700 })
   const store = createAvatarStore({ dshHomePath })
   const service = new DeepseekWhaleService({ store })
   const memoryService = service.memory
@@ -385,6 +388,49 @@ export function apply(ctx, config = {}) {
           source: 'explicit-user-memory',
         })
         json(res, 200, { ok: true, result, view: publicView(service, memoryService, runtimeConfig) })
+        return
+      }
+      if (action === 'backup-list') {
+        const backups = readdirSync(backupRoot, { withFileTypes: true })
+          .filter(entry => entry.isDirectory() && /^backup-[a-f0-9-]+$/.test(entry.name))
+          .map(entry => {
+            const directory = join(backupRoot, entry.name)
+            try {
+              const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8'))
+              return { id: entry.name, createdAt: manifest.createdAt, fileCount: manifest.files?.length || 0, byteLength: manifest.files?.reduce((sum, item) => sum + (item.byteLength || 0), 0) || 0 }
+            } catch { return { id: entry.name, valid: false } }
+          }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+        json(res, 200, { ok: true, backups })
+        return
+      }
+      if (action === 'backup-create') {
+        const id = 'backup-' + randomUUID()
+        const result = store.createBackup(join(backupRoot, id))
+        json(res, 200, { ok: true, backup: { id, createdAt: result.createdAt, fileCount: result.fileCount, byteLength: result.byteLength } })
+        return
+      }
+      if (action === 'backup-verify') {
+        const id = String(args.backupId || '')
+        if (!/^backup-[a-f0-9-]+$/.test(id)) {
+          json(res, 400, { ok: false, error: 'invalid backup id' })
+          return
+        }
+        const result = store.verifyBackup(join(backupRoot, id))
+        json(res, 200, { ok: true, verification: result })
+        return
+      }
+      if (action === 'backup-restore') {
+        const id = String(args.backupId || '')
+        if (args.confirmed !== true) {
+          json(res, 400, { ok: false, code: 'CONFIRMATION_REQUIRED', error: 'explicit restore confirmation is required' })
+          return
+        }
+        if (!/^backup-[a-f0-9-]+$/.test(id)) {
+          json(res, 400, { ok: false, error: 'invalid backup id' })
+          return
+        }
+        const result = store.restoreBackup(join(backupRoot, id))
+        json(res, 200, { ok: true, restore: result })
         return
       }
       if (action === 'memory-list') {
