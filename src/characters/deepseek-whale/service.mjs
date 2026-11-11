@@ -245,8 +245,16 @@ export class DeepseekWhaleService {
     })
   }
 
-  listMemories() {
-    return this.memory.list({ ownerKind: 'character', ownerId: DEEPSEEK_WHALE_ID })
+  listMemories({ query = '', level = 'all', pinned = 'all' } = {}) {
+    const needle = String(query || '').trim().toLocaleLowerCase()
+    const rows = this.memory.list({ ownerKind: 'character', ownerId: DEEPSEEK_WHALE_ID })
+    return rows.filter(item => {
+      if (needle && !String(item.text || '').toLocaleLowerCase().includes(needle)) return false
+      if (level !== 'all' && item.level !== level) return false
+      if (pinned === 'pinned' && !item.pinned) return false
+      if (pinned === 'normal' && item.pinned) return false
+      return true
+    })
   }
 
   pinMemory(memoryId, pinned = true) {

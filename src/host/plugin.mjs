@@ -308,6 +308,17 @@ export function apply(ctx, config = {}) {
 
       if (action === 'relationship-history') {
         const events = store.listAuditEvents('character', 'deepseek', { limit: args.limit })
+          .filter(event => event.type === 'TURN_COMPLETED' || event.type === 'AFFECTION_DELTA')
+          .map(event => ({
+            ...event,
+            label: event.type === 'TURN_COMPLETED' ? '完成一次陪伴对话' : '好感度调整',
+            details: {
+              ...event.details,
+              affectionDelta: event.details.appliedAffectionDelta ?? event.details.delta ?? 0,
+              stageChanged: event.details.stageChanged === true,
+              levelChanged: event.details.levelChanged === true,
+            },
+          }))
         json(res, 200, { ok: true, events })
         return
       }
@@ -457,7 +468,9 @@ export function apply(ctx, config = {}) {
         return
       }
       if (action === 'memory-list') {
-        json(res, 200, { ok: true, memories: service.listMemories() })
+        const level = ['all','core','mid','edge'].includes(args.level) ? args.level : 'all'
+        const pinned = ['all','pinned','normal'].includes(args.pinned) ? args.pinned : 'all'
+        json(res, 200, { ok: true, memories: service.listMemories({ query: args.query, level, pinned }) })
         return
       }
       if (action === 'memory-edit') {
