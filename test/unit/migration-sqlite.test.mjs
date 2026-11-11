@@ -143,3 +143,47 @@ test('new media files are removed if the SQLite migration transaction fails afte
     fixture.cleanup()
   }
 })
+
+
+test('legacy migration rollback is explicit, one-shot and removes imported state and media', async () => {
+  const fixture = createStore()
+  const { store } = fixture
+  try {
+    const coordinator = new MigrationCoordinator({ store })
+    const raw = JSON.stringify({ characters: { deepseek: { level: 2, affection: 4, customSprite: { dataUrl: 'data:image/png;base64,aGVsbG8=' } } } })
+    const staged = coordinator.stage([{ sourceKind: 'whale-galgame', raw }])
+    const committed = await coordinator.commit(staged.id, { confirmed: true })
+    const preview = store.previewMigrationRollback(committed.id)
+    assert.equal(preview.available, true)
+    assert.equal(preview.createdAssetCount, 1)
+    assert.throws(() => store.rollbackMigration(committed.id), { code: 'CONFIRMATION_REQUIRED' })
+    const result = store.rollbackMigration(committed.id, { confirmed: true })
+    assert.equal(result.status, 'rolled_back')
+    assert.equal(result.removedAssetCount, 1)
+    assert.equal(store.loadCharacterState('deepseek'), null)
+    assert.equal(store.listMediaAssets().length, 0)
+    assert.equal(store.previewMigrationRollback(committed.id).reason, 'ROLLBACK_ALREADY_USED')
+  } finally {
+    store.close()
+    fixture.cleanup()
+  }
+})
+
+test('legacy migration rollback refuses to overwrite state changed after import', async () => {
+  const fixture = createStore()
+  const { store } = fixture
+  try {
+    const coordinator = new MigrationCoordinator({ store })
+    const raw = JSON.stringify({ characters: { deepseek: { level: 2, affection: 4 } } })
+    const staged = coordinator.stage([{ sourceKind: 'whale-galgame', raw }])
+    const committed = await coordinator.commit(staged.id, { confirmed: true })
+    const loaded = store.loadCharacterState('deepseek')
+    store.saveCharacterState('deepseek', { ...loaded.state, level: 3 }, loaded.revision)
+    assert.equal(store.previewMigrationRollback(committed.id).reason, 'POST_MIGRATION_STATE_CHANGED')
+    assert.throws(() => store.rollbackMigration(committed.id, { confirmed: true }), { code: 'POST_MIGRATION_STATE_CHANGED' })
+    assert.equal(store.loadCharacterState('deepseek').state.level, 3)
+  } finally {
+    store.close()
+    fixture.cleanup()
+  }
+})
