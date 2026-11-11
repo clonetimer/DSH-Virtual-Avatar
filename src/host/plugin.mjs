@@ -29,6 +29,32 @@ const ASSET_TYPES = Object.freeze({
   'bg-deepseek-seaside-study.webp': 'image/webp',
 })
 
+function validateBrowserOrigin(req) {
+  const fetchSite = String(req.headers?.['sec-fetch-site'] || '').toLowerCase()
+  if (fetchSite === 'cross-site') {
+    const error = new Error('cross-site requests are not allowed')
+    error.status = 403
+    error.code = 'CROSS_SITE_REQUEST'
+    throw error
+  }
+  const origin = req.headers?.origin
+  if (!origin) return
+  let parsed
+  try { parsed = new URL(String(origin)) } catch {
+    const error = new Error('invalid request origin')
+    error.status = 403
+    error.code = 'INVALID_ORIGIN'
+    throw error
+  }
+  const host = String(req.headers?.host || '')
+  if (!host || parsed.host.toLowerCase() !== host.toLowerCase()) {
+    const error = new Error('request origin does not match DSH host')
+    error.status = 403
+    error.code = 'ORIGIN_MISMATCH'
+    throw error
+  }
+}
+
 function json(res, status, value) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
   res.end(JSON.stringify(value))
