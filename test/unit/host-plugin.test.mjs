@@ -319,6 +319,9 @@ test('runtime diagnostics reports model PPL storage and companion health without
   }
   try {
     apply(ctx, {})
+    const modelTest = await call(route.handler, { action: 'model-test' })
+    assert.equal(modelTest.status, 200)
+    assert.equal(modelTest.body.test.status, 'success')
     const result = await call(route.handler, { action: 'diagnostics' })
     assert.equal(result.status, 200)
     const d = result.body.diagnostics
