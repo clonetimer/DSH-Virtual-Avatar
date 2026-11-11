@@ -271,7 +271,7 @@ export function apply(ctx, config = {}) {
     let model = null
     let modelSelectionError = null
     try { model = selectModel(llm, agentDefaultModel, runtimeConfig) }
-    catch (error) { modelSelectionError = { code: error.code || 'MODEL_NOT_CONFIGURED', message: String(error.message || error).slice(0, 200) } }
+    catch (error) { modelSelectionError = { code: error.code || 'MODEL_NOT_CONFIGURED', message: String(error.message || error).replace(/(?:sk|api)[-_ ]?key[=: ]+[^ ]+/ig, '[credential redacted]').slice(0, 200) } }
     let providers = []
     try {
       const catalog = typeof llm.listProviders === 'function' ? llm.listProviders() : []
