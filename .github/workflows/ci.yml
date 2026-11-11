@@ -79,17 +79,17 @@ jobs:
       - name: Build installable plugin archive
         if: matrix.node == '24.9.0'
         run: |
-          mkdir -p .ppl-artifacts
-          npm pack --json > .ppl-artifacts/npm-pack.json
-          node scripts/prepare-install-artifact.mjs .ppl-artifacts/npm-pack.json .ppl-artifacts
+          mkdir -p dist-artifact
+          npm pack --json > dist-artifact/npm-pack.json
+          node scripts/prepare-install-artifact.mjs dist-artifact/npm-pack.json dist-artifact
       - uses: actions/upload-artifact@v4
         if: matrix.node == '24.9.0'
         with:
           name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop
           path: |
-            .ppl-artifacts/*.tgz
-            .ppl-artifacts/*.sha256
-            .ppl-artifacts/package-info.json
+            dist-artifact/*.tgz
+            dist-artifact/*.sha256
+            dist-artifact/package-info.json
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
