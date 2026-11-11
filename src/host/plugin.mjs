@@ -238,6 +238,7 @@ export function apply(ctx, config = {}) {
   }
 
   const handler = async (req, res) => {
+    let action = 'unknown'
     const pathname = new URL(req.url || '/', 'http://dsh.local').pathname
     const assetMarker = pathname.lastIndexOf('/assets/')
     if (req.method === 'GET' && assetMarker >= 0) {
@@ -267,7 +268,7 @@ export function apply(ctx, config = {}) {
     try {
       validateBrowserOrigin(req)
       const body = await readJsonBody(req)
-      const action = typeof body.action === 'string' ? body.action : 'view'
+      action = typeof body.action === 'string' ? body.action : 'view'
       const args = body.args && typeof body.args === 'object' ? body.args : {}
       if (runtimeConfig.enabled === false && action !== 'view') {
         json(res, 403, { ok: false, error: 'DeepSeek Whale companion is disabled' })
@@ -530,7 +531,8 @@ export function apply(ctx, config = {}) {
       json(res, 404, { ok: false, error: 'unknown action: ' + action })
     } catch (error) {
       const status = Number.isInteger(error?.status) ? error.status : error?.code === 'REVISION_CONFLICT' ? 409 : 500
-      json(res, status, { ok: false, error: error?.message || String(error), code: error?.code || 'AVATAR_ERROR' })
+      const safeMessage = String(error?.message || error).replace(/(?:sk|api)[-_ ]?key[=: ]+[^ ]+/ig, '[credential redacted]').slice(0, 240)
+      json(res, status, { ok: false, error: safeMessage, code: error?.code || 'AVATAR_ERROR' })
     }
   }
 
