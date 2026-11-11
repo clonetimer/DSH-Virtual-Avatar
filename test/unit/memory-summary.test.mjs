@@ -23,3 +23,13 @@ test('summary candidate includes expected revision for optimistic confirmation',
   assert.equal(result.expectedRevision, 7)
   assert.equal(result.requiresUserConfirmation, true)
 })
+
+
+test('summary candidate removes C0/C1 controls and normalizes whitespace', () => {
+  const result = createSummaryCandidate({
+    history: [{ role: 'user', text: 'alpha\u0000\u001f beta\u007f\u009f gamma' }],
+    now: '2026-11-11T00:00:00.000Z',
+  })
+  assert.match(result.summary, /alpha beta gamma/)
+  assert.doesNotMatch(result.summary, /[\u0000-\u001f\u007f-\u009f]/)
+})
