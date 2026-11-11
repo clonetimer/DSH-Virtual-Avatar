@@ -207,16 +207,16 @@ persona DEEPSEEK_WHALE version "0.3.0" {
 
 scene PRIVATE_HOME {
     context {
-        privacy = private
-        outsiders_present = false
-        danger = 0.0
+        privacy = private;
+        outsiders_present = false;
+        danger = 0.0;
     }
 }
 
 scene PUBLIC_SPACE {
     context {
-        privacy = public
-        outsiders_present = true
-        danger = 0.0
+        privacy = public;
+        outsiders_present = true;
+        danger = 0.0;
     }
 }
