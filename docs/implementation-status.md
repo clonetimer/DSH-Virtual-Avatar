@@ -61,3 +61,11 @@ GitHub Actions run #211（最新已完成）：
 - DSH Host handler 已调用 same-origin / Fetch Metadata 校验；跨站和错误 Origin 测试覆盖。
 - UI 展示最近一条角色回复对应的表情资源，并使用白名单背景资源。
 - GitHub Actions run #211：Node 22.19 / 24 均通过，27 tests passed / 0 failed。
+
+
+## 场景切换增量
+
+- 增加 `background-set` API，仅允许两个内置背景 ID；拒绝路径穿越及未知资源名。
+- Web 面板增加“切换场景”操作，切换结果持久化到角色状态，并在重新打开/刷新后继续使用。
+- Host 集成测试覆盖有效场景切换和非法背景拒绝。
+- 最近一次完整 CI Run #215 在本次场景切换改动前通过（Node 22.19 / 24）；本次新增代码需等待新的 CI 运行结果。
