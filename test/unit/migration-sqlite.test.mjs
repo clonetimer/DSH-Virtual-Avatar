@@ -143,3 +143,59 @@ test('new media files are removed if the SQLite migration transaction fails afte
     fixture.cleanup()
   }
 })
+
+
+test('migration rollback restores pre-import absence and removes only assets created by that migration', async () => {
+  const fixture = createStore()
+  const { store } = fixture
+  try {
+    const coordinator = new MigrationCoordinator({ store })
+    const image = 'data:image/png;base64,aGVsbG8='
+    const raw = JSON.stringify({ characters: { deepseek: { level: 2, affection: 4, customSprite: { dataUrl: image } } } })
+    const staged = coordinator.stage([{ sourceKind: 'whale-galgame', raw }])
+    const committed = await coordinator.commit(staged.id, { confirmed: true })
+    const migrationId = committed.id
+    const preview = store.previewMigrationRollback(migrationId)
+    assert.equal(preview.available, true)
+    assert.equal(preview.createdAssetCount, 1)
+    assert.equal(store.listMediaAssets().length, 1)
+    await assert.rejects(
+      () => store.rollbackMigration(migrationId),
+      { code: 'CONFIRMATION_REQUIRED' },
+    )
+    const rolledBack = store.rollbackMigration(migrationId, { confirmed: true })
+    assert.equal(rolledBack.status, 'rolled_back')
+    assert.equal(rolledBack.removedAssetCount, 1)
+    assert.equal(store.loadCharacterState('deepseek'), null)
+    assert.equal(store.listMediaAssets().length, 0)
+    assert.equal(store.previewMigrationRollback(migrationId).reason, 'ROLLBACK_ALREADY_USED')
+  } finally {
+    store.close()
+    fixture.cleanup()
+  }
+})
+
+test('migration rollback refuses to overwrite character state changed after import', async () => {
+  const fixture = createStore()
+  const { store } = fixture
+  try {
+    const coordinator = new MigrationCoordinator({ store })
+    const raw = JSON.stringify({ characters: { deepseek: { level: 2, affection: 4 } } })
+    const staged = coordinator.stage([{ sourceKind: 'whale-galgame', raw }])
+    const committed = await coordinator.commit(staged.id, { confirmed: true })
+    const migrationId = committed.id
+    const imported = store.loadCharacterState('deepseek')
+    store.saveCharacterState('deepseek', { ...imported.state, level: 3 }, imported.revision)
+    const preview = store.previewMigrationRollback(migrationId)
+    assert.equal(preview.available, false)
+    assert.equal(preview.reason, 'POST_MIGRATION_STATE_CHANGED')
+    await assert.rejects(
+      () => store.rollbackMigration(migrationId, { confirmed: true }),
+      { code: 'POST_MIGRATION_STATE_CHANGED' },
+    )
+    assert.equal(store.loadCharacterState('deepseek').state.level, 3)
+  } finally {
+    store.close()
+    fixture.cleanup()
+  }
+})

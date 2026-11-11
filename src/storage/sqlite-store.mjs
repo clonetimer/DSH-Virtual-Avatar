@@ -127,6 +127,19 @@ CREATE TABLE IF NOT EXISTS media_assets (
 );
 CREATE INDEX IF NOT EXISTS idx_media_assets_character ON media_assets(character_id, created_at);
 
+CREATE TABLE IF NOT EXISTS migration_rollback_snapshots (
+  migration_id TEXT PRIMARY KEY,
+  character_id TEXT NOT NULL,
+  before_state_json TEXT,
+  before_revision INTEGER NOT NULL,
+  after_revision INTEGER NOT NULL,
+  created_asset_ids_json TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'available',
+  created_at TEXT NOT NULL,
+  rolled_back_at TEXT,
+  FOREIGN KEY(migration_id) REFERENCES migration_runs(migration_id)
+);
+
 CREATE TABLE IF NOT EXISTS audit_events (
   id TEXT PRIMARY KEY,
   aggregate_kind TEXT NOT NULL,
@@ -427,6 +440,71 @@ export class SqliteAvatarStore {
     } : null
   }
 
+  previewMigrationRollback(migrationId) {
+    this.#assertOpen()
+    const row = this.#db.prepare('SELECT * FROM migration_rollback_snapshots WHERE migration_id = ?').get(String(migrationId))
+    if (!row) return { available: false, reason: 'ROLLBACK_SNAPSHOT_NOT_FOUND' }
+    if (row.status !== 'available') return { available: false, reason: 'ROLLBACK_ALREADY_USED', status: row.status }
+    const current = this.loadCharacterState(row.character_id)
+    if (!current || current.revision !== row.after_revision) {
+      return {
+        available: false,
+        reason: 'POST_MIGRATION_STATE_CHANGED',
+        expectedRevision: row.after_revision,
+        currentRevision: current?.revision ?? null,
+      }
+    }
+    return {
+      available: true,
+      migrationId: row.migration_id,
+      characterId: row.character_id,
+      expectedRevision: row.after_revision,
+      restoreRevision: row.before_revision,
+      createdAssetCount: JSON.parse(row.created_asset_ids_json).length,
+    }
+  }
+
+  rollbackMigration(migrationId, { confirmed = false } = {}) {
+    this.#assertOpen()
+    if (confirmed !== true) throw conflict('CONFIRMATION_REQUIRED', 'explicit migration rollback confirmation is required')
+    const preview = this.previewMigrationRollback(migrationId)
+    if (!preview.available) throw conflict(preview.reason, 'migration rollback is blocked: ' + preview.reason)
+    const filesToRemove = []
+    const result = this.transaction(() => {
+      const row = this.#db.prepare('SELECT * FROM migration_rollback_snapshots WHERE migration_id = ?').get(String(migrationId))
+      const current = this.loadCharacterState(row.character_id)
+      if (!current || current.revision !== row.after_revision) {
+        throw conflict('POST_MIGRATION_STATE_CHANGED', 'character state changed after migration; rollback is blocked')
+      }
+      this.#db.prepare('DELETE FROM character_states WHERE character_id = ?').run(row.character_id)
+      const assetIds = JSON.parse(row.created_asset_ids_json)
+      for (const assetId of assetIds) {
+        const asset = this.getMediaAsset(assetId)
+        if (asset) {
+          if (!this.assetDirectory || !asset.relativePath.startsWith('deepseek/')) {
+            throw conflict('MEDIA_ASSET_PATH_INVALID', 'rollback encountered an invalid media asset path')
+          }
+          filesToRemove.push(join(this.assetDirectory, asset.relativePath))
+          this.#db.prepare('DELETE FROM media_assets WHERE asset_id = ?').run(assetId)
+        }
+      }
+      this.#db.prepare("UPDATE migration_rollback_snapshots SET status='rolled_back', rolled_back_at=? WHERE migration_id=?")
+        .run(new Date().toISOString(), String(migrationId))
+      this.#db.prepare("UPDATE migration_runs SET status='rolled_back' WHERE migration_id=?")
+        .run(String(migrationId))
+      this.#recordAudit('migration', String(migrationId), 'MIGRATION_ROLLED_BACK', null, current.state, null, {
+        characterId: row.character_id,
+        removedAssetCount: filesToRemove.length,
+      })
+      return { migrationId: String(migrationId), status: 'rolled_back', removedAssetCount: filesToRemove.length }
+    })
+    const cleanupErrors = []
+    for (const filename of filesToRemove) {
+      try { rmSync(filename, { force: true }) } catch (error) { cleanupErrors.push({ filename, message: error.message }) }
+    }
+    return { ...result, cleanupErrors }
+  }
+
   getMediaAsset(assetId) {
     this.#assertOpen()
     const row = this.#db.prepare('SELECT * FROM media_assets WHERE asset_id = ?').get(String(assetId))
@@ -483,6 +561,7 @@ export class SqliteAvatarStore {
   commitMigration({ migrationId, sources }) {
     this.#assertOpen()
     const createdFiles = []
+    const createdAssetIds = []
     try {
       return this.transaction(() => {
         const id = String(migrationId || randomUUID())
@@ -508,7 +587,7 @@ export class SqliteAvatarStore {
           if (source.sourceKind === 'virtual-person') {
             this.#importVirtualPerson(inspection)
           } else if (source.sourceKind === 'whale-galgame') {
-            const imported = this.#importWhaleDeepseek(inspection, source.sourceHash, createdFiles)
+            const imported = this.#importWhaleDeepseek(inspection, source.sourceHash, createdFiles, createdAssetIds, id)
             if (imported.deferredCharacters.length || imported.mediaAssetsImported || imported.activeCharacterConflict) {
               warnings.push({
                 source: key,
@@ -564,7 +643,7 @@ export class SqliteAvatarStore {
     }
   }
 
-  #extractMediaReferences(value, { sourceHash, sourcePath, createdFiles, assets }) {
+  #extractMediaReferences(value, { sourceHash, sourcePath, createdFiles, createdAssetIds, assets }) {
     if (typeof value === 'string') {
       if (!/^data:image\//i.test(value)) return value
       const match = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)$/i.exec(value)
@@ -636,18 +715,19 @@ export class SqliteAvatarStore {
       this.#db.prepare('INSERT INTO media_assets(asset_id,character_id,mime_type,relative_path,sha256,byte_length,source_hash,source_path,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
         .run(asset.id,asset.characterId,asset.mimeType,asset.relativePath,asset.sha256,asset.byteLength,asset.sourceHash,asset.sourcePath,asset.createdAt)
       assets.set(assetId, asset)
+      createdAssetIds.push(assetId)
       return 'asset://dsh-virtual-avatar/' + assetId
     }
     if (Array.isArray(value)) {
       return value.map((entry, index) => this.#extractMediaReferences(entry, {
-        sourceHash, sourcePath: sourcePath + '[' + index + ']', createdFiles, assets,
+        sourceHash, sourcePath: sourcePath + '[' + index + ']', createdFiles, createdAssetIds, assets,
       }))
     }
     if (value && typeof value === 'object') {
       const output = {}
       for (const [key, entry] of Object.entries(value)) {
         output[key] = this.#extractMediaReferences(entry, {
-          sourceHash, sourcePath: sourcePath + '.' + key, createdFiles, assets,
+          sourceHash, sourcePath: sourcePath + '.' + key, createdFiles, createdAssetIds, assets,
         })
       }
       return output
@@ -655,7 +735,7 @@ export class SqliteAvatarStore {
     return value
   }
 
-  #importWhaleDeepseek(inspection, sourceHash, createdFiles) {
+  #importWhaleDeepseek(inspection, sourceHash, createdFiles, createdAssetIds, migrationId) {
     const parsed = inspection.parsed || {}
     const characters = parsed.characters && typeof parsed.characters === 'object' ? parsed.characters : {}
     const source = characters.deepseek
@@ -665,10 +745,102 @@ export class SqliteAvatarStore {
 
     const assets = new Map()
     const importedSource = this.#extractMediaReferences(source, {
-      sourceHash, sourcePath: '$.characters.deepseek', createdFiles, assets,
+      sourceHash, sourcePath: '$.characters.deepseek', createdFiles, createdAssetIds, assets,
     })
     const importedSharedMedia = this.#extractMediaReferences({ bg: parsed.bg, cg: parsed.cg }, {
-      sourceHash, sourcePath: '$', createdFiles, assets,
+      sourceHash, sourcePath: '
+    })
+    const state = createDeepseekWhaleInitialState({ sessionId: 'deepseek-whale-migrated' })
+    state.level = Math.max(1, Number(importedSource.level) || 1)
+    state.affection = Math.max(0, Number(importedSource.affection) || 0)
+    state.conversation = {
+      log: Array.isArray(importedSource.log) ? importedSource.log : [],
+      chatLines: Array.isArray(importedSource.chatLines) ? importedSource.chatLines : [],
+      choices: Array.isArray(importedSource.choices) ? importedSource.choices : [],
+    }
+    state.activity = importedSource.activity || null
+    state.cgs = Array.isArray(importedSource.cgs) ? importedSource.cgs : []
+    state.customSprite = importedSource.customSprite || null
+    state.chosenBuiltinBackground = importedSource.chosenBuiltinBackground || null
+    state.profileOverrides = importedSource.profileOverrides || {}
+    state.legacy = {
+      current: parsed.current || 'deepseek',
+      tokens: parsed.tokens || null,
+      bg: importedSharedMedia.bg ?? parsed.bg ?? null,
+      backgroundRevision: parsed.backgroundRevision || 0,
+      cg: importedSharedMedia.cg ?? parsed.cg ?? null,
+      preferences: parsed.preferences || {},
+      characterModelLabel: parsed.characterModelLabel || '',
+      chatModelLabel: parsed.chatModelLabel || '',
+      fallbackUsed: parsed.fallbackUsed || false,
+      fallbackReason: parsed.fallbackReason || '',
+    }
+    const saved = this.saveCharacterState('deepseek', state, 0)
+    this.#db.prepare(`
+      INSERT INTO migration_rollback_snapshots(
+        migration_id,character_id,before_state_json,before_revision,after_revision,created_asset_ids_json,status,created_at
+      ) VALUES(?,?,?,?,?,?,?,?)
+    `).run(
+      migrationId,
+      'deepseek',
+      null,
+      0,
+      saved.revision,
+      stableJson(createdAssetIds),
+      'available',
+      new Date().toISOString(),
+    )
+    return {
+      deferredCharacters: Object.keys(characters).filter(id => id !== 'deepseek'),
+      mediaAssetsImported: assets.size,
+      activeCharacterConflict: false,
+    }
+  }
+
+  #memoryRow(row) {
+    return {
+      id: row.id,
+      ownerKind: row.owner_kind,
+      ownerId: row.owner_id,
+      text: row.text,
+      pinned: row.pinned === 1,
+      hitCount: row.hit_count,
+      level: row.level,
+      source: row.source,
+      sourceEventId: row.source_event_id,
+      rawText: row.raw_text,
+      createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
+  #validateMemoryOwner(ownerKind, ownerId) {
+    if (!OWNER_KINDS.has(ownerKind)) throw new TypeError('invalid memory owner kind')
+    if (typeof ownerId !== 'string' || !ownerId.trim()) throw new TypeError('memory owner id required')
+  }
+
+  #recordAudit(aggregateKind, aggregateId, eventType, sourceEventId, before, after, details) {
+    this.#db.prepare(`
+      INSERT INTO audit_events(id,aggregate_kind,aggregate_id,event_type,source_event_id,before_hash,after_hash,details_json,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?)
+    `).run(
+      randomUUID(), aggregateKind, aggregateId, eventType, sourceEventId,
+      before === null || before === undefined ? null : sha256(stableJson(before)),
+      after === null || after === undefined ? null : sha256(stableJson(after)),
+      stableJson(details || {}), new Date().toISOString(),
+    )
+  }
+}
+
+export function createAvatarStore({ dshHomePath } = {}) {
+  if (typeof dshHomePath !== 'function') throw new TypeError('dshHomePath service required')
+  const storageRoot = dshHomePath('storages', 'dsh-virtual-avatar')
+  const filename = join(storageRoot, 'avatar.sqlite')
+  const assetDirectory = join(storageRoot, 'assets')
+  return new SqliteAvatarStore(filename, { assetDirectory })
+}
+, createdFiles, createdAssetIds, assets,
     })
     const state = createDeepseekWhaleInitialState({ sessionId: 'deepseek-whale-migrated' })
     state.level = Math.max(1, Number(importedSource.level) || 1)
