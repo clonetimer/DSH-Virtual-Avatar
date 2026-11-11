@@ -3,7 +3,7 @@ import { MemoryService } from '../../memory/service.mjs'
 import { buildConversationContext } from './context-window.mjs'
 import { createSummaryCandidate } from './memory-summary.mjs'
 import { applyCompanionInteraction, createGrowthState } from './growth.mjs'
-import { addConfirmedStoryFact, appendStoryEvent, createStoryMemory, renderStoryContinuity, updateStorySummary } from './story-memory.mjs'
+import { addConfirmedStoryFact, createStoryMemory, renderStoryContinuity, updateStorySummary } from './story-memory.mjs'
 import {
   DEEPSEEK_WHALE_ID,
   DEEPSEEK_WHALE_PROFILE,
@@ -120,7 +120,7 @@ export class DeepseekWhaleService {
     }
   }
 
-  finalizeTurn(prepared, { reply, terminalReason = 'completed', emotion = 'normal', choices = [] } = {}) {
+  finalizeTurn(prepared, { reply, terminalReason = 'completed', emotion = 'normal', choices = [], occurredAt = new Date().toISOString() } = {}) {
     if (!prepared || prepared.characterId !== DEEPSEEK_WHALE_ID) throw new TypeError('invalid prepared DeepSeek Whale turn')
     if (!TERMINAL_COMMIT_REASONS.has(String(terminalReason))) {
       return { committed: false, reason: String(terminalReason), state: prepared.baseState }
@@ -130,7 +130,14 @@ export class DeepseekWhaleService {
     const pplFinal = this.ppl.finalize(prepared.baseState.pplRuntime, prepared.pplResolution, terminalReason)
     if (!pplFinal.committed) throw new Error('PPL runtime refused completed turn commit')
 
-    const affectionDelta = deepseekWhaleAffectionDelta({ text: prepared.input, choice: prepared.choice })
+    const requestedAffectionDelta = deepseekWhaleAffectionDelta({ text: prepared.input, choice: prepared.choice })
+    const growthResult = applyCompanionInteraction(prepared.baseState.growth || createGrowthState(), {
+      eventId: prepared.eventId,
+      delta: requestedAffectionDelta,
+      occurredAt,
+      source: 'companion-chat',
+    })
+    const affectionDelta = growthResult.deltaApplied
     const affectionResult = applyDeepseekWhaleAffection(prepared.baseState, { delta: affectionDelta })
     const next = affectionResult.state
     next.pplRuntime = pplFinal.runtimeState
@@ -154,12 +161,6 @@ export class DeepseekWhaleService {
     })
     reconciled.conversation.choices = Array.isArray(choices) ? structuredClone(choices) : []
     reconciled.storyMemory = reconciled.storyMemory || createStoryMemory()
-    const growthResult = applyCompanionInteraction(reconciled.growth || createGrowthState(), {
-      eventId: prepared.eventId,
-      delta: affectionDelta,
-      occurredAt: new Date().toISOString(),
-      source: prepared.choice ? 'choice' : 'chat',
-    })
     reconciled.growth = growthResult.growth
     reconciled.growth.affectionLifetime = Math.max(reconciled.growth.affectionLifetime, reconciled.affection || 0)
 
@@ -179,6 +180,7 @@ export class DeepseekWhaleService {
       choiceId: prepared.choice?.id || null,
       reply: response,
       terminalReason,
+      requestedAffectionDelta,
       affectionDelta,
       pplEventType: prepared.event.type,
       pplSnapshotHash: prepared.pplSnapshot?.persona?.irSha256 || null,
@@ -195,6 +197,7 @@ export class DeepseekWhaleService {
       duplicate: committed.duplicate,
       state: committed.state?.state || committed.state || reconciled,
       revision: committed.revision ?? committed.state?.revision ?? null,
+      requestedAffectionDelta,
       affectionDelta,
       levelUps: affectionResult.levelUps,
       relationship: reconciled.relationship,
