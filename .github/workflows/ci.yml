@@ -18,10 +18,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - run: npm run verify
 
-      # PPL Core is used only as a pinned build-time compiler. Its private
-      # reference implementation is not vendored into the distributed plugin.
+      # PPL Core is a pinned build-time compiler only; it is not vendored in
+      # the distributed plugin. The generated IR is the runtime input.
       - uses: actions/checkout@v4
         with:
           repository: clonetimer/PPL
@@ -37,6 +36,12 @@ jobs:
           node .ppl-toolchain/components/foundation/core/dist/src/cli.js test personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules
           mkdir -p .ppl-artifacts
           node .ppl-toolchain/components/foundation/core/dist/src/cli.js build personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules --out .ppl-artifacts/deepseek-whale.pir.json
+          if [ -f personas/deepseek-whale.pir.json ]; then
+            cmp personas/deepseek-whale.pir.json .ppl-artifacts/deepseek-whale.pir.json
+          else
+            cp .ppl-artifacts/deepseek-whale.pir.json personas/deepseek-whale.pir.json
+          fi
+      - run: npm run verify
       - uses: actions/upload-artifact@v4
         with:
           name: deepseek-whale-pir-node-${{ matrix.node }}
