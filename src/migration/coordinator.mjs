@@ -10,11 +10,7 @@ const INSPECTORS = {
   'ppl-persona-ir': inspectPplPersonaIr,
 }
 
-/**
- * Coordinates preview -> stage -> explicit commit.
- * Persistence is injected so the coordinator can be tested without touching
- * user files. Source readers must be read-only; this class never mutates them.
- */
+/** Preview/stage/explicit-commit coordinator. The injected store owns durable transactions. */
 export class MigrationCoordinator {
   #store
   #staged = new Map()
@@ -35,27 +31,17 @@ export class MigrationCoordinator {
   preview(inputs) {
     if (!Array.isArray(inputs) || inputs.length === 0) throw new TypeError('at least one migration source is required')
     const inspections = inputs.map(({ sourceKind, raw }) => this.inspect(sourceKind, raw))
-    const preview = createMigrationPreview(inspections)
-    const sources = preview.sources.map(source => ({
-      ...source,
-      alreadyImported: this.#store.hasSource(source.sourceKind, source.sourceHash),
-    }))
-    return { ...preview, sources, totalRecords: sources.filter(s => !s.alreadyImported).reduce((n, s) => n + s.records, 0) }
+    const base = createMigrationPreview(inspections)
+    const sources = base.sources.map(source => ({ ...source, alreadyImported: this.#store.hasSource(source.sourceKind, source.sourceHash) }))
+    return { ...base, sources, totalRecords: sources.filter(source => !source.alreadyImported).reduce((sum, source) => sum + source.records, 0) }
   }
 
   stage(inputs) {
+    if (!Array.isArray(inputs) || inputs.length === 0) throw new TypeError('at least one migration source is required')
     const inspections = inputs.map(({ sourceKind, raw }) => this.inspect(sourceKind, raw))
-    const preview = createMigrationPreview(inspections)
-    const id = randomUUID()
-    const plan = {
-      id,
-      createdAt: new Date().toISOString(),
-      preview,
-      inspections,
-      status: 'staged',
-    }
-    this.#staged.set(id, plan)
-    return { id, status: plan.status, preview }
+    const plan = { id: randomUUID(), createdAt: new Date().toISOString(), preview: createMigrationPreview(inspections), inspections, status: 'staged' }
+    this.#staged.set(plan.id, plan)
+    return { id: plan.id, status: plan.status, preview: plan.preview }
   }
 
   async commit(stagedId, { confirmed = false } = {}) {
@@ -77,11 +63,7 @@ export class MigrationCoordinator {
     }
     const result = await this.#store.commitMigration({
       migrationId: plan.id,
-      sources: plan.inspections.map(item => ({
-        sourceKind: item.sourceKind,
-        sourceHash: item.sourceHash,
-        inspection: item,
-      })),
+      sources: plan.inspections.map(inspection => ({ sourceKind: inspection.sourceKind, sourceHash: inspection.sourceHash, inspection })),
     })
     plan.status = 'committed'
     plan.result = result
