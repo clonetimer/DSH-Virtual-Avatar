@@ -413,6 +413,20 @@ export function apply(ctx, config = {}) {
         json(res, removed ? 200 : 404, { ok: removed, error: removed ? undefined : 'memory not found' })
         return
       }
+      if (action === 'background-set') {
+        const key = String(args.background || '')
+        const backgrounds = new Set(['palace-night', 'bg-deepseek-seaside-study'])
+        if (!backgrounds.has(key)) {
+          json(res, 400, { ok: false, error: 'unsupported background' })
+          return
+        }
+        const loaded = service.loadState()
+        const next = { ...loaded.state, chosenBuiltinBackground: key }
+        const saved = store.saveCharacterState('deepseek', next, loaded.revision)
+        json(res, 200, { ok: true, background: key, revision: saved.revision, view: publicView(service, memoryService, runtimeConfig) })
+        return
+      }
+
       if (action === 'profile-get') {
         const loaded = service.loadState()
         json(res, 200, { ok: true, profile: resolveDeepseekWhaleProfile(loaded.state.profileOverrides || {}) })
