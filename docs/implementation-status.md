@@ -175,3 +175,18 @@
 - CI now creates an actual installable `.tgz` on Node 24.9.0, copies it into an artifact directory, writes SHA-256 and package-info manifest, and uploads a Windows Web/Desktop install artifact.
 - README and test plan now include PowerShell hash verification and separate Web/selected-Desktop-profile install/restart procedures.
 - Real Web/Desktop installation remains NOT RUN until artifact is installed in the user's Windows DSH environment and evidence is returned.
+
+
+## P4 Windows DSH 0.2.2-rc.1 install artifact (2026-11-11)
+
+- PR #18 merged to `feat/architecture-baseline`: `8d71ef49d7946dafc5f31e5906df20baaa98e99e`.
+- CI Run #462 passed Node 24.9.0 and Node 24; package audit passed on both.
+- Node 24.9.0 job produced and uploaded an installable npm tarball artifact:
+  - Artifact: `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop`
+  - File: `dsh-virtual-avatar-0.1.0-dev.1.tgz`
+  - Byte length: 3,445,774
+  - SHA-256: `7b85a4456bbf59e384a58f3cbbe0dbe6ed636f5d6e52479e9fe9d18eb088fc9c`
+  - Run: `43015839283`
+- Install package is shared by DSH Web and DSH Desktop; both use the normal Web Client module graph and Cordis Host bundle. No private Electron API or separate renderer bundle was introduced.
+- Windows real-host test remains pending: install into Web profile and Desktop selected profile; verify route/overlay/model streaming/reload/backup restore/uninstall data retention.
+- Do not mark P4 fully PASS until both platform evidence sets are recorded.
