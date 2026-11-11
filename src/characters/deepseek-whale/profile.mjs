@@ -32,7 +32,7 @@ export function normalizeDeepseekWhaleProfileOverrides(raw = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
   const out = {}
   for (const [key, limit] of Object.entries(PROFILE_LIMITS)) {
-    if (raw[key] === null) continue
+    if (raw[key] === undefined || raw[key] === null) continue
     if (typeof raw[key] !== 'string') {
       const error = new TypeError('角色设定字段必须是字符串或 null')
       error.code = 'INVALID_PROFILE_FIELD'
