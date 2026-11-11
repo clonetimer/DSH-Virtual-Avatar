@@ -89,9 +89,9 @@ export function updateStorySummary(storyMemory, { summary, expectedRevision, now
 export function renderStoryContinuity(storyMemory) {
   const state = normalizeStoryMemory(storyMemory)
   const sections = []
-  if (state.summary) sections.push('【剧情连续性摘要】\\n' + state.summary)
-  if (state.confirmedFacts.length) sections.push('【已确认的重要事实】\\n' + state.confirmedFacts.slice(-20).map(item => '- ' + item.text).join('\\n'))
-  if (state.keyEvents.length) sections.push('【近期关键事件】\\n' + state.keyEvents.slice(-12).map(item => '- ' + item.title + (item.detail ? '：' + item.detail : '')).join('\\n'))
-  if (state.openThreads.length) sections.push('【尚未完成的约定/剧情】\\n' + state.openThreads.slice(-10).map(item => '- ' + cleanText(item.text, 160)).join('\\n'))
+  if (state.summary) sections.push('【长期相处摘要】\\n' + state.summary)
+  if (state.confirmedFacts.length) sections.push('【已确认的用户事实】\\n' + state.confirmedFacts.slice(-20).map(item => '- ' + item.text).join('\\n'))
+  if (state.keyEvents.length) sections.push('【共同经历与重要事件】\\n' + state.keyEvents.slice(-12).map(item => '- ' + item.title + (item.detail ? '：' + item.detail : '')).join('\\n'))
+  if (state.openThreads.length) sections.push('【尚未完成的约定】\\n' + state.openThreads.slice(-10).map(item => '- ' + cleanText(item.text, 160)).join('\\n'))
   return sections.join('\\n\\n')
 }
