@@ -1,6 +1,7 @@
 import { createDeepseekWhaleRuntime } from '../../ppl/index.mjs'
 import { MemoryService } from '../../memory/service.mjs'
 import { buildConversationContext } from './context-window.mjs'
+import { createSummaryCandidate } from './memory-summary.mjs'
 import { applyCompanionInteraction, createGrowthState } from './growth.mjs'
 import { addConfirmedStoryFact, appendStoryEvent, createStoryMemory, renderStoryContinuity, updateStorySummary } from './story-memory.mjs'
 import {
@@ -72,10 +73,12 @@ export class DeepseekWhaleService {
       turn: turn ?? loaded.state.pplRuntime?.session?.turn ?? 0,
       step,
     })
-    const memoryContext = this.memory.buildContext({
+    const memoryContext = this.memory.retrieveContext({
       ownerKind: 'character',
       ownerId: DEEPSEEK_WHALE_ID,
+      query: input,
       maxChars: 12000,
+      limit: 20,
     })
     const profile = resolveDeepseekWhaleProfile(profileOverrides || loaded.state.profileOverrides || {})
     const system = buildDeepseekWhaleSystemPrompt({
@@ -91,7 +94,8 @@ export class DeepseekWhaleService {
     const systemWithContinuity = [system, continuity].filter(Boolean).join('\\n\\n')
     const contextWindow = buildConversationContext({
       history: loaded.state.conversation?.log || [],
-      storyContinuity: continuity,
+      continuity,
+      memories: memoryContext.items,
       recentTurns: 12,
       maxChars: 14000,
     })
@@ -211,6 +215,17 @@ export class DeepseekWhaleService {
     const storyMemory = updateStorySummary(loaded.state.storyMemory, { summary, expectedRevision: expectedStoryRevision })
     const saved = this.store.saveCharacterState(DEEPSEEK_WHALE_ID, { ...loaded.state, storyMemory }, loaded.revision)
     return { revision: saved.revision, storyMemory }
+  }
+
+  createMemorySummaryCandidate({ now = new Date().toISOString() } = {}) {
+    const loaded = this.loadState()
+    const memories = this.memory.list({ ownerKind: 'character', ownerId: DEEPSEEK_WHALE_ID })
+    return createSummaryCandidate({
+      history: loaded.state.conversation?.log || [],
+      currentMemory: loaded.state.storyMemory || createStoryMemory(),
+      memories,
+      now,
+    })
   }
 
   getStoryMemory() {
