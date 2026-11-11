@@ -87,6 +87,18 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     })
     assert.equal(profile.status, 200)
     assert.equal(profile.body.profile.displayName, '小鲸鱼')
+
+    const background = await call(route.handler, {
+      action: 'background-set',
+      args: { background: 'bg-deepseek-seaside-study' },
+    })
+    assert.equal(background.status, 200)
+    assert.match(background.body.view.character.backgroundUrl, /bg-deepseek-seaside-study\\.webp$/)
+    const invalidBackground = await call(route.handler, {
+      action: 'background-set',
+      args: { background: '../outside' },
+    })
+    assert.equal(invalidBackground.status, 400)
   } finally {
     if (typeof cleanup === 'function') cleanup()
     rmSync(home, { recursive: true, force: true })
