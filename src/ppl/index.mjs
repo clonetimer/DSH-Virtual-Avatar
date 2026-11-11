@@ -1,37 +1,43 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { compile } from './vendor/pplc/compiler.js'
 import { PersonaRuntime } from './lib/persona-runtime.js'
 import { applyResolution } from './vendor/pplc/runtime.js'
 
-const SOURCE_PATH = fileURLToPath(new URL('../../personas/deepseek-whale.ppl', import.meta.url))
+const IR_PATH = fileURLToPath(new URL('../../personas/deepseek-whale.pir.json', import.meta.url))
 const COMMIT_REASONS = new Set(['completed', 'max-tokens'])
-let cachedCompiled = null
+let cachedPersona = null
 
-export function compileDeepseekWhalePersona(source = readFileSync(SOURCE_PATH, 'utf8')) {
-  const result = compile(source, SOURCE_PATH)
-  const errors = (result.diagnostics || []).filter(item => item.severity === 'error')
-  if (!result.ir || errors.length) {
-    const detail = errors.map(item => item.code + ': ' + item.message).join('; ')
-    const error = new Error('DeepSeek Whale PPL compilation failed: ' + (detail || 'IR not produced'))
-    error.code = 'PPL_COMPILE_FAILED'
-    error.diagnostics = result.diagnostics || []
+export function loadDeepseekWhalePersona(raw = readFileSync(IR_PATH, 'utf8')) {
+  let ir
+  try { ir = JSON.parse(raw) } catch (cause) {
+    const error = new Error('DeepSeek Whale PPL IR is not valid JSON', { cause })
+    error.code = 'PPL_IR_INVALID_JSON'
     throw error
   }
-  return { ir: result.ir, diagnostics: result.diagnostics || [] }
+  if (ir?.schema !== 'ppl.persona-ir/0.3' || ir?.persona?.id !== 'DEEPSEEK_WHALE') {
+    const error = new Error('expected PPL 0.3 DEEPSEEK_WHALE Persona IR')
+    error.code = 'PPL_IR_SCHEMA_MISMATCH'
+    throw error
+  }
+  if (!ir.symbols || !Array.isArray(ir.rules) || !ir.runtimeInitial) {
+    const error = new Error('DeepSeek Whale PPL IR is missing required runtime fields')
+    error.code = 'PPL_IR_INCOMPLETE'
+    throw error
+  }
+  return ir
 }
 
 export function getDeepseekWhalePersona() {
-  if (!cachedCompiled) cachedCompiled = compileDeepseekWhalePersona()
-  return cachedCompiled
+  if (!cachedPersona) cachedPersona = loadDeepseekWhalePersona()
+  return cachedPersona
 }
 
 export function resetDeepseekWhalePersonaCache() {
-  cachedCompiled = null
+  cachedPersona = null
 }
 
 export function createDeepseekWhaleRuntime({ scene, context, profile = 'standard' } = {}) {
-  const { ir } = getDeepseekWhalePersona()
+  const ir = getDeepseekWhalePersona()
   const runtime = new PersonaRuntime({ persona: ir, scene, context, profile })
   return {
     ir,
