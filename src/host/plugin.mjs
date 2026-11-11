@@ -313,6 +313,42 @@ export function apply(ctx, config = {}) {
         return
       }
 
+      if (action === 'story-get') {
+        json(res, 200, { ok: true, storyMemory: service.getStoryMemory() })
+        return
+      }
+
+      if (action === 'story-fact-confirm') {
+        const text = typeof args.text === 'string' ? args.text.trim() : ''
+        const sourceEventId = typeof args.sourceEventId === 'string' ? args.sourceEventId.trim() : ''
+        if (!text || !sourceEventId) {
+          json(res, 400, { ok: false, error: 'text and sourceEventId are required' })
+          return
+        }
+        const result = service.addConfirmedStoryFact({
+          id: typeof args.id === 'string' && args.id.trim() ? args.id.trim() : randomUUID(),
+          text,
+          sourceEventId,
+          category: typeof args.category === 'string' ? args.category : 'fact',
+        })
+        json(res, 200, { ok: true, ...result })
+        return
+      }
+
+      if (action === 'story-summary-set') {
+        const summary = typeof args.summary === 'string' ? args.summary.trim() : ''
+        if (!summary) {
+          json(res, 400, { ok: false, error: 'summary is required' })
+          return
+        }
+        const result = service.updateStorySummary({
+          summary,
+          expectedStoryRevision: Number.isSafeInteger(args.expectedStoryRevision) ? args.expectedStoryRevision : undefined,
+        })
+        json(res, 200, { ok: true, ...result })
+        return
+      }
+
       if (action === 'history') {
         const loaded = service.loadState()
         const lines = loaded.state.conversation?.chatLines || []
