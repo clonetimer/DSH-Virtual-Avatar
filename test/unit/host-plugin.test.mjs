@@ -86,6 +86,16 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(storySummary.status, 200)
     assert.equal(storySummary.body.storyMemory.summary, '主人和鲸鱼娘正在熟悉彼此。')
 
+    const summaryCandidate = await call(route.handler, { action: 'summary-candidate' })
+    assert.equal(summaryCandidate.status, 200)
+    assert.equal(summaryCandidate.body.candidate.requiresUserConfirmation, true)
+    assert.ok(summaryCandidate.body.candidate.sourceHash)
+    const summaryConfirm = await call(route.handler, {
+      action: 'summary-confirm',
+      args: { summary: summaryCandidate.body.candidate.summary || '主人和鲸鱼娘正在建立长期陪伴关系。', expectedStoryRevision: 0 },
+    })
+    assert.equal(summaryConfirm.status, 200)
+    assert.match(summaryConfirm.body.storyMemory.summary, /主人和鲸鱼娘/)
     const historyPage = await call(route.handler, { action: 'history', args: { limit: 1 } })
     assert.equal(historyPage.status, 200)
     assert.equal(historyPage.body.total, 2)
@@ -100,9 +110,7 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(history.body.lines[0].who, 'heroine')
     assert.equal(history.body.nextBefore, 1)
 
-    assert.equal(chat.body.choices.length, 3)
-    assert.deepEqual(chat.body.choices.map(item => item.effect).sort(), [-1, 0, 1])
-    assert.deepEqual(chat.body.choices.map(item => item.text), ['再聊一会儿', '给她一个拥抱', '让她休息'])
+    assert.deepEqual(chat.body.choices, [])
 
     const memory = await call(route.handler, {
       action: 'memory-add',
