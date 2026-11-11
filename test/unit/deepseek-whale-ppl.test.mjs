@@ -3,11 +3,10 @@ import assert from 'node:assert/strict'
 import { runSourceTests } from '../../src/ppl/vendor/pplc/runtime.js'
 import { createDeepseekWhaleRuntime, getDeepseekWhalePersona } from '../../src/ppl/index.mjs'
 
-test('DeepSeek Whale PPL source compiles and all embedded source tests pass', () => {
-  const { ir, diagnostics } = getDeepseekWhalePersona()
+test('DeepSeek Whale PPL 0.3 artifact loads and all embedded source tests pass', () => {
+  const ir = getDeepseekWhalePersona()
   assert.equal(ir.schema, 'ppl.persona-ir/0.3')
   assert.equal(ir.persona.id, 'DEEPSEEK_WHALE')
-  assert.equal(diagnostics.filter(item => item.severity === 'error').length, 0)
   const results = runSourceTests(ir)
   assert.equal(results.failed, 0, JSON.stringify(results.results.filter(item => !item.passed), null, 2))
   assert.equal(results.passed, 3)
@@ -34,7 +33,7 @@ test('PPL relationship commits are staged and only applied for completed turns',
   assert.equal(completed.runtimeState.relationships.admin.attachment, 0.105)
 })
 
-test('PPL confession transition requires trust threshold and is committed after the turn', () => {
+test('PPL confession transition requires trust threshold and commits after the turn', () => {
   const runtime = createDeepseekWhaleRuntime()
   const before = runtime.initialState('whale-confession')
   before.relationships.admin.trust = 0.8
