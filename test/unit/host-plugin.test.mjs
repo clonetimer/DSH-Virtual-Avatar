@@ -244,3 +244,37 @@ test('backup API creates, lists, verifies and restores user data with explicit c
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+
+test('conversation search and relationship timeline return persisted companion events', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-history-'))
+  let route
+  let cleanup
+  const llm = { stream: async function* () { yield { type: 'text-delta', text: '我会记得这次海边散步。' }; yield { type: 'finish', reason: { kind: 'stop' } } } }
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm,
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject(names, callback) {
+      if (names.includes('agentDefaultModel')) callback({ agentDefaultModel: { currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }) } })
+    },
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    const chat = await call(route.handler, { action: 'chat', args: { text: '我们今天去海边散步了。' } })
+    assert.equal(chat.status, 200)
+    const search = await call(route.handler, { action: 'history-search', args: { query: '海边' } })
+    assert.equal(search.status, 200)
+    assert.ok(search.body.matches.length >= 1)
+    const short = await call(route.handler, { action: 'history-search', args: { query: 'a' } })
+    assert.equal(short.status, 400)
+    assert.equal(short.body.code, 'SEARCH_QUERY_TOO_SHORT')
+    const events = await call(route.handler, { action: 'relationship-history', args: { limit: 50 } })
+    assert.equal(events.status, 200)
+    assert.ok(events.body.events.some(event => event.type === 'TURN_COMPLETED'))
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
