@@ -209,6 +209,14 @@ function selectModel(llm, agentDefaultModel, config) {
   throw new Error('No DSH model is configured. Select a main model or configure chatProvider/chatModel.')
 }
 
+function safeBackgroundAsset(state) {
+  const key = String(state?.chosenBuiltinBackground || 'palace-night')
+  const filename = key + '.webp'
+  return ['palace-night.webp', 'bg-deepseek-seaside-study.webp'].includes(filename)
+    ? filename
+    : 'palace-night.webp'
+}
+
 function publicView(service, memoryService, config) {
   const loaded = service.loadState()
   const state = loaded.state
@@ -232,7 +240,7 @@ function publicView(service, memoryService, config) {
         exasperated: 'whale-exasperated.webp',
         starry: 'whale-starry.webp',
       }[state.conversation?.chatLines?.filter(line => line.who === 'heroine').at(-1)?.emotion] || 'maid-left.webp'),
-      backgroundUrl: API_PATH + '/assets/' + (state.chosenBuiltinBackground || 'palace-night') + '.webp',
+      backgroundUrl: API_PATH + '/assets/' + safeBackgroundAsset(state),
       expressionUrls: Object.fromEntries(Object.keys(ASSET_TYPES).filter(key => key.startsWith('whale-')).map(key => [key.replace('whale-', '').replace('.webp', ''), API_PATH + '/assets/' + key])),
       level: state.level,
       affection: state.affection,
