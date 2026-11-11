@@ -447,7 +447,7 @@ export function apply(ctx, config = {}) {
 
       json(res, 404, { ok: false, error: 'unknown action: ' + action })
     } catch (error) {
-      const status = Number.isInteger(error?.status) ? error.status : 500
+      const status = Number.isInteger(error?.status) ? error.status : error?.code === 'REVISION_CONFLICT' ? 409 : 500
       json(res, status, { ok: false, error: error?.message || String(error), code: error?.code || 'AVATAR_ERROR' })
     }
   }
