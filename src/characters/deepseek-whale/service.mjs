@@ -197,12 +197,10 @@ export class DeepseekWhaleService {
     const loaded = this.loadState()
     const profile = resolveDeepseekWhaleProfile(overrides)
     const next = { ...loaded.state, profileOverrides: Object.fromEntries(
-      Object.entries(profile).filter(([key, value]) => DEEPSEEP_PROFILE_FIELDS().includes(key) && value !== DEEPSEEK_WHALE_PROFILE[key]),
+      Object.entries(profile).filter(([key, value]) => PROFILE_OVERRIDE_FIELDS.includes(key) && value !== DEEPSEEK_WHALE_PROFILE[key]),
     ) }
     return this.store.saveCharacterState(DEEPSEEK_WHALE_ID, next, expectedRevision ?? loaded.revision)
   }
 }
 
-function DEEPSEEP_PROFILE_FIELDS() {
-  return ['displayName', 'address', 'greeting', 'persona', 'tone', 'visual']
-}
+const PROFILE_OVERRIDE_FIELDS = Object.freeze(['displayName', 'address', 'greeting', 'persona', 'tone', 'visual'])
