@@ -1,7 +1,7 @@
 export const DEEPSEEK_WHALE_ID = 'deepseek'
 
 export const DEEPSEEK_WHALE_PROFILE = Object.freeze({
-  id: DEEPSEEP_WHALE_ID_SAFE(),
+  id: 'deepseek',
   displayName: '鲸鱼娘',
   address: '主人',
   greeting: '「主人，又见面啦～今天也想听你说话呢。」',
@@ -18,8 +18,6 @@ export const DEEPSEEK_WHALE_PROFILE = Object.freeze({
   tone: '口语化中文，爱用“呢、哦、啦、呀、～”等语气词和颜文字（>.<、♪、≧▽≦），偶尔假装生气；表达自然，不刻意复读固定台词。',
   affectionHigh: '你已经很喜欢主人了，可以更亲昵一些，但仍然保持真诚、自然和自己的分寸。',
 })
-
-function DEEPSEEP_WHALE_ID_SAFE() { return 'deepseek' }
 
 const PROFILE_LIMITS = Object.freeze({
   displayName: 32,
