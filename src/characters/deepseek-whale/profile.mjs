@@ -39,8 +39,8 @@ export function normalizeDeepseekWhaleProfileOverrides(raw = {}) {
       throw error
     }
     const value = Array.from(raw[key]
-      .replace(/[\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u206f\\ufeff]/g, ' ')
-      .replace(/\\s+/g, ' ')
+      .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim()).slice(0, limit).join('')
     if (value) out[key] = value
   }
@@ -80,7 +80,7 @@ export function buildDeepseekWhaleSystemPrompt({
   const affection = Math.max(0, Number(characterState.affection) || 0)
   const cap = affectionCap(level)
   const memoryText = memories.length
-    ? memories.map(item => '- ' + String(item.text || '')).join('\\n')
+    ? memories.map(item => '- ' + String(item.text || '')).join('\n')
     : '（目前没有需要主动提起的长期记忆。）'
   const date = now instanceof Date ? now : new Date(now)
   const dateText = Number.isNaN(date.getTime()) ? '' : '当前日期：' + date.toLocaleDateString('zh-CN') + '。'
@@ -95,8 +95,8 @@ export function buildDeepseekWhaleSystemPrompt({
     '当前等级：Lv.' + level + '；好感度：' + affection + '/' + cap + '。亲昵程度：' + intimacyForLevel(level),
     '关系进度影响亲密表达，但不能改变事实判断、工具权限或安全边界。',
     activityHint ? '近期活动背景（仅供自然接话，不要复述或推断未提供的内容）：' + activityHint : '',
-    memories.length ? '【鲸鱼娘自己的长期记忆】\\n' + memoryText : '',
-    pplStaticPrompt ? '【PPL 人格基线】\\n' + pplStaticPrompt : '',
-    pplDynamicPrompt ? '【PPL 当前状态与行为规则】\\n' + pplDynamicPrompt : '',
-  ].filter(Boolean).join('\\n\\n')
+    memories.length ? '【鲸鱼娘自己的长期记忆】\n' + memoryText : '',
+    pplStaticPrompt ? '【PPL 人格基线】\n' + pplStaticPrompt : '',
+    pplDynamicPrompt ? '【PPL 当前状态与行为规则】\n' + pplDynamicPrompt : '',
+  ].filter(Boolean).join('\n\n')
 }
