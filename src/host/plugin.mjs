@@ -308,6 +308,17 @@ export function apply(ctx, config = {}) {
 
       if (action === 'relationship-history') {
         const events = store.listAuditEvents('character', 'deepseek', { limit: args.limit })
+          .filter(event => event.type === 'TURN_COMPLETED' || event.type === 'AFFECTION_DELTA')
+          .map(event => ({
+            ...event,
+            label: event.type === 'TURN_COMPLETED' ? '完成一次陪伴对话' : '好感度调整',
+            details: {
+              ...event.details,
+              affectionDelta: event.details.appliedAffectionDelta ?? event.details.delta ?? 0,
+              stageChanged: event.details.stageChanged === true,
+              levelChanged: event.details.levelChanged === true,
+            },
+          }))
         json(res, 200, { ok: true, events })
         return
       }
