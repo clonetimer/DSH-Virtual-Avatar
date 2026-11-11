@@ -61,6 +61,16 @@ export function classifyDeepseekWhaleEvent({ text = '', choice = null, eventId, 
   }
 }
 
+export function deepseekWhaleAffectionDelta({ text = '', choice = null } = {}) {
+  if (choice && choice.effect === 1) return 1
+  if (choice && choice.effect === -1) return -1
+  if (choice) return 0
+  const input = String(text || '')
+  if (POSITIVE_TEXT.test(input)) return 1
+  if (NEGATIVE_TEXT.test(input)) return -1
+  return 0
+}
+
 export function applyDeepseekWhaleAffection(state, { delta = 0 } = {}) {
   if (![ -1, 0, 1 ].includes(delta)) throw new TypeError('affection delta must be -1, 0 or 1')
   const next = structuredClone(state)
