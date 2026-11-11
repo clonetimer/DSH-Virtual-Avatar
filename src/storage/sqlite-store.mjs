@@ -236,6 +236,40 @@ export class SqliteAvatarStore {
     return { state: structuredClone(state), revision, updatedAt: now }
   }
 
+  findDomainEvent(eventId) {
+    this.#assertOpen()
+    const row = this.#db.prepare('SELECT event_id, character_id, event_type, payload_hash, payload_json FROM domain_events WHERE event_id = ?').get(String(eventId))
+    return row ? { eventId: row.event_id, characterId: row.character_id, eventType: row.event_type, payloadHash: row.payload_hash, payload: JSON.parse(row.payload_json) } : null
+  }
+
+  commitCharacterTurn({ eventId, characterId = 'deepseek', payload, state, expectedRevision, occurredAt = new Date().toISOString() }) {
+    this.#assertOpen()
+    const id = String(eventId || '')
+    if (!id) throw new TypeError('eventId required')
+    if (!state || typeof state !== 'object') throw new TypeError('next character state required')
+    return this.transaction(() => {
+      const payloadHash = sha256(stableJson(payload || {}))
+      const previousEvent = this.findDomainEvent(id)
+      if (previousEvent) {
+        if (previousEvent.payloadHash !== payloadHash) throw conflict('EVENT_ID_CONFLICT', 'turn event id was reused with a different payload')
+        return { duplicate: true, state: this.loadCharacterState(characterId) }
+      }
+      const before = this.loadCharacterState(characterId)
+      const currentRevision = before?.revision || 0
+      if (expectedRevision !== undefined && currentRevision !== expectedRevision) {
+        throw conflict('REVISION_CONFLICT', 'character state changed while the turn was being generated')
+      }
+      const saved = this.saveCharacterState(characterId, state, currentRevision)
+      const now = new Date().toISOString()
+      this.#db.prepare(`
+        INSERT INTO domain_events(event_id,character_id,event_type,payload_hash,payload_json,occurred_at,applied_at)
+        VALUES(?,?,?,?,?,?,?)
+      `).run(id,characterId,'TURN_COMPLETED',payloadHash,stableJson(payload || {}),occurredAt,now)
+      this.#recordAudit('character',characterId,'TURN_COMPLETED',id,before?.state || null,saved.state,{})
+      return { duplicate: false, state: saved.state, revision: saved.revision, updatedAt: saved.updatedAt }
+    })
+  }
+
   applyAffectionEvent({ eventId, characterId = 'deepseek', delta = 0, source = 'galgame-choice', occurredAt = new Date().toISOString() }) {
     this.#assertOpen()
     const id = String(eventId || '')
@@ -420,7 +454,7 @@ export class SqliteAvatarStore {
       this.#db.prepare(`
         INSERT OR IGNORE INTO memory_items(id,owner_kind,owner_id,text,pinned,hit_count,level,source,raw_text,created_at,last_seen_at,updated_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
-      `).run(id,'agent-persona','virtual-person-global',item.body,item.pinned ? 1 : 0,item.hitCount,item.pinned ? 'core' : item.hitCount > 0 ? 'mid' : 'edge','virtual-person',item.raw,item.date + 'T' + item.time + ':00.000Z',item.date + 'T' + item.time + ':00.000Z',new Date().toISOString())
+      `).run(id,'agent-persona','virtual-person-global',item.body,item.pinned ? 1 : 0,item.hitCount,item.pinned ? 'core' : item.hitCount > 0 ? 'mid' : 'edge','virtual-person',item.raw,item.date + ' ' + item.time,item.date + ' ' + item.time,new Date().toISOString())
     }
   }
 
