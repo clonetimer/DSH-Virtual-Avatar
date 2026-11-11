@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 const sha = value => createHash('sha256').update(value).digest('hex')
 const MAX_SUMMARY_CHARS = 1600
 function clean(value, max = 240) {
-  return String(value || '').replace(/[\\u0000-\\u001f\\u007f-\\u009f]/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, max)
+  return String(value || '').replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max)
 }
 export function createSummaryCandidate({ history = [], currentMemory = {}, memories = [], now = new Date().toISOString() } = {}) {
   if (!Array.isArray(history) || !Array.isArray(memories)) throw new TypeError('history and memories must be arrays')
