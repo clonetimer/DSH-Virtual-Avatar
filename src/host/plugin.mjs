@@ -391,6 +391,20 @@ export function apply(ctx, config = {}) {
         json(res, 200, { ok: true, memories: service.listMemories() })
         return
       }
+      if (action === 'memory-edit') {
+        const memoryId = String(args.memoryId || '')
+        const result = service.editMemory(memoryId, args.text)
+        if (!result) {
+          json(res, 404, { ok: false, error: 'memory not found' })
+          return
+        }
+        json(res, 200, { ok: true, memory: result })
+        return
+      }
+      if (action === 'memory-export') {
+        json(res, 200, { ok: true, export: service.exportMemories() })
+        return
+      }
       if (action === 'memory-pin') {
         const result = service.pinMemory(String(args.memoryId || ''), args.pinned !== false)
         if (!result) {
