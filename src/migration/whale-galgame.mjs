@@ -34,6 +34,8 @@ export function inspectWhaleGlobalSave(raw) {
     rootKeys: Object.keys(parsed),
     characterIds,
     characterCount: characterIds.length,
+    deepseekAvailable: Object.prototype.hasOwnProperty.call(characters, 'deepseek'),
+    deferredCharacterIds: characterIds.filter(id => id !== 'deepseek'),
     characters: characterIds.map(id => {
       const c = characters[id]
       return {
@@ -46,5 +48,6 @@ export function inspectWhaleGlobalSave(raw) {
     }),
     mediaDataUrls,
     parsed,
+    raw,
   }
 }
