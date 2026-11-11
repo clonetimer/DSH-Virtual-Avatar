@@ -140,3 +140,11 @@ GitHub Actions run #211（最新已完成）：
 - 相关度检索目前采用本地文本相似度排序，不宣称语义向量检索。
 - 需要当前 head 的 Node 22.19 / 24 CI 通过后，才能标记 A1 模块级验收。
 - 真实 DSH Web/Desktop 对话与跨会话验收仍未完成。
+
+## 2026-11-11：A1 控制字符清理 CI 修复候选
+
+- Run #324 在 \`npm run check\` 阶段失败，定位为 \`memory-summary.mjs\` 与 \`story-engine.mjs\` 中控制字符和空白正则重复转义；PPL 编译阶段已通过。
+- 已将正则恢复为 JavaScript Unicode 转义与 \`\\s\` 正常写法。
+- \`memory-summary.test.mjs\` 新增 C0/C1 控制字符清理与空白归一化回归用例。
+- 当前修复分支等待 Node 22.19 / 24 完整 CI；在新 run 通过前不标记 PASS。
+
