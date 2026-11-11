@@ -18,7 +18,7 @@
 | DeepSeek PPL Persona / Runtime | PASS（模块级） | 固定版本编译、人格测试、完成/中断提交门禁 |
 | 自由对话 Host API | PASS（mock contract） | 模型流式接口契约与 Origin / Fetch Metadata 测试；真实 DSH provider 尚未实机验证 |
 | SQLite 角色状态与事件账本 | PASS（模块级） | 事务、乐观锁、幂等、重启恢复 |
-| 角色长期记忆 | PASS（模块级） | owner 隔离、相关检索、相似合并、pin/delete、预算 |
+| 角色长期记忆 | PASS（模块级） | owner 隔离、相关检索、相似合并、pin/delete、编辑、JSON 导出、预算 |
 | 长期相处摘要 | PASS（模块级） | source hash、revision 检查、用户确认后写入 |
 | 关系与好感成长 | PASS（模块级） | PPL trust/attachment/stage；每日正向好感上限已接入真实结算 |
 | Whale DeepSeek 迁移 | PARTIAL | 状态导入与原始来源归档；本分支正在补媒体提取与 hash 对账 |
@@ -45,7 +45,7 @@
 4. SQLite 提交失败时回收本轮新增文件；读取时重新核验 hash。
 5. 对其他角色的媒体明确标记 deferred，不混入 DeepSeek。
 
-## 下一阶段
+## P1 进度补充\n\n- P1-B 已增加记忆编辑与 JSON 导出服务/API/界面；正在等待双版本 CI。\n- 记忆自动候选仍需用户确认；编辑限制 400 字；导出仅包含 DeepSeek 角色记忆。\n- P1-A 安全回滚尚未合入；P1-C 摘要冲突 UI 与 P1-D 完整备份恢复仍未完成。\n\n## 下一阶段
 
 1. 完成迁移回滚：快照、后续写入冲突检测、受控恢复。
 2. 完成记忆编辑、导出、删除和摘要冲突提示。
