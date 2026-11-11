@@ -1,0 +1,98 @@
+name: CI
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main, "feat/**"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["24.9.0", "24"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # PPL Core is a pinned build-time compiler only; it is not vendored in
+      # the distributed plugin. The generated IR is the runtime input.
+      - uses: actions/checkout@v4
+        with:
+          repository: clonetimer/PPL
+          ref: a587e5b6ffb62fd005ac67e98eed79fac3dd66de
+          path: .ppl-toolchain
+      - name: Build pinned PPL compiler
+        run: |
+          npm install --prefix .ppl-toolchain/components/foundation/core --no-audit --no-fund
+          npm run build --prefix .ppl-toolchain/components/foundation/core
+      - name: Diagnose DeepSeek Whale PPL source
+        run: |
+          node --input-type=module -e "import { compileFile } from './.ppl-toolchain/components/foundation/core/dist/src/fs-project.js'; const r=compileFile('personas/deepseek-whale.ppl',{moduleRoot:'.ppl-toolchain/components/foundation/core/modules'}); console.log(JSON.stringify(r.diagnostics,null,2));"
+      - name: Compile and test DeepSeek Whale persona
+        run: |
+          node .ppl-toolchain/components/foundation/core/dist/src/cli.js check personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules
+          node .ppl-toolchain/components/foundation/core/dist/src/cli.js test personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules
+          mkdir -p .ppl-artifacts
+          node .ppl-toolchain/components/foundation/core/dist/src/cli.js build personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules --out .ppl-artifacts/deepseek-whale.pir.json
+          if [ -f personas/deepseek-whale.pir.json ]; then
+            cmp personas/deepseek-whale.pir.json .ppl-artifacts/deepseek-whale.pir.json
+          else
+            cp .ppl-artifacts/deepseek-whale.pir.json personas/deepseek-whale.pir.json
+          fi
+      - uses: actions/checkout@v4
+        with:
+          repository: JAdpp/dsh-whale-galgame
+          ref: aa6ee3df79f8707131eefcdf17acef37cfd5bc4f
+          path: .whale-upstream
+      - name: Stage DeepSeek Whale art and upstream notices
+        run: |
+          mkdir -p assets/deepseek-whale third_party/whale-galgame
+          for asset in maid-left.webp whale-cheerful.webp whale-shy.webp whale-serious.webp whale-confused.webp whale-angry.webp whale-frightened.webp whale-exasperated.webp whale-starry.webp palace-night.webp bg-deepseek-seaside-study.webp; do
+            cp ".whale-upstream/assets/default/$asset" "assets/deepseek-whale/$asset"
+          done
+          cp .whale-upstream/LICENSE.md third_party/whale-galgame/LICENSE.md
+          cp .whale-upstream/NOTICE.md third_party/whale-galgame/NOTICE.md
+          cp .whale-upstream/THIRD_PARTY_LICENSES.md third_party/whale-galgame/THIRD_PARTY_LICENSES.md
+          cp .whale-upstream/assets/default/README.md third_party/whale-galgame/ASSET_NOTICES.md
+          cp -R .whale-upstream/assets/default/licenses third_party/whale-galgame/licenses
+      - name: Commit generated PPL IR and DeepSeek art pack
+        if: matrix.node == '24.9.0'
+        run: |
+          git add personas/deepseek-whale.pir.json assets/deepseek-whale third_party/whale-galgame
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "build: add compiled DeepSeek Whale persona and art pack"
+            TARGET_BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+            git fetch origin "$TARGET_BRANCH"
+            git rebase "origin/$TARGET_BRANCH"
+            git push origin "HEAD:$TARGET_BRANCH"
+          fi
+      - run: npm run verify
+      - name: Build installable plugin archive
+        if: matrix.node == '24.9.0'
+        run: |
+          mkdir -p dist-artifact
+          npm pack --json > dist-artifact/npm-pack.json
+          node scripts/prepare-install-artifact.mjs dist-artifact/npm-pack.json dist-artifact
+      - uses: actions/upload-artifact@v4
+        if: matrix.node == '24.9.0'
+        with:
+          name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop
+          path: |
+            dist-artifact/*.tgz
+            dist-artifact/*.sha256
+            dist-artifact/package-info.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-whale-pir-node-${{ matrix.node }}
+          path: .ppl-artifacts/deepseek-whale.pir.json
+          if-no-files-found: error
