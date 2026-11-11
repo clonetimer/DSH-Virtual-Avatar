@@ -153,3 +153,12 @@
 - No target DSH Web/Desktop build/version has been supplied or exercised in this environment.
 - The package declares `dsh.client.platform: web`; Desktop support must be verified against the target Desktop release, not assumed.
 - Real provider streaming, offline failure behavior, browser reload, app restart and real backup restore remain blocked on target host execution.
+
+
+## DSH 0.2.2-rc.1 compatibility update (2026-11-11)
+
+- User confirmed target DSH version: `0.2.2-rc1` (normalized SemVer `0.2.2-rc.1`).
+- Bundle declares `engines.dsh: >=0.2.2-rc.1 <0.2.3-0`; unsupported versions should be rejected by DSH install/startup.
+- Runtime requirement raised to Node.js >=24.9.0; CI aligned to Node 24.9.0 / 24.
+- The earlier P4 package/lifecycle check passed on the old Node 22.19 / 24 matrix; this compatibility change requires a fresh Node 24 CI run.
+- Real DSH Web/Desktop installation, bundle composition, live model streaming and reload evidence remain pending.
