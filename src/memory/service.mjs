@@ -133,6 +133,36 @@ export class MemoryService {
     return this.store.deleteMemoryItem(memoryId)
   }
 
+  retrieveContext({ ownerKind, ownerId, query = '', maxChars = 12000, limit = 20 }) {
+    assertOwner(ownerKind, ownerId)
+    if (!Number.isInteger(limit) || limit < 1) throw new TypeError('limit must be positive')
+    const rows = this.store.listMemoryItems(ownerKind, ownerId)
+    const needle = String(query || '').trim()
+    const ranked = rows.map(row => ({
+      row,
+      relevance: needle ? memorySimilarity(needle, row.text) : 0,
+    })).sort((a, b) =>
+      Number(b.row.pinned) - Number(a.row.pinned)
+      || b.relevance - a.relevance
+      || b.row.lastSeenAt.localeCompare(a.row.lastSeenAt),
+    )
+    const selected = []
+    let used = 0
+    for (const item of ranked) {
+      if (selected.length >= limit) break
+      const cost = Array.from(item.row.text).length + 1
+      if (used + cost > maxChars && !item.row.pinned) continue
+      selected.push({ ...item.row, relevance: item.relevance })
+      used += cost
+    }
+    return {
+      items: selected,
+      text: selected.map(item => '- ' + item.text).join('\\n'),
+      charCount: used,
+      omittedCount: rows.length - selected.length,
+    }
+  }
+
   buildContext({ ownerKind, ownerId, maxChars = 32000 }) {
     assertOwner(ownerKind, ownerId)
     if (!Number.isInteger(maxChars) || maxChars < 0) throw new TypeError('maxChars must be a non-negative integer')
