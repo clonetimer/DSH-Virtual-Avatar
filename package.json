@@ -12,5 +12,28 @@
     "test:unit": "node --test test/unit/*.test.mjs",
     "check": "node --check src/index.mjs && node --check src/migration/*.mjs && node --check src/persona/*.mjs && node --check src/characters/deepseek-whale/*.mjs && node --check src/memory/*.mjs && node --check src/storage/*.mjs && node --check src/ppl/index.mjs",
     "verify": "npm run check && npm test"
-  }
+  },
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "files": [
+    "lib",
+    "src",
+    "personas",
+    "docs",
+    "third_party",
+    "cordis.patch.yml",
+    "README.md"
+  ]
 }
