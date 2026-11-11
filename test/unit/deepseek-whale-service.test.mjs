@@ -41,3 +41,46 @@ test('DeepSeek Whale companion turn is prepared, committed once and durably relo
     store.close()
   }
 })
+
+
+test('confirmed story facts are persisted and injected into later companion turns', () => {
+  const store = new SqliteAvatarStore(':memory:')
+  try {
+    const service = new DeepseekWhaleService({ store })
+    const confirmed = service.addConfirmedStoryFact({
+      id: 'birthday-fact',
+      text: '主人的生日在五月',
+      sourceEventId: 'user-confirmed-birthday',
+      category: 'preference',
+    })
+    assert.equal(confirmed.duplicate, false)
+    const prepared = service.prepareTurn({
+      text: '你还记得吗？',
+      eventId: 'story-context-turn',
+      sessionId: 'story-session',
+    })
+    assert.match(prepared.system, /主人的生日在五月/)
+    assert.match(prepared.system, /已确认的重要事实/)
+    assert.equal(service.getStoryMemory().confirmedFacts.length, 1)
+  } finally {
+    store.close()
+  }
+})
+
+test('choice selections become idempotent story events after completed turns', () => {
+  const store = new SqliteAvatarStore(':memory:')
+  try {
+    const service = new DeepseekWhaleService({ store })
+    const prepared = service.prepareTurn({
+      text: '给她一个拥抱',
+      choice: { id: 'choice-hug', text: '给她一个拥抱', effect: 1 },
+      eventId: 'story-choice-turn',
+    })
+    service.finalizeTurn(prepared, { reply: '（轻轻靠近主人）谢谢主人。' })
+    const events = service.getStoryMemory().keyEvents
+    assert.equal(events.length, 1)
+    assert.match(events[0].title, /给她一个拥抱/)
+  } finally {
+    store.close()
+  }
+})
