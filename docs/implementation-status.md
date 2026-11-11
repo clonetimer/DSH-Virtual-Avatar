@@ -162,3 +162,16 @@
 - Runtime requirement raised to Node.js >=24.9.0; CI aligned to Node 24.9.0 / 24.
 - The earlier P4 package/lifecycle check passed on the old Node 22.19 / 24 matrix; this compatibility change requires a fresh Node 24 CI run.
 - Real DSH Web/Desktop installation, bundle composition, live model streaming and reload evidence remain pending.
+
+
+## P4 Windows qualification follow-up (2026-11-11)
+
+- Target confirmed by user: DSH 0.2.2-rc.1, Windows, both Web and Desktop.
+- Runtime gate: Node.js >=24.9.0; CI matrix remains 24.9.0 / current 24.
+- Clarified compatibility architecture: both Web and Desktop consume the same ordinary `dsh.client.platform: web` client module; Desktop does not require a separate Electron renderer bundle. Host still uses the normal Cordis bundle patch and Web routes.
+- Removed undocumented `dsh.client.immediately` metadata.
+- Strengthened package audit to assert DSH engine range, Node minimum, Web Client platform, bundle patch and client export.
+- Fixed CI generated-asset commit condition to run on Node 24.9.0 (the matrix no longer contains Node 22.19).
+- CI now creates an actual installable `.tgz` on Node 24.9.0, copies it into an artifact directory, writes SHA-256 and package-info manifest, and uploads a Windows Web/Desktop install artifact.
+- README and test plan now include PowerShell hash verification and separate Web/selected-Desktop-profile install/restart procedures.
+- Real Web/Desktop installation remains NOT RUN until artifact is installed in the user's Windows DSH environment and evidence is returned.
