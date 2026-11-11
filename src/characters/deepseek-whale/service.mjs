@@ -1,5 +1,7 @@
 import { createDeepseekWhaleRuntime } from '../../ppl/index.mjs'
 import { MemoryService } from '../../memory/service.mjs'
+import { buildConversationContext } from './context-window.mjs'
+import { applyCompanionInteraction, createGrowthState } from './growth.mjs'
 import { addConfirmedStoryFact, appendStoryEvent, createStoryMemory, renderStoryContinuity, updateStorySummary } from './story-memory.mjs'
 import {
   DEEPSEEK_WHALE_ID,
@@ -30,6 +32,7 @@ export class DeepseekWhaleService {
   #initialState(sessionId) {
     const state = createDeepseekWhaleInitialState({ sessionId })
     state.storyMemory = createStoryMemory()
+    state.growth = createGrowthState()
     state.pplRuntime = this.ppl.initialState(sessionId)
     return state
   }
@@ -41,6 +44,7 @@ export class DeepseekWhaleService {
     if (!state.pplRuntime) state.pplRuntime = this.ppl.initialState(sessionId)
     if (!state.conversation) state.conversation = { log: [], chatLines: [], choices: [] }
     if (!state.storyMemory) state.storyMemory = createStoryMemory()
+    if (!state.growth) state.growth = createGrowthState()
     return { state, revision: loaded.revision, updatedAt: loaded.updatedAt, persisted: true }
   }
 
@@ -84,7 +88,13 @@ export class DeepseekWhaleService {
       now,
     })
     const continuity = renderStoryContinuity(loaded.state.storyMemory)
-    const systemWithContinuity = [system, continuity].filter(Boolean).join('\n\n')
+    const systemWithContinuity = [system, continuity].filter(Boolean).join('\\n\\n')
+    const contextWindow = buildConversationContext({
+      history: loaded.state.conversation?.log || [],
+      storyContinuity: continuity,
+      recentTurns: 12,
+      maxChars: 14000,
+    })
     return {
       characterId: DEEPSEEK_WHALE_ID,
       eventId: String(eventId),
@@ -95,6 +105,8 @@ export class DeepseekWhaleService {
       profile,
       memoryContext,
       system: systemWithContinuity,
+      contextMessages: contextWindow.messages,
+      contextDiagnostics: { omittedTurns: contextWindow.omittedTurns, includedTurns: contextWindow.includedTurns, estimatedChars: contextWindow.estimatedChars },
       baseState: loaded.state,
       expectedRevision: loaded.revision,
       pplResolution: resolved.resolution,
@@ -138,6 +150,15 @@ export class DeepseekWhaleService {
     })
     reconciled.conversation.choices = Array.isArray(choices) ? structuredClone(choices) : []
     reconciled.storyMemory = reconciled.storyMemory || createStoryMemory()
+    const growthResult = applyCompanionInteraction(reconciled.growth || createGrowthState(), {
+      eventId: prepared.eventId,
+      delta: affectionDelta,
+      occurredAt: new Date().toISOString(),
+      source: prepared.choice ? 'choice' : 'chat',
+    })
+    reconciled.growth = growthResult.growth
+    reconciled.growth.affectionLifetime = Math.max(reconciled.growth.affectionLifetime, reconciled.affection || 0)
+
     if (affectionResult.levelUps.length) {
       for (const levelUp of affectionResult.levelUps) {
         reconciled.conversation.chatLines.push({
