@@ -25,21 +25,47 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 - `cordis.patch.yml` 将 `dsh-virtual-avatar` 插入 DSH 插件 bundle。
 - Host API 前缀为 `/api/dsh-virtual-avatar`。
 
-### 本地开发安装（需要按目标 DSH 发行版确认）
+### Windows 安装：DSH Web 与 Desktop 0.2.2-rc.1
 
-1. 使用 Node.js 22.19 或更高版本。
-2. 先运行 `npm ci && npm run verify`。
-3. 运行 `npm pack --dry-run --json` 或 `npm run pack:check`，检查交付文件清单。
-4. 将生成的插件包放入目标 DSH 发行版支持的本地插件目录，或使用该版本插件管理器添加。
-5. 在测试 bundle 中应用 `cordis.patch.yml`，确认插件 ID 为 `dsh-virtual-avatar`。
-6. 启动 DSH Web，检查插件加载日志、唯一 API 路由和右下角鲸鱼入口。
-7. 在 DSH 主模型设置中选定 Provider/Model，打开“运行诊断”执行模型连接测试，再发送一条中文消息。
-8. 验证刷新、插件重载、长期记忆和备份恢复。
+**运行时要求：Node.js 24.9.0 或更高版本。** 在 PowerShell 中先检查：
 
-空的 `chatProvider` / `chatModel` 默认跟随 DSH 主界面当前模型；若宿主未提供当前模型选择，可在插件 config 中显式配置。插件不要求单独运行 PPL Gateway。
+```powershell
+node --version
+npm --version
+```
 
-**Desktop 尚未被声明为已支持。** 当前 `package.json` 声明 `dsh.client.platform: web`。必须按目标 DSH Desktop 版本单独执行 `docs/test-plan.md` 的 P4-D，不能由 Web 端测试推断 Desktop 兼容性。
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop` artifact 下载以下文件：
+- `dsh-virtual-avatar-0.1.0-dev.1.tgz`
+- 对应的 `.sha256` 文件
+- `package-info.json`
 
+先校验包文件（在下载目录执行）：
+
+```powershell
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.1.tgz -Algorithm SHA256
+```
+
+将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
+
+**DSH Web（web profile）：**
+
+```powershell
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.1.tgz"
+dsh --profile web --dump-config
+```
+
+**DSH Desktop：** 使用 Desktop 当前选中的 profile 名称替换下面的 `<profile>`，不要默认猜测 profile 一定叫 web：
+
+```powershell
+dsh plugin --profile "<profile>" add ".\dsh-virtual-avatar-0.1.0-dev.1.tgz"
+dsh --profile "<profile>" --dump-config
+```
+
+安装后完全退出并重新启动对应 DSH Web / Desktop，再打开插件页面。确认插件 `dsh-virtual-avatar` 已加载，鲸鱼入口出现，诊断页显示 PPL、SQLite 和模型选择状态。模型连接测试需在 DSH 主界面已配置 Provider 后执行。
+
+**Web 与 Desktop 共用同一个 `dsh.client.platform: web` 客户端模块。** Desktop 通过普通 DSH Web Client 模块图加载插件界面，不需要单独 Electron renderer bundle；Host 仍通过 Cordis bundle patch 注册。Desktop 的实际安装、渲染和窗口重启仍须按 P4 验收表实测，CI 不代替实机验收。
+
+卸载前先创建备份。卸载插件不会作为清理用户数据的操作；不要手工删除 DSH_HOME 下的 `storages/dsh-virtual-avatar`，除非你明确要永久删除角色数据。
 ## 开发验证
 
 ```bash

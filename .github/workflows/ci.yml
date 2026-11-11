@@ -1,9 +1,9 @@
 name: CI
 on:
   push:
-    branches: [main, "feat/**"]
+    branches: [main, "feat/**", "fix/**"]
   pull_request:
-    branches: [main]
+    branches: [main, "feat/**"]
   workflow_dispatch:
 permissions:
   contents: write
@@ -63,7 +63,7 @@ jobs:
           cp .whale-upstream/assets/default/README.md third_party/whale-galgame/ASSET_NOTICES.md
           cp -R .whale-upstream/assets/default/licenses third_party/whale-galgame/licenses
       - name: Commit generated PPL IR and DeepSeek art pack
-        if: matrix.node == '22.19.0'
+        if: matrix.node == '24.9.0'
         run: |
           git add personas/deepseek-whale.pir.json assets/deepseek-whale third_party/whale-galgame
           if ! git diff --cached --quiet; then
@@ -76,6 +76,21 @@ jobs:
             git push origin "HEAD:$TARGET_BRANCH"
           fi
       - run: npm run verify
+      - name: Build installable plugin archive
+        if: matrix.node == '24.9.0'
+        run: |
+          mkdir -p dist-artifact
+          npm pack --json > dist-artifact/npm-pack.json
+          node scripts/prepare-install-artifact.mjs dist-artifact/npm-pack.json dist-artifact
+      - uses: actions/upload-artifact@v4
+        if: matrix.node == '24.9.0'
+        with:
+          name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop
+          path: |
+            dist-artifact/*.tgz
+            dist-artifact/*.sha256
+            dist-artifact/package-info.json
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: deepseek-whale-pir-node-${{ matrix.node }}
