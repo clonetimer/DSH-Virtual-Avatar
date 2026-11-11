@@ -138,3 +138,18 @@
 - Run #435: Node 22.19 / Node 24 PASS for diagnostics and model-test test contract.
 - A final follow-up commit redacts credentials from model-test failure messages; Run #436 is the acceptance run for that exact head.
 - Real DSH provider connectivity and Web/Desktop visual acceptance remain host-environment tests, not inferred from mocks.
+
+
+## P4 implementation record (2026-11-11)
+
+### Completed in code
+- Added `npm run pack:check` to inspect the actual npm pack dry-run manifest.
+- Added `scripts/verify-pack.mjs` to require the Cordis entry, Web client, Host implementation, SQLite store, DeepSeek PPL source/IR, art assets, bundle patch and README.
+- Package audit rejects test sources, GitHub workflow internals, PPL compiler checkout and SQLite/database files from the distributed package.
+- Added Host lifecycle integration test: route registration is unique, cleanup disposes exactly once, reload re-registers once, and DSH_HOME profile data survives plugin instance replacement.
+- Added P4 qualification protocol for Web and Desktop with explicit evidence fields and no mock-to-real-host equivalence.
+
+### Not yet qualified
+- No target DSH Web/Desktop build/version has been supplied or exercised in this environment.
+- The package declares `dsh.client.platform: web`; Desktop support must be verified against the target Desktop release, not assumed.
+- Real provider streaming, offline failure behavior, browser reload, app restart and real backup restore remain blocked on target host execution.
