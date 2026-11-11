@@ -3,7 +3,7 @@ const MAX_EVENTS = 80
 const MAX_THREADS = 30
 
 function cleanText(value, limit = 240) {
-  return String(value || '').replace(/[\\u0000-\\u001f\\u007f-\\u009f]/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, limit)
+  return String(value || '').replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, limit)
 }
 
 export function createStoryMemory() {
@@ -32,17 +32,17 @@ export function normalizeStoryMemory(value) {
   }
 }
 
-/** Only explicit user-confirmed facts can enter durable story memory. */
+/** Durable user facts are added only after explicit confirmation. */
 export function addConfirmedStoryFact(storyMemory, { id, text, sourceEventId, category = 'fact', now = new Date().toISOString() } = {}) {
   const state = normalizeStoryMemory(storyMemory)
   const clean = cleanText(text, 240)
-  if (!clean) throw new TypeError('story fact text required')
+  if (!clean) throw new TypeError('companion memory fact text required')
   if (!id || !sourceEventId) throw new TypeError('stable fact id and sourceEventId required')
   const existing = state.confirmedFacts.find(item => item.id === id)
   if (existing) {
     if (existing.text !== clean || existing.sourceEventId !== sourceEventId) {
-      const error = new Error('story fact id conflict')
-      error.code = 'STORY_FACT_CONFLICT'
+      const error = new Error('companion memory fact id conflict')
+      error.code = 'MEMORY_FACT_CONFLICT'
       throw error
     }
     return { duplicate: true, storyMemory: state }
@@ -55,7 +55,7 @@ export function addConfirmedStoryFact(storyMemory, { id, text, sourceEventId, ca
 
 export function appendStoryEvent(storyMemory, { id, title, detail = '', sourceEventId, now = new Date().toISOString() } = {}) {
   const state = normalizeStoryMemory(storyMemory)
-  if (!id || !sourceEventId) throw new TypeError('story event id and sourceEventId required')
+  if (!id || !sourceEventId) throw new TypeError('companion event id and sourceEventId required')
   const existing = state.keyEvents.find(item => item.id === id)
   if (existing) return { duplicate: true, storyMemory: state }
   state.keyEvents.push({
@@ -74,12 +74,12 @@ export function appendStoryEvent(storyMemory, { id, title, detail = '', sourceEv
 export function updateStorySummary(storyMemory, { summary, expectedRevision, now = new Date().toISOString() } = {}) {
   const state = normalizeStoryMemory(storyMemory)
   if (expectedRevision !== undefined && state.revision !== expectedRevision) {
-    const error = new Error('story memory revision conflict')
+    const error = new Error('companion summary revision conflict')
     error.code = 'REVISION_CONFLICT'
     throw error
   }
   const clean = cleanText(summary, MAX_SUMMARY_CHARS)
-  if (!clean) throw new TypeError('story summary required')
+  if (!clean) throw new TypeError('companion summary required')
   state.summary = clean
   state.revision += 1
   state.lastUpdatedAt = now
@@ -89,9 +89,9 @@ export function updateStorySummary(storyMemory, { summary, expectedRevision, now
 export function renderStoryContinuity(storyMemory) {
   const state = normalizeStoryMemory(storyMemory)
   const sections = []
-  if (state.summary) sections.push('【长期相处摘要】\\n' + state.summary)
-  if (state.confirmedFacts.length) sections.push('【已确认的用户事实】\\n' + state.confirmedFacts.slice(-20).map(item => '- ' + item.text).join('\\n'))
-  if (state.keyEvents.length) sections.push('【共同经历与重要事件】\\n' + state.keyEvents.slice(-12).map(item => '- ' + item.title + (item.detail ? '：' + item.detail : '')).join('\\n'))
-  if (state.openThreads.length) sections.push('【尚未完成的约定】\\n' + state.openThreads.slice(-10).map(item => '- ' + cleanText(item.text, 160)).join('\\n'))
-  return sections.join('\\n\\n')
+  if (state.summary) sections.push('【长期相处摘要】\n' + state.summary)
+  if (state.confirmedFacts.length) sections.push('【已确认的用户事实】\n' + state.confirmedFacts.slice(-20).map(item => '- ' + item.text).join('\n'))
+  if (state.keyEvents.length) sections.push('【共同经历与重要事件】\n' + state.keyEvents.slice(-12).map(item => '- ' + item.title + (item.detail ? '：' + item.detail : '')).join('\n'))
+  if (state.openThreads.length) sections.push('【尚未完成的约定】\n' + state.openThreads.slice(-10).map(item => '- ' + cleanText(item.text, 160)).join('\n'))
+  return sections.join('\n\n')
 }
