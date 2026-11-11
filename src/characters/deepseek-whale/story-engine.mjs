@@ -2,7 +2,7 @@ const MAX_NODES = 100
 const MAX_CHOICES = 4
 
 function clean(value, limit = 240) {
-  return String(value || '').replace(/[\\u0000-\\u001f\\u007f-\\u009f]/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, limit)
+  return String(value || '').replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, limit)
 }
 
 export function createStoryRun({ storyId = 'whale-main', startNode = 'intro' } = {}) {
