@@ -24,6 +24,7 @@ export function createSummaryCandidate({ history = [], currentMemory = {}, memor
     summary,
     sourceRange: { recentMessageCount: recent.length, firstMessage: recent[0]?.at || null, lastMessage: recent.at(-1)?.at || null },
     sourceHash: sha(JSON.stringify({ recent, facts, events, memoryTexts })),
+    expectedRevision: Math.max(0, Number(currentMemory.revision) || 0),
     generatedAt: now,
     requiresUserConfirmation: true,
     warning: '这是基于现有记录整理的候选摘要；确认前不会覆盖已保存的长期摘要。',
