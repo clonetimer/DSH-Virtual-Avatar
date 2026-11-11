@@ -49,9 +49,15 @@ test('Whale affection progression retains the upstream cap and carry-over semant
   assert.deepEqual(result.levelUps, [{ level: 2, consumed: 30 }])
 })
 
-test('event classification uses companion semantics for comfort and confession', () => {
+test('relationship classification rejects negated and incidental affection text', () => {
   assert.equal(classifyDeepseekWhaleEvent({ text: '今天辛苦了', eventId: '1' }).type, 'COMFORT')
   assert.equal(classifyDeepseekWhaleEvent({ text: '我喜欢你', eventId: '2' }).type, 'CONFESSION')
-  assert.equal(classifyDeepseekWhaleEvent({ text: '普通聊天', eventId: '3' }).source, 'companion')
+  assert.equal(classifyDeepseekWhaleEvent({ text: '我喜欢和你聊天', eventId: '3' }).type, 'POSITIVE_INTERACTION')
+  assert.equal(classifyDeepseekWhaleEvent({ text: '我不喜欢你', eventId: '4' }).type, 'NEGATIVE_INTERACTION')
+  assert.equal(classifyDeepseekWhaleEvent({ text: '我喜欢你做的咖啡', eventId: '5' }).type, 'MESSAGE')
+  assert.equal(classifyDeepseekWhaleEvent({ text: '普通聊天', eventId: '6' }).source, 'companion')
   assert.equal(deepseekWhaleAffectionDelta({ text: '我喜欢你' }), 1)
+  assert.equal(deepseekWhaleAffectionDelta({ text: '我喜欢和你聊天' }), 1)
+  assert.equal(deepseekWhaleAffectionDelta({ text: '我不喜欢你' }), -1)
+  assert.equal(deepseekWhaleAffectionDelta({ text: '我喜欢你做的咖啡' }), 0)
 })
