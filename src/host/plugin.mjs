@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { createAvatarStore } from '../storage/sqlite-store.mjs'
@@ -11,6 +13,20 @@ export const inject = ['webServer', 'llm']
 const API_PATH = '/api/dsh-virtual-avatar'
 const MAX_BODY_BYTES = 256 * 1024
 const MAX_HISTORY = 12
+const ASSET_ROOT = fileURLToPath(new URL('../../assets/deepseek-whale/', import.meta.url))
+const ASSET_TYPES = Object.freeze({
+  'maid-left.webp': 'image/webp',
+  'whale-cheerful.webp': 'image/webp',
+  'whale-shy.webp': 'image/webp',
+  'whale-serious.webp': 'image/webp',
+  'whale-confused.webp': 'image/webp',
+  'whale-angry.webp': 'image/webp',
+  'whale-frightened.webp': 'image/webp',
+  'whale-exasperated.webp': 'image/webp',
+  'whale-starry.webp': 'image/webp',
+  'palace-night.webp': 'image/webp',
+  'bg-deepseek-seaside-study.webp': 'image/webp',
+})
 
 function json(res, status, value) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
@@ -140,6 +156,9 @@ function publicView(service, memoryService, config) {
       address: profile.address,
       greeting: profile.greeting,
       visual: profile.visual,
+      imageUrl: API_PATH + '/assets/maid-left.webp',
+      backgroundUrl: API_PATH + '/assets/palace-night.webp',
+      expressionUrls: Object.fromEntries(Object.keys(ASSET_TYPES).filter(key => key.startsWith('whale-')).map(key => [key.replace('whale-', '').replace('.webp', ''), API_PATH + '/assets/' + key])),
       level: state.level,
       affection: state.affection,
       affectionCap: affectionCap(state.level),
@@ -175,6 +194,24 @@ export function apply(ctx, config = {}) {
   }
 
   const handler = async (req, res) => {
+    const pathname = new URL(req.url || '/', 'http://dsh.local').pathname
+    const assetMarker = pathname.lastIndexOf('/assets/')
+    if (req.method === 'GET' && assetMarker >= 0) {
+      const assetName = decodeURIComponent(pathname.slice(assetMarker + '/assets/'.length))
+      const contentType = ASSET_TYPES[assetName]
+      if (!contentType || assetName.includes('/') || assetName.includes('\\\\')) {
+        json(res, 404, { ok: false, error: 'asset not found' })
+        return
+      }
+      try {
+        const bytes = readFileSync(join(ASSET_ROOT, assetName))
+        res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=86400' })
+        res.end(bytes)
+      } catch {
+        json(res, 404, { ok: false, error: 'asset unavailable' })
+      }
+      return
+    }
     if (req.method === 'GET') {
       json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.1' })
       return
