@@ -95,53 +95,6 @@ function emotionFromText(text) {
   return 'normal'
 }
 
-function fallbackChoices() {
-  return [
-    { id: randomUUID(), text: '靠近一点，轻轻抱抱她', effect: 1 },
-    { id: randomUUID(), text: '继续聊聊刚才的话题', effect: 0 },
-    { id: randomUUID(), text: '先让她休息一会儿', effect: -1 },
-  ]
-}
-
-async function generateChoices(llm, model, reply, userText, signal) {
-  const fallback = fallbackChoices()
-  try {
-    let output = ''
-    for await (const chunk of llm.stream({
-      provider: model.provider,
-      model: model.model,
-      system: '你为 Galgame 对话生成三个自然、简短、彼此不同的后续行动选项。只输出 JSON 数组，每项包含 text 和 effect。effect 只能是 -1、0、1。不要输出解释。',
-      messages: [{
-        role: 'user',
-        content: [{ type: 'text', text: JSON.stringify({ user: userText, heroine: reply, requirement: '三个选项分别体现积极互动、中性继续对话、轻微疏远或让角色休息；避免强迫、羞辱和突兀亲密。' }) }],
-        source: { kind: 'user' },
-      }],
-      temperature: 0.7,
-      maxTokens: 300,
-      signal,
-    })) {
-      if (chunk?.type === 'text-delta' && chunk.text) output += chunk.text
-      if (chunk?.type === 'finish' && ['error', 'aborted'].includes(String(chunk.reason?.kind || ''))) {
-        throw new Error(chunk.reason?.failure?.message || 'choice generation failed')
-      }
-    }
-    const match = output.match(/\[[\s\S]*\]/)
-    if (!match) return fallback
-    const parsed = JSON.parse(match[0])
-    if (!Array.isArray(parsed) || parsed.length !== 3) return fallback
-    const choices = parsed.map(item => ({
-      id: randomUUID(),
-      text: String(item?.text || '').trim().slice(0, 80),
-      effect: Number(item?.effect),
-    }))
-    if (choices.some(item => !item.text || ![-1, 0, 1].includes(item.effect))) return fallback
-    if (new Set(choices.map(item => item.text)).size !== 3) return fallback
-    return choices
-  } catch {
-    return fallback
-  }
-}
-
 async function streamReply(llm, model, system, contextMessages, userText, signal) {
   if (!llm || typeof llm.stream !== 'function') throw new Error('DSH LLM stream service is unavailable')
   const messages = [{
@@ -381,19 +334,18 @@ export function apply(ctx, config = {}) {
         } finally {
           clearTimeout(timeout)
         }
-        const choices = await generateChoices(llm, model, generated.text, text, controller.signal)
         const committed = service.finalizeTurn(prepared, {
           reply: generated.text,
           terminalReason: generated.terminalReason,
           emotion: emotionFromText(generated.text),
-          choices,
+          choices: [],
         })
         json(res, 200, {
           ok: true,
           eventId,
           reply: generated.text,
           emotion: emotionFromText(generated.text),
-          choices: committed.state.conversation?.choices || choices,
+          choices: [],
           view: publicView(service, memoryService, runtimeConfig),
           duplicate: committed.duplicate === true,
         })
