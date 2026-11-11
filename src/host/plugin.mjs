@@ -468,7 +468,9 @@ export function apply(ctx, config = {}) {
         return
       }
       if (action === 'memory-list') {
-        json(res, 200, { ok: true, memories: service.listMemories() })
+        const level = ['all','core','mid','edge'].includes(args.level) ? args.level : 'all'
+        const pinned = ['all','pinned','normal'].includes(args.pinned) ? args.pinned : 'all'
+        json(res, 200, { ok: true, memories: service.listMemories({ query: args.query, level, pinned }) })
         return
       }
       if (action === 'memory-edit') {
