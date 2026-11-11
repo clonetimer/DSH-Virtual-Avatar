@@ -5,6 +5,14 @@ for await (const chunk of process.stdin) input += chunk
 const result = JSON.parse(input)
 assert.ok(Array.isArray(result) && result.length === 1, 'npm pack must return exactly one package result')
 const files = new Set(result[0].files.map(file => file.path))
+const manifest = JSON.parse(await (await import('node:fs/promises')).readFile('package.json', 'utf8'))
+assert.equal(manifest.engines?.node, '>=24.9.0', 'DSH 0.2.2-rc.1 requires Node >=24.9.0')
+assert.equal(manifest.engines?.dsh, '>=0.2.2-rc.1 <0.2.3-0', 'unexpected DSH compatibility range')
+assert.equal(manifest.dsh?.client?.platform, 'web', 'DSH Desktop consumes the ordinary Web Client module')
+assert.ok(Array.isArray(manifest.dsh?.client?.inject), 'client injection dependencies must be explicit')
+assert.ok(manifest.dsh?.bundle?.patch === './cordis.patch.yml', 'Cordis bundle patch must be declared')
+assert.equal(manifest.exports?.['./client'], './lib/client.js', 'Web Client export must match package entry')
+assert.equal(manifest.dsh?.client?.immediately, undefined, 'do not rely on undocumented client metadata')
 const required = [
   'package.json', 'lib/index.js', 'lib/client.js', 'src/host/plugin.mjs',
   'src/storage/sqlite-store.mjs', 'src/characters/deepseek-whale/service.mjs',
