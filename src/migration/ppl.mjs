@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 const sha = text => createHash('sha256').update(text).digest('hex')
 
 export function inspectPplPersonaIr(raw) {
+  let sourceRaw = typeof raw === 'string' ? raw : JSON.stringify(raw)
   if (typeof raw === 'string') {
     let parsed
     try { parsed = JSON.parse(raw) } catch (cause) {
@@ -29,5 +30,6 @@ export function inspectPplPersonaIr(raw) {
     ruleCount: Array.isArray(raw.rules) ? raw.rules.length : 0,
     transitionCount: Array.isArray(raw.transitions) ? raw.transitions.length : 0,
     ir: structuredClone(raw),
+    raw: sourceRaw,
   }
 }
