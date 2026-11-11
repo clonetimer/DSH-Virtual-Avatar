@@ -5,7 +5,7 @@ const DEFAULT_SIMILARITY_THRESHOLD = 0.6
 const DEFAULT_MAX_ITEM_CHARS = 400
 
 function normalizedBigrams(text) {
-  const clean = Array.from(String(text || '').replace(/[\\s\\p{P}\\p{S}]/gu, ''))
+  const clean = Array.from(String(text || '').replace(/[\s\p{P}\p{S}]/gu, ''))
   const counts = new Map()
   if (clean.length === 1) counts.set(clean[0], 1)
   for (let index = 0; index < clean.length - 1; index++) {
@@ -150,7 +150,7 @@ export class MemoryService {
     const items = rows.filter(row => selected.has(row.id))
     return {
       items,
-      text: items.map(row => '- ' + row.text).join('\\n'),
+      text: items.map(row => '- ' + row.text).join('\n'),
       charCount: used,
       pinnedOverflow: used > maxChars,
       omittedCount: rows.length - items.length,
