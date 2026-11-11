@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteAvatarStore } from '../../src/storage/sqlite-store.mjs'
 import { MemoryService } from '../../src/memory/service.mjs'
+import { extractMemoryCandidates } from '../../src/memory/candidates.mjs'
 
 test('SQLite event ledger is idempotent and rejects reused ids with changed payload', () => {
   const store = new SqliteAvatarStore(':memory:')
@@ -79,5 +80,16 @@ test('memory context keeps pinned facts even when they exceed the prompt budget'
     assert.equal(context.items.length, 1)
     assert.equal(context.items[0].pinned, true)
     assert.equal(context.pinnedOverflow, true)
+  } finally { store.close() }
+})
+
+
+test('memory candidate extraction only suggests; it does not persist anything', () => {
+  const store = new SqliteAvatarStore(':memory:')
+  try {
+    const candidates = extractMemoryCandidates('我喜欢海边的夜景，也正在做卫星仿真平台。')
+    assert.ok(candidates.length >= 1)
+    assert.equal(candidates.every(item => item.requiresConfirmation), true)
+    assert.equal(store.listMemoryItems('character', 'deepseek').length, 0)
   } finally { store.close() }
 })
