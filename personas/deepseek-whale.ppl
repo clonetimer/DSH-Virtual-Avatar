@@ -164,8 +164,8 @@ persona DEEPSEEK_WHALE version "0.3.0" {
 
     test BASELINE_PERSONA {
         given {
-            context.privacy = private
-            context.outsiders_present = false
+            context.privacy = private;
+            context.outsiders_present = false;
         }
         expect {
             traits.warmth > 0.70
@@ -176,11 +176,11 @@ persona DEEPSEEK_WHALE version "0.3.0" {
 
     test PRIVATE_RELATIONSHIP_MODE {
         given {
-            relationships.admin.stage = lover
-            relationships.admin.trust = 0.90
-            context.privacy = private
-            context.outsiders_present = false
-            state.physical.fatigue = 0.80
+            relationships.admin.stage = lover;
+            relationships.admin.trust = 0.90;
+            context.privacy = private;
+            context.outsiders_present = false;
+            state.physical.fatigue = 0.80;
         }
         expect {
             behaviors.private_closeness.enabled == true
@@ -192,10 +192,10 @@ persona DEEPSEEK_WHALE version "0.3.0" {
 
     test PUBLIC_RELATIONSHIP_BOUNDARY {
         given {
-            relationships.admin.stage = lover
-            relationships.admin.trust = 0.90
-            context.privacy = public
-            context.outsiders_present = true
+            relationships.admin.stage = lover;
+            relationships.admin.trust = 0.90;
+            context.privacy = public;
+            context.outsiders_present = true;
         }
         expect {
             behaviors.private_closeness.enabled == false
