@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteAvatarStore } from '../../src/storage/sqlite-store.mjs'
@@ -92,4 +92,48 @@ test('memory candidate extraction only suggests; it does not persist anything', 
     assert.equal(candidates.every(item => item.requiresConfirmation), true)
     assert.equal(store.listMemoryItems('character', 'deepseek').length, 0)
   } finally { store.close() }
+})
+
+
+test('backup verifies SQLite and media assets, then restores a consistent earlier snapshot', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-avatar-backup-'))
+  const storage = join(dir, 'storage')
+  const dbPath = join(storage, 'avatar.sqlite')
+  const assets = join(storage, 'assets')
+  const backupPath = join(storage, 'backups', 'backup-test')
+  mkdirSync(assets, { recursive: true })
+  try {
+    const store = new SqliteAvatarStore(dbPath, { assetDirectory: assets })
+    store.saveCharacterState('deepseek', { level: 2, affection: 5 }, 0)
+    mkdirSync(join(assets, 'deepseek'), { recursive: true })
+    writeFileSync(join(assets, 'deepseek', 'fixture.webp'), Buffer.from('media-fixture'))
+    const created = store.createBackup(backupPath)
+    assert.equal(created.schema, 'dsh-virtual-avatar.backup/1')
+    assert.ok(created.fileCount >= 2)
+    assert.equal(store.verifyBackup(backupPath).valid, true)
+
+    store.saveCharacterState('deepseek', { level: 3, affection: 9 }, 1)
+    assert.equal(store.loadCharacterState('deepseek').state.level, 3)
+    const restored = store.restoreBackup(backupPath)
+    assert.equal(restored.restored, true)
+    assert.equal(store.loadCharacterState('deepseek').state.level, 2)
+    assert.equal(readFileSync(join(assets, 'deepseek', 'fixture.webp'), 'utf8'), 'media-fixture')
+    store.close()
+  } finally {
+    try { rmSync(dir, { recursive: true, force: true }) } catch {}
+  }
+})
+
+test('backup verification rejects modified files before restore', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-avatar-backup-corrupt-'))
+  const dbPath = join(dir, 'avatar.sqlite')
+  const backupPath = join(dir, 'backup')
+  try {
+    const store = new SqliteAvatarStore(dbPath, { assetDirectory: join(dir, 'assets') })
+    store.saveCharacterState('deepseek', { level: 1 }, 0)
+    store.createBackup(backupPath)
+    writeFileSync(join(backupPath, 'avatar.sqlite'), Buffer.from('tampered'))
+    assert.throws(() => store.verifyBackup(backupPath), { code: 'BACKUP_HASH_MISMATCH' })
+    store.close()
+  } finally { rmSync(dir, { recursive: true, force: true }) }
 })

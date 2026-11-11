@@ -1,11 +1,12 @@
 import { DatabaseSync } from 'node:sqlite'
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
 import { applyDeepseekWhaleAffection, createDeepseekWhaleInitialState } from '../characters/deepseek-whale/relationship.mjs'
 
 const OWNER_KINDS = new Set(['shared', 'agent-persona', 'character'])
 const sha256 = value => createHash('sha256').update(value).digest('hex')
+const BACKUP_SCHEMA = 'dsh-virtual-avatar.backup/1'
 const MAX_MEDIA_ASSET_BYTES = 12 * 1024 * 1024
 const MAX_MIGRATION_MEDIA_BYTES = 64 * 1024 * 1024
 const MEDIA_EXTENSIONS = Object.freeze({
@@ -180,6 +181,140 @@ export class SqliteAvatarStore {
     if (this.#closed) return
     this.#db.close()
     this.#closed = true
+  }
+
+  createBackup(backupDirectory) {
+    this.#assertOpen()
+    if (!isAbsolute(backupDirectory)) throw new TypeError('backup directory must be absolute')
+    if (this.filename === ':memory:') throw conflict('BACKUP_REQUIRES_FILE_DATABASE', 'persistent SQLite database is required for backup')
+    if (existsSync(backupDirectory)) throw conflict('BACKUP_DESTINATION_EXISTS', 'backup destination already exists')
+    const parent = dirname(backupDirectory)
+    mkdirSync(parent, { recursive: true, mode: 0o700 })
+    const temporary = backupDirectory + '.' + randomUUID() + '.tmp'
+    mkdirSync(temporary, { recursive: true, mode: 0o700 })
+    try {
+      const databasePath = join(temporary, 'avatar.sqlite')
+      const escaped = databasePath.replace(/'/g, "''")
+      this.#db.exec("PRAGMA wal_checkpoint(FULL)")
+      this.#db.exec("VACUUM INTO '" + escaped + "'")
+      const assetsPath = join(temporary, 'assets')
+      if (this.assetDirectory && existsSync(this.assetDirectory)) cpSync(this.assetDirectory, assetsPath, { recursive: true, errorOnExist: true, force: false })
+      const entries = []
+      const walk = (directory, prefix = '') => {
+        if (!existsSync(directory)) return
+        for (const name of readdirSync(directory).sort()) {
+          const absolute = join(directory, name)
+          const relative = prefix ? prefix + '/' + name : name
+          const stat = statSync(absolute)
+          if (stat.isDirectory()) walk(absolute, relative)
+          else if (stat.isFile()) {
+            const bytes = readFileSync(absolute)
+            entries.push({ path: relative, byteLength: bytes.length, sha256: sha256(bytes) })
+          } else throw conflict('BACKUP_UNSUPPORTED_FILE', 'backup contains a non-regular file')
+        }
+      }
+      walk(temporary)
+      const manifest = {
+        schema: BACKUP_SCHEMA,
+        createdAt: new Date().toISOString(),
+        pluginVersion: '0.1.0-dev.1',
+        database: { path: 'avatar.sqlite', byteLength: statSync(databasePath).size, sha256: sha256(readFileSync(databasePath)) },
+        assets: entries.filter(item => item.path.startsWith('assets/')),
+        files: entries,
+      }
+      writeFileSync(join(temporary, 'manifest.json'), JSON.stringify(manifest, null, 2), { flag: 'wx', mode: 0o600 })
+      renameSync(temporary, backupDirectory)
+      return { schema: BACKUP_SCHEMA, createdAt: manifest.createdAt, fileCount: entries.length + 1, byteLength: entries.reduce((sum, item) => sum + item.byteLength, manifest.database.byteLength), manifest }
+    } catch (error) {
+      try { rmSync(temporary, { recursive: true, force: true }) } catch { /* preserve original error */ }
+      throw error
+    }
+  }
+
+  verifyBackup(backupDirectory) {
+    this.#assertOpen()
+    if (!isAbsolute(backupDirectory)) throw new TypeError('backup directory must be absolute')
+    const manifestPath = join(backupDirectory, 'manifest.json')
+    let manifest
+    try { manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) } catch (cause) {
+      const error = conflict('BACKUP_MANIFEST_INVALID', 'backup manifest is missing or invalid')
+      error.cause = cause
+      throw error
+    }
+    if (manifest.schema !== BACKUP_SCHEMA || manifest.database?.path !== 'avatar.sqlite' || !Array.isArray(manifest.files)) {
+      throw conflict('BACKUP_SCHEMA_UNSUPPORTED', 'backup schema is unsupported')
+    }
+    const checked = []
+    for (const entry of manifest.files) {
+      if (typeof entry.path !== 'string' || entry.path.startsWith('/') || entry.path.includes('..') || entry.path.includes('\\')) {
+        throw conflict('BACKUP_PATH_INVALID', 'backup contains an unsafe path')
+      }
+      const absolute = join(backupDirectory, entry.path)
+      let bytes
+      try { bytes = readFileSync(absolute) } catch (cause) {
+        const error = conflict('BACKUP_FILE_MISSING', 'backup file is missing: ' + entry.path)
+        error.cause = cause
+        throw error
+      }
+      if (bytes.length !== entry.byteLength || sha256(bytes) !== entry.sha256) {
+        throw conflict('BACKUP_HASH_MISMATCH', 'backup file failed integrity verification: ' + entry.path)
+      }
+      checked.push(entry.path)
+    }
+    const databaseBytes = readFileSync(join(backupDirectory, 'avatar.sqlite'))
+    if (databaseBytes.length !== manifest.database.byteLength || sha256(databaseBytes) !== manifest.database.sha256) {
+      throw conflict('BACKUP_HASH_MISMATCH', 'backup database failed integrity verification')
+    }
+    return { valid: true, schema: manifest.schema, createdAt: manifest.createdAt, fileCount: checked.length, byteLength: checked.reduce((sum, path) => sum + statSync(join(backupDirectory, path)).size, 0) }
+  }
+
+  restoreBackup(backupDirectory) {
+    this.#assertOpen()
+    const verified = this.verifyBackup(backupDirectory)
+    if (!verified.valid) throw conflict('BACKUP_VERIFICATION_FAILED', 'backup did not pass verification')
+    if (this.filename === ':memory:' || !this.assetDirectory) throw conflict('RESTORE_REQUIRES_PERSISTENT_STORAGE', 'persistent database and asset directory are required')
+    const databaseDirectory = dirname(this.filename)
+    const restoreRoot = join(databaseDirectory, '.restore-' + randomUUID())
+    const oldDatabase = this.filename + '.pre-restore-' + randomUUID()
+    const oldAssets = this.assetDirectory + '.pre-restore-' + randomUUID()
+    mkdirSync(restoreRoot, { recursive: true, mode: 0o700 })
+    const newDatabase = join(restoreRoot, 'avatar.sqlite')
+    const newAssets = join(restoreRoot, 'assets')
+    cpSync(join(backupDirectory, 'avatar.sqlite'), newDatabase)
+    if (existsSync(join(backupDirectory, 'assets'))) cpSync(join(backupDirectory, 'assets'), newAssets, { recursive: true })
+    const oldDbExisted = existsSync(this.filename)
+    const oldAssetsExisted = existsSync(this.assetDirectory)
+    this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    this.#db.close()
+    this.#closed = true
+    let dbMoved = false
+    let assetsMoved = false
+    try {
+      if (oldDbExisted) { renameSync(this.filename, oldDatabase); dbMoved = true }
+      if (oldAssetsExisted) { renameSync(this.assetDirectory, oldAssets); assetsMoved = true }
+      renameSync(newDatabase, this.filename)
+      if (existsSync(newAssets)) renameSync(newAssets, this.assetDirectory)
+      this.#db = new DatabaseSync(this.filename)
+      this.#db.exec(SCHEMA)
+      this.#db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
+      this.#closed = false
+      rmSync(restoreRoot, { recursive: true, force: true })
+      rmSync(oldDatabase, { force: true })
+      rmSync(oldAssets, { recursive: true, force: true })
+      return { restored: true, backupCreatedAt: verified.createdAt, verifiedFiles: verified.fileCount }
+    } catch (error) {
+      try { this.#db.close() } catch { /* closed handle */ }
+      try { rmSync(this.filename, { force: true }) } catch { /* restore below */ }
+      try { rmSync(this.assetDirectory, { recursive: true, force: true }) } catch { /* restore below */ }
+      if (dbMoved && existsSync(oldDatabase)) renameSync(oldDatabase, this.filename)
+      if (assetsMoved && existsSync(oldAssets)) renameSync(oldAssets, this.assetDirectory)
+      this.#db = new DatabaseSync(this.filename)
+      this.#db.exec(SCHEMA)
+      this.#db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
+      this.#closed = false
+      try { rmSync(restoreRoot, { recursive: true, force: true }) } catch { /* preserve restore failure */ }
+      throw error
+    }
   }
 
   getPersona(id) {

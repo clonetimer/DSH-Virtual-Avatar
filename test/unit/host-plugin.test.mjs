@@ -202,3 +202,45 @@ test('DSH companion API rejects cross-site and mismatched Origin requests', asyn
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+
+test('backup API creates, lists, verifies and restores user data with explicit confirmation', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-backup-api-'))
+  let route
+  let cleanup
+  const llm = { stream: async function* () { yield { type: 'text-delta', text: '你好' }; yield { type: 'finish', reason: { kind: 'stop' } } } }
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm,
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject() {},
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    const plugin = apply(ctx, {})
+    const original = await call(route.handler, { action: 'profile-set', args: { profile: { displayName: '备份前的鲸鱼娘' } } })
+    assert.equal(original.status, 200)
+    const created = await call(route.handler, { action: 'backup-create' })
+    assert.equal(created.status, 200)
+    const backupId = created.body.backup.id
+    assert.match(backupId, /^backup-/)
+    const listed = await call(route.handler, { action: 'backup-list' })
+    assert.equal(listed.body.backups.length, 1)
+    const verified = await call(route.handler, { action: 'backup-verify', args: { backupId } })
+    assert.equal(verified.status, 200)
+    assert.equal(verified.body.verification.valid, true)
+    const changed = await call(route.handler, { action: 'profile-set', args: { profile: { displayName: '备份后的鲸鱼娘' } } })
+    assert.equal(changed.status, 200)
+    const refused = await call(route.handler, { action: 'backup-restore', args: { backupId } })
+    assert.equal(refused.status, 400)
+    assert.equal(refused.body.code, 'CONFIRMATION_REQUIRED')
+    const restored = await call(route.handler, { action: 'backup-restore', args: { backupId, confirmed: true } })
+    assert.equal(restored.status, 200)
+    const view = await call(route.handler, { action: 'view' })
+    assert.equal(view.body.character.name, '备份前的鲸鱼娘')
+    assert.equal(plugin.store.loadCharacterState('deepseek').state.profileOverrides.displayName, '备份前的鲸鱼娘')
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
