@@ -1,0 +1,317 @@
+import { randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { createAvatarStore } from '../storage/sqlite-store.mjs'
+import { DeepseekWhaleService } from '../characters/deepseek-whale/service.mjs'
+import { DEEPSEEK_WHALE_PROFILE, affectionCap, resolveDeepseekWhaleProfile } from '../characters/deepseek-whale/profile.mjs'
+
+export const name = 'dsh-virtual-avatar'
+export const inject = ['webServer', 'llm']
+
+const API_PATH = '/api/dsh-virtual-avatar'
+const MAX_BODY_BYTES = 256 * 1024
+const MAX_HISTORY = 12
+
+function json(res, status, value) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
+  res.end(JSON.stringify(value))
+}
+
+async function readJsonBody(req) {
+  const chunks = []
+  let bytes = 0
+  for await (const chunk of req) {
+    const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
+    bytes += data.length
+    if (bytes > MAX_BODY_BYTES) {
+      const error = new Error('request body too large')
+      error.status = 413
+      throw error
+    }
+    chunks.push(data)
+  }
+  if (!bytes) return {}
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  } catch (cause) {
+    const error = new Error('invalid JSON request body', { cause })
+    error.status = 400
+    throw error
+  }
+}
+
+function emotionFromText(text) {
+  if (/生气|讨厌|哼|烦|滚|过分|笨蛋|可恶|不理|走开/u.test(text)) return 'angry'
+  if (/害怕|吓|恐怖|啊啊|惊|别吓我/u.test(text)) return 'frightened'
+  if (/无奈|累死|唉|好吧|算了|无语|头疼/u.test(text)) return 'exasperated'
+  if (/星星|好美|浪漫|月亮|梦想|憧憬|心动|漂亮/u.test(text)) return 'starry'
+  if (/害羞|呜|脸红|不好意思|才不|……/u.test(text)) return 'shy'
+  if (/？|\?|什么|不懂|为啥|咦|没听懂/u.test(text)) return 'confused'
+  if (/认真|工作|学习|讨论|问题|报告|项目|方案/u.test(text)) return 'serious'
+  if (/开心|高兴|哈哈|太好了|太棒|喜欢|爱|幸福|抱抱|亲亲/u.test(text)) return 'cheerful'
+  return 'normal'
+}
+
+function fallbackChoices() {
+  return [
+    { id: randomUUID(), text: '靠近一点，轻轻抱抱她', effect: 1 },
+    { id: randomUUID(), text: '继续聊聊刚才的话题', effect: 0 },
+    { id: randomUUID(), text: '先让她休息一会儿', effect: -1 },
+  ]
+}
+
+async function streamReply(llm, model, system, history, userText, signal) {
+  if (!llm || typeof llm.stream !== 'function') throw new Error('DSH LLM stream service is unavailable')
+  const messages = [{
+    role: 'user',
+    content: [{ type: 'text', text: '（场景：深海女仆工坊的会客厅，暖黄的灯光。当前角色正在和主人聊天。只扮演 DeepSeek 鲸鱼娘。）' }],
+    source: { kind: 'user' },
+  }]
+  for (const row of [...history, { role: 'user', text: userText }].slice(-MAX_HISTORY)) {
+    messages.push({
+      role: row.role === 'assistant' ? 'assistant' : 'user',
+      content: [{ type: 'text', text: String(row.text || '') }],
+      source: row.role === 'assistant'
+        ? { kind: 'model', provider: model.provider, model: model.model }
+        : { kind: 'user' },
+    })
+  }
+  let output = ''
+  let terminalReason = 'completed'
+  const iterable = llm.stream({
+    provider: model.provider,
+    model: model.model,
+    messages,
+    system,
+    temperature: 0.9,
+    maxTokens: 1200,
+    signal,
+  })
+  for await (const chunk of iterable) {
+    if (!chunk) continue
+    if (chunk.type === 'text-delta' && chunk.text) output += chunk.text
+    if (chunk.type === 'finish' && chunk.reason) {
+      const kind = String(chunk.reason.kind || '')
+      if (kind === 'error' || kind === 'aborted') {
+        const failure = chunk.reason.failure
+        throw new Error(failure?.message || failure?.code || kind)
+      }
+      if (kind === 'max-tokens' || kind === 'length') terminalReason = 'max-tokens'
+    }
+  }
+  if (!output.trim()) throw new Error('model stream produced no text')
+  return { text: output.trim(), terminalReason }
+}
+
+function resolveDshHomePath(ctx) {
+  if (typeof ctx.dshHomePath === 'function') return ctx.dshHomePath.bind(ctx)
+  const root = process.env.DSH_HOME || join(homedir(), '.dsh')
+  return (...segments) => join(root, ...segments)
+}
+
+function selectModel(llm, agentDefaultModel, config) {
+  if (config.chatProvider && config.chatModel) {
+    return { provider: String(config.chatProvider), model: String(config.chatModel) }
+  }
+  try {
+    const current = agentDefaultModel?.currentSelection?.()
+    if (current?.provider && current?.model) return { provider: String(current.provider), model: String(current.model) }
+  } catch { /* try the provider catalog below */ }
+  try {
+    const providers = typeof llm?.listProviders === 'function' ? llm.listProviders() : []
+    if (Array.isArray(providers) && providers.length) {
+      const provider = providers[0]
+      return { provider: String(provider.id), model: String(config.fallbackModel || 'deepseek-v4-flash') }
+    }
+  } catch { /* report missing model selection below */ }
+  throw new Error('No DSH model is configured. Select a main model or configure chatProvider/chatModel.')
+}
+
+function publicView(service, memoryService, config) {
+  const loaded = service.loadState()
+  const state = loaded.state
+  const profile = resolveDeepseekWhaleProfile(state.profileOverrides || {})
+  return {
+    ok: true,
+    enabled: config.enabled !== false,
+    character: {
+      id: 'deepseek',
+      name: profile.displayName,
+      address: profile.address,
+      greeting: profile.greeting,
+      visual: profile.visual,
+      level: state.level,
+      affection: state.affection,
+      affectionCap: affectionCap(state.level),
+      relationship: state.relationship,
+      chatLines: state.conversation?.chatLines || [],
+      choices: state.conversation?.choices || [],
+    },
+    memories: memoryService.list({ ownerKind: 'character', ownerId: 'deepseek' }).length,
+    revision: loaded.revision,
+  }
+}
+
+export function apply(ctx, config = {}) {
+  const webServer = ctx.webServer
+  const llm = ctx.llm
+  if (!webServer || typeof webServer.register !== 'function') throw new Error('dsh-virtual-avatar requires DSH webServer service')
+  if (!llm || typeof llm.stream !== 'function') throw new Error('dsh-virtual-avatar requires DSH llm service')
+
+  let agentDefaultModel = null
+  if (typeof ctx.inject === 'function') {
+    ctx.inject(['agentDefaultModel'], scope => { agentDefaultModel = scope.agentDefaultModel })
+  }
+
+  const dshHomePath = resolveDshHomePath(ctx)
+  const store = createAvatarStore({ dshHomePath })
+  const service = new DeepseekWhaleService({ store })
+  const memoryService = service.memory
+  const runtimeConfig = {
+    enabled: config.enabled !== false,
+    chatProvider: typeof config.chatProvider === 'string' ? config.chatProvider.trim() : '',
+    chatModel: typeof config.chatModel === 'string' ? config.chatModel.trim() : '',
+    fallbackModel: typeof config.fallbackModel === 'string' ? config.fallbackModel : 'deepseek-v4-flash',
+  }
+
+  const handler = async (req, res) => {
+    if (req.method === 'GET') {
+      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.1' })
+      return
+    }
+    if (req.method !== 'POST') {
+      json(res, 405, { ok: false, error: 'method not allowed' })
+      return
+    }
+    try {
+      const body = await readJsonBody(req)
+      const action = typeof body.action === 'string' ? body.action : 'view'
+      const args = body.args && typeof body.args === 'object' ? body.args : {}
+      if (runtimeConfig.enabled === false && action !== 'view') {
+        json(res, 403, { ok: false, error: 'DeepSeek Whale companion is disabled' })
+        return
+      }
+
+      if (action === 'view') {
+        json(res, 200, publicView(service, memoryService, runtimeConfig))
+        return
+      }
+
+      if (action === 'chat') {
+        const text = typeof args.text === 'string' ? args.text.trim().slice(0, 500) : ''
+        if (!text) {
+          json(res, 400, { ok: false, error: 'message text is required' })
+          return
+        }
+        const sessionId = typeof args.sessionId === 'string' && args.sessionId.trim() ? args.sessionId.trim().slice(0, 160) : 'deepseek-whale-default'
+        const loaded = service.loadState({ sessionId })
+        const turn = Number.isSafeInteger(args.turn) ? args.turn : (Number(loaded.state.pplRuntime?.session?.turn) || 0) + 1
+        const eventId = typeof args.eventId === 'string' && args.eventId.trim()
+          ? args.eventId.trim().slice(0, 200)
+          : sessionId + ':' + turn + ':' + randomUUID()
+        const choice = typeof args.choiceId === 'string'
+          ? (loaded.state.conversation?.choices || []).find(item => item && item.id === args.choiceId) || null
+          : null
+        const prepared = service.prepareTurn({
+          text,
+          choice,
+          eventId,
+          sessionId,
+          turn,
+          step: Number.isSafeInteger(args.step) ? args.step : 1,
+          context: args.context && typeof args.context === 'object'
+            ? args.context
+            : { privacy: 'private', outsiders_present: false, danger: 0 },
+          activityHint: typeof args.activityHint === 'string' ? args.activityHint.slice(0, 600) : '',
+        })
+        const model = selectModel(llm, agentDefaultModel, runtimeConfig)
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(new Error('DeepSeek Whale model request timed out')), 110000)
+        let generated
+        try {
+          generated = await streamReply(
+            llm,
+            model,
+            prepared.system,
+            prepared.baseState.conversation?.log || [],
+            text,
+            controller.signal,
+          )
+        } finally {
+          clearTimeout(timeout)
+        }
+        const choices = fallbackChoices()
+        const committed = service.finalizeTurn(prepared, {
+          reply: generated.text,
+          terminalReason: generated.terminalReason,
+          emotion: emotionFromText(generated.text),
+          choices,
+        })
+        json(res, 200, {
+          ok: true,
+          eventId,
+          reply: generated.text,
+          emotion: emotionFromText(generated.text),
+          choices: committed.state.conversation?.choices || choices,
+          view: publicView(service, memoryService, runtimeConfig),
+          duplicate: committed.duplicate === true,
+        })
+        return
+      }
+
+      if (action === 'memory-add') {
+        const text = typeof args.text === 'string' ? args.text.trim() : ''
+        const result = service.remember(text, {
+          eventId: typeof args.eventId === 'string' ? args.eventId : randomUUID(),
+          source: 'explicit-user-memory',
+        })
+        json(res, 200, { ok: true, result, view: publicView(service, memoryService, runtimeConfig) })
+        return
+      }
+      if (action === 'memory-list') {
+        json(res, 200, { ok: true, memories: service.listMemories() })
+        return
+      }
+      if (action === 'memory-pin') {
+        const result = service.pinMemory(String(args.memoryId || ''), args.pinned !== false)
+        if (!result) {
+          json(res, 404, { ok: false, error: 'memory not found' })
+          return
+        }
+        json(res, 200, { ok: true, memory: result })
+        return
+      }
+      if (action === 'memory-delete') {
+        const removed = service.removeMemory(String(args.memoryId || ''))
+        json(res, removed ? 200 : 404, { ok: removed, error: removed ? undefined : 'memory not found' })
+        return
+      }
+      if (action === 'profile-get') {
+        const loaded = service.loadState()
+        json(res, 200, { ok: true, profile: resolveDeepseekWhaleProfile(loaded.state.profileOverrides || {}) })
+        return
+      }
+      if (action === 'profile-set') {
+        const loaded = service.loadState()
+        const saved = service.updateProfile(args.profile || {}, { expectedRevision: loaded.revision })
+        json(res, 200, { ok: true, profile: resolveDeepseekWhaleProfile(saved.state.profileOverrides || {}), revision: saved.revision })
+        return
+      }
+
+      json(res, 404, { ok: false, error: 'unknown action: ' + action })
+    } catch (error) {
+      const status = Number.isInteger(error?.status) ? error.status : 500
+      json(res, status, { ok: false, error: error?.message || String(error), code: error?.code || 'AVATAR_ERROR' })
+    }
+  }
+
+  const dispose = webServer.register({ kind: 'prefix', path: API_PATH, handler })
+  if (typeof ctx.effect === 'function') {
+    ctx.effect(() => () => {
+      try { if (typeof dispose === 'function') dispose() } catch { /* host may already be disposing */ }
+      try { store.close() } catch { /* ignore shutdown close failures */ }
+    })
+  }
+
+  return { service, store, apiPath: API_PATH }
+}
