@@ -15,6 +15,8 @@ const API_PATH = '/api/dsh-virtual-avatar'
 const MAX_BODY_BYTES = 256 * 1024
 const MAX_HISTORY = 12
 const ASSET_ROOT = fileURLToPath(new URL('../../assets/deepseek-whale/', import.meta.url))
+const PPL_SOURCE_PATH = fileURLToPath(new URL('../../personas/deepseek-whale.ppl', import.meta.url))
+const PPL_IR_PATH = fileURLToPath(new URL('../../personas/deepseek-whale.pir.json', import.meta.url))
 const ASSET_TYPES = Object.freeze({
   'maid-left.webp': 'image/webp',
   'whale-cheerful.webp': 'image/webp',
@@ -230,6 +232,9 @@ export function apply(ctx, config = {}) {
   const store = createAvatarStore({ dshHomePath })
   const service = new DeepseekWhaleService({ store })
   const memoryService = service.memory
+  const recentErrors = []
+  let lastSuccessfulTurnAt = null
+  let lastModelTest = null
   const runtimeConfig = {
     enabled: config.enabled !== false,
     chatProvider: typeof config.chatProvider === 'string' ? config.chatProvider.trim() : '',
@@ -237,7 +242,83 @@ export function apply(ctx, config = {}) {
     fallbackModel: typeof config.fallbackModel === 'string' ? config.fallbackModel : 'deepseek-v4-flash',
   }
 
+  const collectDirectoryStats = (directory, maxEntries = 10000) => {
+    let files = 0
+    let bytes = 0
+    let truncated = false
+    const walk = current => {
+      let entries = []
+      try { entries = readdirSync(current, { withFileTypes: true }) } catch { return }
+      for (const entry of entries) {
+        if (files >= maxEntries) { truncated = true; return }
+        if (entry.isSymbolicLink()) continue
+        const absolute = join(current, entry.name)
+        try {
+          const stat = statSync(absolute)
+          if (stat.isDirectory()) walk(absolute)
+          else if (stat.isFile()) { files++; bytes += stat.size }
+        } catch { /* skip files that disappear during inspection */ }
+      }
+    }
+    walk(directory)
+    return { files, bytes, truncated }
+  }
+
+  const buildDiagnostics = () => {
+    const checkedAt = new Date().toISOString()
+    const loaded = service.loadState()
+    const persona = service.ppl.ir
+    let model = null
+    let modelSelectionError = null
+    try { model = selectModel(llm, agentDefaultModel, runtimeConfig) }
+    catch (error) { modelSelectionError = { code: error.code || 'MODEL_NOT_CONFIGURED', message: String(error.message || error).replace(/(?:sk|api)[-_ ]?key[=: ]+[^ ]+/ig, '[credential redacted]').slice(0, 200) } }
+    let providers = []
+    try {
+      const catalog = typeof llm.listProviders === 'function' ? llm.listProviders() : []
+      if (Array.isArray(catalog)) providers = catalog.map(item => ({ id: String(item.id || ''), name: String(item.name || item.id || ''), available: item.available !== false })).filter(item => item.id)
+    } catch { providers = [] }
+    const memories = service.listMemories()
+    const mediaAssets = store.listMediaAssets('deepseek')
+    const mediaBytes = mediaAssets.reduce((sum, item) => sum + (Number(item.byteLength) || 0), 0)
+    let database = { status: 'unavailable', fileBytes: null }
+    try {
+      const dbPath = join(storageRoot, 'avatar.sqlite')
+      database = { status: existsSync(dbPath) ? 'available' : 'not-created', fileBytes: existsSync(dbPath) ? statSync(dbPath).size : 0 }
+      store.listAuditEvents('character', 'deepseek', { limit: 1 })
+    } catch (error) { database = { status: 'error', code: error.code || 'SQLITE_ERROR' } }
+    const backupDirectory = collectDirectoryStats(backupRoot)
+    const mediaDirectory = collectDirectoryStats(join(storageRoot, 'assets'))
+    let source = { status: 'missing' }
+    let ir = { status: 'missing' }
+    try { const bytes = readFileSync(PPL_SOURCE_PATH); source = { status: 'available', bytes: bytes.length } }
+    catch (error) { source = { status: 'error', message: String(error.message || error).slice(0, 160) } }
+    try {
+      const raw = readFileSync(PPL_IR_PATH, 'utf8')
+      const parsed = JSON.parse(raw)
+      ir = { status: parsed.schema === 'ppl.persona-ir/0.3' && parsed.persona?.id === 'DEEPSEEK_WHALE' ? 'valid' : 'incompatible', schema: parsed.schema || null, personaId: parsed.persona?.id || null, version: parsed.persona?.version || null, bytes: Buffer.byteLength(raw) }
+    } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
+    return {
+      checkedAt,
+      plugin: { id: name, version: '0.1.0-dev.1', enabled: runtimeConfig.enabled },
+      model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
+      persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0 },
+      storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, mediaDirectory, backupDirectory },
+      companion: {
+        level: loaded.state.level,
+        affection: loaded.state.affection,
+        trust: loaded.state.relationship?.trust ?? null,
+        attachment: loaded.state.relationship?.attachment ?? null,
+        relationshipStage: loaded.state.relationship?.stage || 'acquaintance',
+        stateRevision: loaded.revision,
+        lastConversationAt: loaded.state.conversation?.chatLines?.at(-1)?.at || null,
+        lastSuccessfulTurnAt,
+      },
+      recentErrors: recentErrors.slice(0, 10),
+    }
+  }
+
   const handler = async (req, res) => {
+    let action = 'unknown'
     const pathname = new URL(req.url || '/', 'http://dsh.local').pathname
     const assetMarker = pathname.lastIndexOf('/assets/')
     if (req.method === 'GET' && assetMarker >= 0) {
@@ -267,7 +348,7 @@ export function apply(ctx, config = {}) {
     try {
       validateBrowserOrigin(req)
       const body = await readJsonBody(req)
-      const action = typeof body.action === 'string' ? body.action : 'view'
+      action = typeof body.action === 'string' ? body.action : 'view'
       const args = body.args && typeof body.args === 'object' ? body.args : {}
       if (runtimeConfig.enabled === false && action !== 'view') {
         json(res, 403, { ok: false, error: 'DeepSeek Whale companion is disabled' })
@@ -320,6 +401,40 @@ export function apply(ctx, config = {}) {
             },
           }))
         json(res, 200, { ok: true, events })
+        return
+      }
+
+      if (action === 'diagnostics') {
+        json(res, 200, { ok: true, diagnostics: buildDiagnostics() })
+        return
+      }
+
+      if (action === 'model-test') {
+        const model = selectModel(llm, agentDefaultModel, runtimeConfig)
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(new Error('model test timed out')), 20000)
+        let output = ''
+        try {
+          const iterable = llm.stream({
+            provider: model.provider,
+            model: model.model,
+            messages: [{ role: 'user', content: [{ type: 'text', text: 'Reply with OK.' }] }],
+            system: 'This is a connectivity test. Reply with OK only.',
+            temperature: 0,
+            maxTokens: 8,
+            signal: controller.signal,
+          })
+          for await (const chunk of iterable) {
+            if (chunk?.type === 'text-delta' && chunk.text) output += chunk.text
+            if (chunk?.type === 'finish' && ['error','aborted'].includes(String(chunk.reason?.kind || ''))) throw new Error(chunk.reason?.failure?.message || 'model stream failed')
+          }
+          if (!output.trim()) throw new Error('model returned no text')
+          lastModelTest = { at: new Date().toISOString(), status: 'success', provider: model.provider, model: model.model }
+          json(res, 200, { ok: true, test: lastModelTest })
+        } catch (error) {
+          lastModelTest = { at: new Date().toISOString(), status: 'failed', provider: model.provider, model: model.model, code: error.code || 'MODEL_TEST_FAILED', message: String(error.message || error).slice(0, 200) }
+          throw error
+        } finally { clearTimeout(timeout) }
         return
       }
 
@@ -377,6 +492,7 @@ export function apply(ctx, config = {}) {
           emotion: emotionFromText(generated.text),
           choices: [],
         })
+        lastSuccessfulTurnAt = new Date().toISOString()
         json(res, 200, {
           ok: true,
           eventId,
@@ -529,8 +645,11 @@ export function apply(ctx, config = {}) {
 
       json(res, 404, { ok: false, error: 'unknown action: ' + action })
     } catch (error) {
+      recentErrors.unshift({ at: new Date().toISOString(), action, code: error?.code || 'AVATAR_ERROR', message: String(error?.message || error).replace(/(?:sk|api)[-_ ]?key[=: ]+[^ ]+/ig, '[credential redacted]').slice(0, 240) })
+      if (recentErrors.length > 10) recentErrors.length = 10
       const status = Number.isInteger(error?.status) ? error.status : error?.code === 'REVISION_CONFLICT' ? 409 : 500
-      json(res, status, { ok: false, error: error?.message || String(error), code: error?.code || 'AVATAR_ERROR' })
+      const safeMessage = String(error?.message || error).replace(/(?:sk|api)[-_ ]?key[=: ]+[^ ]+/ig, '[credential redacted]').slice(0, 240)
+      json(res, status, { ok: false, error: safeMessage, code: error?.code || 'AVATAR_ERROR' })
     }
   }
 

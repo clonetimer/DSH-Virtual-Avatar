@@ -298,3 +298,44 @@ test('conversation search and relationship timeline return persisted companion e
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+
+test('runtime diagnostics reports model PPL storage and companion health without credentials', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-diagnostics-'))
+  let route
+  let cleanup
+  const llm = {
+    listProviders: () => [{ id: 'deepseek-official', name: 'DeepSeek', available: true, apiKey: 'sk-secret-must-not-leak' }],
+    stream: async function* () { yield { type: 'text-delta', text: '你好' }; yield { type: 'finish', reason: { kind: 'stop' } } },
+  }
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm,
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject(names, callback) {
+      if (names.includes('agentDefaultModel')) callback({ agentDefaultModel: { currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }) } })
+    },
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    const modelTest = await call(route.handler, { action: 'model-test' })
+    assert.equal(modelTest.status, 200)
+    assert.equal(modelTest.body.test.status, 'success')
+    const result = await call(route.handler, { action: 'diagnostics' })
+    assert.equal(result.status, 200)
+    const d = result.body.diagnostics
+    assert.equal(d.model.status, 'selected')
+    assert.equal(d.model.selected.provider, 'deepseek-official')
+    assert.equal(d.persona.runtime, 'loaded')
+    assert.equal(d.persona.ir.status, 'valid')
+    assert.equal(d.storage.database.status, 'available')
+    assert.equal(typeof d.storage.memoryCount, 'number')
+    assert.equal(d.companion.relationshipStage, 'acquaintance')
+    assert.ok(!JSON.stringify(d).includes('sk-secret-must-not-leak'))
+    assert.ok(!JSON.stringify(d).toLowerCase().includes('apikey'))
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
