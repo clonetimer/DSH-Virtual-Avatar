@@ -79,6 +79,12 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(summaryConfirm.status, 200)
     assert.match(summaryConfirm.body.storyMemory.summary, /今天辛苦了/)
     assert.match(summaryConfirm.body.storyMemory.summary, /主人也辛苦啦/)
+    const staleSummaryConfirm = await call(route.handler, {
+      action: 'summary-confirm',
+      args: { summary: '过期摘要不得覆盖新摘要', expectedStoryRevision: 0 },
+    })
+    assert.equal(staleSummaryConfirm.status, 409)
+    assert.equal(staleSummaryConfirm.body.code, 'REVISION_CONFLICT')
     const historyPage = await call(route.handler, { action: 'history', args: { limit: 1 } })
     assert.equal(historyPage.status, 200)
     assert.equal(historyPage.body.total, 2)
