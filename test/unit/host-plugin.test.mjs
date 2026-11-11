@@ -70,6 +70,22 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(chat.body.reply, '主人也辛苦啦，我一直在这里哦。')
     assert.equal(chat.body.view.character.relationship.trust, 0.51)
     assert.equal(chat.body.view.character.chatLines.length, 2)
+    const storyView = await call(route.handler, { action: 'story-get' })
+    assert.equal(storyView.status, 200)
+    assert.equal(storyView.body.storyMemory.confirmedFacts.length, 0)
+    const storyFact = await call(route.handler, {
+      action: 'story-fact-confirm',
+      args: { id: 'host-fact-1', text: '主人喜欢海边夜景', sourceEventId: 'explicit-user-confirmation' },
+    })
+    assert.equal(storyFact.status, 200)
+    assert.equal(storyFact.body.storyMemory.confirmedFacts.length, 1)
+    const storySummary = await call(route.handler, {
+      action: 'story-summary-set',
+      args: { summary: '主人和鲸鱼娘正在熟悉彼此。', expectedStoryRevision: 1 },
+    })
+    assert.equal(storySummary.status, 200)
+    assert.equal(storySummary.body.storyMemory.summary, '主人和鲸鱼娘正在熟悉彼此。')
+
     const historyPage = await call(route.handler, { action: 'history', args: { limit: 1 } })
     assert.equal(historyPage.status, 200)
     assert.equal(historyPage.body.total, 2)
