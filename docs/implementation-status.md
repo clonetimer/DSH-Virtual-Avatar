@@ -123,3 +123,18 @@
 - Directory size scan skips symbolic links and caps traversal at 10,000 files.
 - Added Host integration coverage for provider selection, PPL IR validity, SQLite status, companion status, credential non-disclosure and model-test success.
 - Node 22.19 / 24 CI pending.
+
+
+## P3 runtime diagnostics delivery record (2026-11-11)
+
+### Implemented
+- Read-only `diagnostics` API: plugin enable/version, selected model/provider catalog, PPL source/IR/runtime validity, SQLite health/file size, memory/pinned counts, media and backup directory sizes, relationship state, last conversation/successful turn and bounded recent errors.
+- Explicit `model-test`: minimal request, max 8 tokens, 20-second timeout; no companion turn finalization and no conversation/memory/relationship persistence.
+- Overlay diagnostics panel: recheck, explicit model test, JSON export.
+- Privacy: provider credentials/API keys are not included in diagnostics; error strings are bounded and common API-key patterns are redacted. Directory scan skips symbolic links and is capped at 10,000 files.
+- Host integration test covers selected provider, PPL IR validity, SQLite availability, relationship state, credential non-disclosure and model-test success.
+
+### CI evidence
+- Run #435: Node 22.19 / Node 24 PASS for diagnostics and model-test test contract.
+- A final follow-up commit redacts credentials from model-test failure messages; Run #436 is the acceptance run for that exact head.
+- Real DSH provider connectivity and Web/Desktop visual acceptance remain host-environment tests, not inferred from mocks.
