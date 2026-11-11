@@ -18,11 +18,7 @@ function memoryStore() {
     },
   }
 }
-
-const source = () => ({
-  sourceKind: 'virtual-person',
-  raw: '# Persona\n\n## 记忆\n- 2026-10-28 13:20："核心事实"^3*；',
-})
+const source = () => ({ sourceKind: 'virtual-person', raw: '# Persona\n\n## 记忆\n- 2026-10-28 13:20："核心事实"^3*；' })
 
 test('migration requires explicit confirmation and commits staged sources once', async () => {
   const coordinator = new MigrationCoordinator({ store: memoryStore() })
