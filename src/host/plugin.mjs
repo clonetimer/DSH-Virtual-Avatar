@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { createAvatarStore } from '../storage/sqlite-store.mjs'
 import { DeepseekWhaleService } from '../characters/deepseek-whale/service.mjs'
+import { extractMemoryCandidates } from '../memory/candidates.mjs'
 import { DEEPSEEK_WHALE_PROFILE, affectionCap, resolveDeepseekWhaleProfile } from '../characters/deepseek-whale/profile.mjs'
 
 export const name = 'dsh-virtual-avatar'
@@ -293,6 +294,12 @@ export function apply(ctx, config = {}) {
           view: publicView(service, memoryService, runtimeConfig),
           duplicate: committed.duplicate === true,
         })
+        return
+      }
+
+      if (action === 'memory-candidates') {
+        const text = typeof args.text === 'string' ? args.text.trim().slice(0, 500) : ''
+        json(res, 200, { ok: true, candidates: extractMemoryCandidates(text) })
         return
       }
 
