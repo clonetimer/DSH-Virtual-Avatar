@@ -112,3 +112,14 @@
 - Prevent duplicate concurrent fetches for those panels.
 - This PR is UI feedback only; it does not change stored data or relationship scoring.
 - Real DSH Web/Desktop visual acceptance remains outstanding.
+
+
+## P3 runtime diagnostics implementation log (2026-11-11)
+
+- Added a read-only `diagnostics` Host API covering plugin enabled state, selected model/provider IDs, provider availability catalog (no credentials), PPL source/IR/runtime status, SQLite availability and file size, memory/pinned counts, media/backup directory sizes, relationship state, recent successful conversation and last 10 runtime errors.
+- Added explicit user-triggered `model-test` action. It sends a minimal “Reply with OK” request with an 8-token cap and 20-second timeout; it does not call companion turn finalization, does not write conversation history, memory or relationship state.
+- Added a diagnostics overlay panel with recheck, model connectivity test and JSON diagnostics export.
+- Diagnostics omits API keys and provider credentials. Error messages are bounded and redact common API-key patterns before returning/storing.
+- Directory size scan skips symbolic links and caps traversal at 10,000 files.
+- Added Host integration coverage for provider selection, PPL IR validity, SQLite status, companion status, credential non-disclosure and model-test success.
+- Node 22.19 / 24 CI pending.
