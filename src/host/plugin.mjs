@@ -289,6 +289,29 @@ export function apply(ctx, config = {}) {
         return
       }
 
+      if (action === 'history-search') {
+        const query = typeof args.query === 'string' ? args.query.trim().toLocaleLowerCase() : ''
+        if (query.length < 2) {
+          json(res, 400, { ok: false, code: 'SEARCH_QUERY_TOO_SHORT', error: '请输入至少两个字符' })
+          return
+        }
+        const loaded = service.loadState()
+        const lines = loaded.state.conversation?.chatLines || []
+        const matches = []
+        for (let index = lines.length - 1; index >= 0 && matches.length < 100; index--) {
+          const line = lines[index]
+          if (String(line.text || '').toLocaleLowerCase().includes(query)) matches.push({ ...line, index })
+        }
+        json(res, 200, { ok: true, query: args.query.trim(), matches, total: matches.length, truncated: matches.length === 100 })
+        return
+      }
+
+      if (action === 'relationship-history') {
+        const events = store.listAuditEvents('character', 'deepseek', { limit: args.limit })
+        json(res, 200, { ok: true, events })
+        return
+      }
+
       if (action === 'view') {
         json(res, 200, publicView(service, memoryService, runtimeConfig))
         return

@@ -903,6 +903,23 @@ export class SqliteAvatarStore {
     if (typeof ownerId !== 'string' || !ownerId.trim()) throw new TypeError('memory owner id required')
   }
 
+  listAuditEvents(aggregateKind, aggregateId, { limit = 50, before = null } = {}) {
+    this.#assertOpen()
+    const safeLimit = Math.max(1, Math.min(100, Number.isSafeInteger(limit) ? limit : 50))
+    const rows = before
+      ? this.#db.prepare('SELECT id,aggregate_kind,aggregate_id,event_type,source_event_id,before_hash,after_hash,details_json,created_at FROM audit_events WHERE aggregate_kind=? AND aggregate_id=? AND created_at < ? ORDER BY created_at DESC,id DESC LIMIT ?').all(String(aggregateKind),String(aggregateId),String(before),safeLimit)
+      : this.#db.prepare('SELECT id,aggregate_kind,aggregate_id,event_type,source_event_id,before_hash,after_hash,details_json,created_at FROM audit_events WHERE aggregate_kind=? AND aggregate_id=? ORDER BY created_at DESC,id DESC LIMIT ?').all(String(aggregateKind),String(aggregateId),safeLimit)
+    return rows.map(row => ({
+      id: row.id,
+      type: row.event_type,
+      sourceEventId: row.source_event_id,
+      beforeHash: row.before_hash,
+      afterHash: row.after_hash,
+      details: JSON.parse(row.details_json),
+      createdAt: row.created_at,
+    }))
+  }
+
   #recordAudit(aggregateKind, aggregateId, eventType, sourceEventId, before, after, details) {
     this.#db.prepare(`
       INSERT INTO audit_events(id,aggregate_kind,aggregate_id,event_type,source_event_id,before_hash,after_hash,details_json,created_at)
