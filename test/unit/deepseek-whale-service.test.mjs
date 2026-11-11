@@ -84,3 +84,37 @@ test('choice selections become idempotent story events after completed turns', (
     store.close()
   }
 })
+
+
+test('prepared turn retrieves relevant pinned memories and bounds recent context', () => {
+  const store = new SqliteAvatarStore(':memory:')
+  try {
+    const service = new DeepseekWhaleService({ store })
+    service.remember('主人喜欢海边的夜景', { eventId: 'memory-seaside-1' })
+    service.remember('主人正在学习 Rust 编程', { eventId: 'memory-rust-1' })
+    const memories = service.listMemories()
+    service.pinMemory(memories[0].id, true)
+    const prepared = service.prepareTurn({
+      text: '你还记得我喜欢海边吗？',
+      eventId: 'context-retrieval-1',
+    })
+    assert.ok(prepared.memoryContext.items.length >= 1)
+    assert.ok(prepared.memoryContext.items.some(item => item.text.includes('海边')))
+    assert.ok(prepared.contextMessages.length <= 12)
+    assert.ok(prepared.contextDiagnostics.estimatedChars <= 14000)
+    assert.equal(prepared.contextDiagnostics.includedMessages, prepared.contextMessages.length)
+  } finally { store.close() }
+})
+
+test('summary candidates include source hash and current revision without overwriting memory', () => {
+  const store = new SqliteAvatarStore(':memory:')
+  try {
+    const service = new DeepseekWhaleService({ store })
+    service.addConfirmedStoryFact({ id: 'fact-summary-1', text: '主人喜欢夜景', sourceEventId: 'fact-source-1' })
+    const candidate = service.createMemorySummaryCandidate({ now: '2026-11-11T00:00:00.000Z' })
+    assert.match(candidate.summary, /主人喜欢夜景/)
+    assert.equal(candidate.requiresUserConfirmation, true)
+    assert.equal(candidate.expectedRevision, 1)
+    assert.equal(service.getStoryMemory().summary, '')
+  } finally { store.close() }
+})
