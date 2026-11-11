@@ -45,7 +45,16 @@
 4. SQLite 提交失败时回收本轮新增文件；读取时重新核验 hash。
 5. 对其他角色的媒体明确标记 deferred，不混入 DeepSeek。
 
-## P1 进度补充\n\n- P1-B 已增加记忆编辑与 JSON 导出服务/API/界面；正在等待双版本 CI。\n- 记忆自动候选仍需用户确认；编辑限制 400 字；导出仅包含 DeepSeek 角色记忆。\n- P1-A 安全回滚尚未合入；P1-C 摘要冲突 UI 与 P1-D 完整备份恢复仍未完成。\n\n## 下一阶段
+## P1 进度补充\n\n- P1-B 已增加记忆编辑与 JSON 导出服务/API/界面；正在等待双版本 CI。\n- 记忆自动候选仍需用户确认；编辑限制 400 字；导出仅包含 DeepSeek 角色记忆。\n- P1-A 安全回滚尚未合入；P1-C 摘要冲突 UI 与 P1-D 完整备份恢复仍未完成。\n\n## P1-D 本地备份恢复实现
+
+- 新增 `dsh-virtual-avatar.backup/1` 备份目录格式。
+- SQLite `VACUUM INTO` 一致性快照；媒体资产复制到备份目录。
+- manifest 记录 schema、时间、文件大小和 SHA-256。
+- 恢复前校验；校验通过后原子替换数据库和媒体目录，失败恢复旧目录。
+- Host API：backup-list / backup-create / backup-verify / backup-restore；恢复必须显式确认。
+- 新增存储层与 Host API 备份恢复回归，等待 Node 22.19 / 24 CI。
+
+## 下一阶段
 
 1. 完成迁移回滚：快照、后续写入冲突检测、受控恢复。
 2. 完成记忆编辑、导出、删除和摘要冲突提示。
