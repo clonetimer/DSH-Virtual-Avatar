@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteAvatarStore } from '../../src/storage/sqlite-store.mjs'
@@ -107,6 +107,38 @@ test('malformed or unsupported media aborts the migration without partial databa
     assert.equal(store.getMigrationSource('whale-galgame', staged.preview.sources[0].sourceHash), null)
     assert.equal(coordinator.getStage(staged.id).status, 'staged')
   } finally {
+    store.close()
+    fixture.cleanup()
+  }
+})
+
+
+test('new media files are removed if the SQLite migration transaction fails after extraction', async () => {
+  const fixture = createStore()
+  const { store, directory } = fixture
+  const originalSave = store.saveCharacterState.bind(store)
+  try {
+    const coordinator = new MigrationCoordinator({ store })
+    const raw = JSON.stringify({
+      characters: {
+        deepseek: { customSprite: { dataUrl: 'data:image/png;base64,aGVsbG8=' } },
+      },
+    })
+    const staged = coordinator.stage([{ sourceKind: 'whale-galgame', raw }])
+    store.saveCharacterState = () => { throw new Error('simulated character state write failure') }
+    await assert.rejects(
+      () => coordinator.commit(staged.id, { confirmed: true }),
+      /simulated character state write failure/,
+    )
+    store.saveCharacterState = originalSave
+    assert.equal(store.loadCharacterState('deepseek'), null)
+    assert.equal(store.listMediaAssets().length, 0)
+    assert.equal(store.getMigrationSource('whale-galgame', staged.preview.sources[0].sourceHash), null)
+    const mediaDirectory = join(directory, 'assets', 'deepseek')
+    assert.equal(existsSync(mediaDirectory), true)
+    assert.deepEqual(readdirSync(mediaDirectory), [])
+  } finally {
+    store.saveCharacterState = originalSave
     store.close()
     fixture.cleanup()
   }

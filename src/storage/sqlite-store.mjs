@@ -6,6 +6,15 @@ import { applyDeepseekWhaleAffection, createDeepseekWhaleInitialState } from '..
 
 const OWNER_KINDS = new Set(['shared', 'agent-persona', 'character'])
 const sha256 = value => createHash('sha256').update(value).digest('hex')
+const MAX_MEDIA_ASSET_BYTES = 12 * 1024 * 1024
+const MAX_MIGRATION_MEDIA_BYTES = 64 * 1024 * 1024
+const MEDIA_EXTENSIONS = Object.freeze({
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/avif': 'avif',
+})
 
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue)
@@ -556,27 +565,20 @@ export class SqliteAvatarStore {
   }
 
   #extractMediaReferences(value, { sourceHash, sourcePath, createdFiles, assets }) {
-    const MAX_MEDIA_ASSET_BYTES = 12 * 1024 * 1024
-    const extensions = Object.freeze({
-      'image/png': 'png',
-      'image/jpeg': 'jpg',
-      'image/webp': 'webp',
-      'image/gif': 'gif',
-      'image/avif': 'avif',
-    })
     if (typeof value === 'string') {
       if (!/^data:image\//i.test(value)) return value
       const match = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)$/i.exec(value)
       if (!match) throw conflict('INVALID_MEDIA_DATA_URL', 'legacy image data URL is malformed at ' + sourcePath)
       const mimeType = match[1].toLowerCase()
-      const extension = extensions[mimeType]
+      const extension = MEDIA_EXTENSIONS[mimeType]
       if (!extension) throw conflict('UNSUPPORTED_MEDIA_TYPE', 'legacy media type is not supported: ' + mimeType)
       const encoded = match[2].replace(/\s/g, '')
       if (!encoded || encoded.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
         throw conflict('INVALID_MEDIA_DATA_URL', 'legacy image base64 payload is malformed at ' + sourcePath)
       }
       const bytes = Buffer.from(encoded, 'base64')
-      if (!bytes.length || bytes.toString('base64').replace(/=+$/,'') !== encoded.replace(/=+$/,'')) {
+      const canonicalBase64 = bytes.toString('base64')
+      if (!bytes.length || (encoded !== canonicalBase64 && encoded !== canonicalBase64.replace(/=+$/,''))) {
         throw conflict('INVALID_MEDIA_DATA_URL', 'legacy image base64 payload failed canonical validation at ' + sourcePath)
       }
       if (bytes.length > MAX_MEDIA_ASSET_BYTES) {
@@ -594,6 +596,12 @@ export class SqliteAvatarStore {
         }
         assets.set(assetId, existing)
         return 'asset://dsh-virtual-avatar/' + assetId
+      }
+      const alreadyStaged = assets.get(assetId)
+      if (alreadyStaged) return 'asset://dsh-virtual-avatar/' + assetId
+      const stagedBytes = Array.from(assets.values()).reduce((sum, item) => sum + item.byteLength, 0)
+      if (stagedBytes + bytes.length > MAX_MIGRATION_MEDIA_BYTES) {
+        throw conflict('MEDIA_MIGRATION_TOO_LARGE', 'DeepSeek migration exceeds the 64 MiB total media limit')
       }
 
       const relativePath = 'deepseek/' + contentHash + '.' + extension

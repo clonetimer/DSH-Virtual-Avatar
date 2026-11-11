@@ -46,7 +46,7 @@
 
 1. 仅提取 DeepSeek 角色字段及明确引用的全局 bg / cg。
 2. 支持 PNG、JPEG、WebP、GIF、AVIF；拒绝 SVG、未知 MIME 和非规范 Base64。
-3. 单个媒体文件上限为 12 MiB；超限时整个迁移事务失败，不留下半成品状态。
+3. 单个媒体文件上限为 12 MiB，单次 DeepSeek 媒体导入总量上限为 64 MiB；超限时整个迁移事务失败，不留下半成品状态。
 4. 以媒体内容 SHA-256 生成内容寻址文件名；asset ID 同时绑定 MIME，避免相同字节被不同 MIME 误解释。
 5. 文件先写入同目录临时文件，再原子重命名；SQLite 记录与角色状态在同一事务内提交。
 6. 角色状态中的 data URL 替换为 asset://dsh-virtual-avatar/<asset-id> 引用；原始 data URL 只保留在只读来源归档。

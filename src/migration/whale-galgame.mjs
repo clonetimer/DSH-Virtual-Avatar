@@ -37,9 +37,9 @@ export function inspectWhaleGlobalSave(raw) {
   const deepseekMediaDataUrls = []
   if (Object.prototype.hasOwnProperty.call(characters, 'deepseek')) {
     collectMedia(characters.deepseek, '$.characters.deepseek', deepseekMediaDataUrls)
+    if (Object.prototype.hasOwnProperty.call(parsed, 'bg')) collectMedia(parsed.bg, '$.bg', deepseekMediaDataUrls)
+    if (Object.prototype.hasOwnProperty.call(parsed, 'cg')) collectMedia(parsed.cg, '$.cg', deepseekMediaDataUrls)
   }
-  if (Object.prototype.hasOwnProperty.call(parsed, 'bg')) collectMedia(parsed.bg, '$.bg', deepseekMediaDataUrls)
-  if (Object.prototype.hasOwnProperty.call(parsed, 'cg')) collectMedia(parsed.cg, '$.cg', deepseekMediaDataUrls)
 
   const importedPaths = new Set(deepseekMediaDataUrls.map(item => item.path))
   const deferredMediaDataUrls = mediaDataUrls.filter(item => !importedPaths.has(item.path))
