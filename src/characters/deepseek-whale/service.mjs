@@ -83,6 +83,8 @@ export class DeepseekWhaleService {
       activityHint,
       now,
     })
+    const continuity = renderStoryContinuity(loaded.state.storyMemory)
+    const systemWithContinuity = [system, continuity].filter(Boolean).join('\n\n')
     return {
       characterId: DEEPSEEK_WHALE_ID,
       eventId: String(eventId),
@@ -92,7 +94,7 @@ export class DeepseekWhaleService {
       context: structuredClone(context),
       profile,
       memoryContext,
-      system,
+      system: systemWithContinuity,
       baseState: loaded.state,
       expectedRevision: loaded.revision,
       pplResolution: resolved.resolution,
