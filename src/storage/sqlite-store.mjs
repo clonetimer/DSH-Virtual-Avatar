@@ -596,7 +596,7 @@ export class SqliteAvatarStore {
         return 'asset://dsh-virtual-avatar/' + assetId
       }
 
-      const relativePath = join('deepseek', contentHash + '.' + extension)
+      const relativePath = 'deepseek/' + contentHash + '.' + extension
       const absolutePath = join(this.assetDirectory, relativePath)
       mkdirSync(dirname(absolutePath), { recursive: true, mode: 0o700 })
       if (existsSync(absolutePath)) {
