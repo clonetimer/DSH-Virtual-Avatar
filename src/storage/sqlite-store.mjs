@@ -338,6 +338,17 @@ export class SqliteAvatarStore {
     return { duplicate: false, memoryId }
   }
 
+  findMemoryEvent(eventId) {
+    this.#assertOpen()
+    const row = this.#db.prepare('SELECT event_id, owner_kind, owner_id, payload_hash, memory_id FROM memory_events WHERE event_id = ?').get(String(eventId))
+    return row ? { eventId: row.event_id, ownerKind: row.owner_kind, ownerId: row.owner_id, payloadHash: row.payload_hash, memoryId: row.memory_id } : null
+  }
+
+  setMemoryEventMemoryId(eventId, memoryId) {
+    this.#assertOpen()
+    this.#db.prepare('UPDATE memory_events SET memory_id = ? WHERE event_id = ?').run(String(memoryId), String(eventId))
+  }
+
   hasSource(sourceKind, sourceHash) {
     this.#assertOpen()
     return !!this.#db.prepare('SELECT 1 AS found FROM migration_sources WHERE source_kind = ? AND source_hash = ?').get(String(sourceKind), String(sourceHash))
