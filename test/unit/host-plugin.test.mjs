@@ -77,7 +77,8 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
       args: { summary: summaryCandidate.body.candidate.summary || '主人和鲸鱼娘正在建立长期陪伴关系。', expectedStoryRevision: 0 },
     })
     assert.equal(summaryConfirm.status, 200)
-    assert.match(summaryConfirm.body.storyMemory.summary, /主人和鲸鱼娘/)
+    assert.match(summaryConfirm.body.storyMemory.summary, /今天辛苦了/)
+    assert.match(summaryConfirm.body.storyMemory.summary, /主人也辛苦啦/)
     const historyPage = await call(route.handler, { action: 'history', args: { limit: 1 } })
     assert.equal(historyPage.status, 200)
     assert.equal(historyPage.body.total, 2)
