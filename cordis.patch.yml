@@ -1,0 +1,9 @@
+- insert:
+    - id: virtual-avatar
+      name: dsh-virtual-avatar
+      config:
+        enabled: true
+        # Empty values follow the model selected in the main DSH interface.
+        chatProvider: ""
+        chatModel: ""
+        fallbackModel: "deepseek-v4-flash"
