@@ -14,3 +14,12 @@ test('summary candidate includes recent conversation and confirmed facts but nev
   assert.equal(result.requiresUserConfirmation, true)
   assert.ok(result.sourceHash)
 })
+
+test('summary candidate includes expected revision for optimistic confirmation', () => {
+  const result = createSummaryCandidate({
+    history: [{ role: 'user', text: '我喜欢海边' }],
+    currentMemory: { revision: 7, confirmedFacts: [{ text: '生日在五月' }] },
+  })
+  assert.equal(result.expectedRevision, 7)
+  assert.equal(result.requiresUserConfirmation, true)
+})
