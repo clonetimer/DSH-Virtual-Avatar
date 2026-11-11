@@ -16,7 +16,8 @@
   "main": "./lib/index.js",
   "exports": {
     ".": "./lib/index.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": "./lib/client.js"
   },
   "dsh": {
     "bundle": {
@@ -24,7 +25,11 @@
     },
     "client": {
       "platform": "web",
-      "inject": []
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
     }
   },
   "files": [
@@ -34,6 +39,7 @@
     "docs",
     "third_party",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "assets"
   ]
 }
