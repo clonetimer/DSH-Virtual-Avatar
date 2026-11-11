@@ -27,7 +27,7 @@ test('Whale migration imports DeepSeek state and defers other characters without
     })
     const preview = coordinator.preview([{ sourceKind: 'whale-galgame', raw }])
     assert.equal(preview.totalRecords, 1)
-    assert.deepEqual(preview.sources[0].warnings, ['DEFERRED_CHARACTERS:2'])
+    assert.deepEqual(preview.sources[0].warnings, ['MEDIA_EXTRACTION_REQUIRED:1', 'DEFERRED_CHARACTERS:2'])
     const staged = coordinator.stage([{ sourceKind: 'whale-galgame', raw }])
     await assert.rejects(() => coordinator.commit(staged.id), { code: 'CONFIRMATION_REQUIRED' })
     const committed = await coordinator.commit(staged.id, { confirmed: true })
