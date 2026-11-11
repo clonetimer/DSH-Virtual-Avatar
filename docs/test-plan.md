@@ -87,3 +87,29 @@ For each platform capture: DSH version/build, OS, install route, package filenam
 - Install using the supported Bundle/Profile workflow: `dsh plugin --profile web add <local-path-or-tarball>`; restart `dsh web`; inspect `dsh --profile web --dump-config`.
 - Bundle patch references the package name `dsh-virtual-avatar`; package must include `cordis.patch.yml` and both host/client entry points.
 - Desktop compatibility is not inferred from Web. Repeat the same install and client injection test in the target Desktop 0.2.2-rc.1 distribution.
+
+
+## P4 Windows target: DSH 0.2.2-rc.1
+
+### Package-level requirements
+- Runtime: Node.js >=24.9.0. CI matrix: 24.9.0 and current 24.
+- Bundle: `dsh.bundle.patch` references `cordis.patch.yml`; Host entry exports `name`, `inject`, `apply`.
+- Client: `dsh.client.platform = web`; DSH Desktop consumes the ordinary Web Client module through its renderer module graph. No Electron private API or separate renderer bundle is used.
+- The package must not declare undocumented client metadata such as `dsh.client.immediately`.
+- The npm package archive is built in CI on Node 24.9.0 and uploaded with SHA-256 and package-info manifest.
+
+### Windows Web install
+1. Verify Node.js >=24.9.0 in PowerShell.
+2. Download the CI artifact `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop`.
+3. Verify the tgz with `Get-FileHash -Algorithm SHA256` against the provided .sha256 file.
+4. Install with `dsh plugin --profile web add ".\\dsh-virtual-avatar-0.1.0-dev.1.tgz"`.
+5. Run `dsh --profile web --dump-config`, restart DSH Web and verify the single Cordis entry, route and overlay.
+
+### Windows Desktop install
+1. Identify the currently selected Desktop profile from Desktop profile UI; do not assume it is named web.
+2. Install the same tgz into that profile with `dsh plugin --profile "<profile>" add "<absolute-path-to-tgz>"`.
+3. Run `dsh --profile "<profile>" --dump-config`; fully restart Desktop to recompose the Host bundle and reload the Web Client module.
+4. Verify overlay render, model test, multi-turn persistence, backup restore and app close/reopen.
+
+### Real-host evidence (must be supplied by a Windows run)
+Record exact Desktop build, selected profile, Node version, artifact SHA-256, plugin inventory/load log, API route count, model test status, chat screenshot, refresh/restart persistence, backup restore and uninstall data retention. Until this evidence exists, mark real Web/Desktop qualification as BLOCKED/NOT RUN, not PASS.
