@@ -168,9 +168,9 @@ persona DEEPSEEK_WHALE version "0.3.0" {
             context.outsiders_present = false;
         }
         expect {
-            traits.warmth > 0.70
-            traits.playfulness > 0.70
-            behaviors.shy_tsundere.enabled == true
+            traits.warmth > 0.70;
+            traits.playfulness > 0.70;
+            behaviors.shy_tsundere.enabled == true;
         }
     }
 
@@ -183,10 +183,10 @@ persona DEEPSEEK_WHALE version "0.3.0" {
             state.physical.fatigue = 0.80;
         }
         expect {
-            behaviors.private_closeness.enabled == true
-            behaviors.public_mode.enabled == false
-            traits.vulnerability > 0.80
-            style.emotional_explicitness > 0.80
+            behaviors.private_closeness.enabled == true;
+            behaviors.public_mode.enabled == false;
+            traits.vulnerability > 0.80;
+            style.emotional_explicitness > 0.80;
         }
     }
 
@@ -198,9 +198,9 @@ persona DEEPSEEK_WHALE version "0.3.0" {
             context.outsiders_present = true;
         }
         expect {
-            behaviors.private_closeness.enabled == false
-            behaviors.public_mode.enabled == true
-            style.formality > 0.20
+            behaviors.private_closeness.enabled == false;
+            behaviors.public_mode.enabled == true;
+            style.formality > 0.20;
         }
     }
 }
