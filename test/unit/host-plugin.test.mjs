@@ -124,6 +124,9 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     })
     assert.equal(profile.status, 200)
     assert.equal(profile.body.profile.displayName, '小鲸鱼')
+    const resetProfile = await call(route.handler, { action: 'profile-set', args: { profile: {} } })
+    assert.equal(resetProfile.status, 200)
+    assert.equal(resetProfile.body.profile.displayName, '鲸鱼娘')
 
     const background = await call(route.handler, {
       action: 'background-set',
