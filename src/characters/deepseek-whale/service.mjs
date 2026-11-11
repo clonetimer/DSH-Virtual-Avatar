@@ -91,12 +91,12 @@ export class DeepseekWhaleService {
       now,
     })
     const continuity = renderStoryContinuity(loaded.state.storyMemory)
-    const systemWithContinuity = [system, continuity].filter(Boolean).join('\\n\\n')
+    const systemWithContinuity = [system, continuity].filter(Boolean).join('\n\n')
     const contextWindow = buildConversationContext({
       history: loaded.state.conversation?.log || [],
       continuity,
       memories: memoryContext.items,
-      recentTurns: 12,
+      recentMessages: 12,
       maxChars: 14000,
     })
     return {
@@ -110,7 +110,7 @@ export class DeepseekWhaleService {
       memoryContext,
       system: systemWithContinuity,
       contextMessages: contextWindow.messages,
-      contextDiagnostics: { omittedTurns: contextWindow.omittedTurns, includedTurns: contextWindow.includedTurns, estimatedChars: contextWindow.estimatedChars },
+      contextDiagnostics: { omittedMessages: contextWindow.omittedMessages, includedMessages: contextWindow.includedMessages, estimatedChars: contextWindow.estimatedChars },
       baseState: loaded.state,
       expectedRevision: loaded.revision,
       pplResolution: resolved.resolution,
