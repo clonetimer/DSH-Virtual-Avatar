@@ -1,7 +1,7 @@
 # DSH Virtual Avatar 实施状态（Companion-first）
 
-更新基线：feat/architecture-baseline / 1228f34c1bdee391ed8324e33fe0e43090ef965e。
-本轮工作分支：feat/migration-media-assets；PR #4 目标为开发分支，不直接修改 main。
+更新基线：feat/architecture-baseline / b1775eaa56b2a741038ae6f500758586ee575403。
+PR #4 已合并至开发分支；PR #5 首次回滚实现因源码结构错误未通过 CI，已关闭且未合并。当前 UX 修复分支：fix/companion-overlay-ux。
 
 ## 已验收基线
 
@@ -21,8 +21,9 @@
 | 角色长期记忆 | PASS（模块级） | owner 隔离、相关检索、相似合并、pin/delete、预算 |
 | 长期相处摘要 | PASS（模块级） | source hash、revision 检查、用户确认后写入 |
 | 关系与好感成长 | PASS（模块级） | PPL trust/attachment/stage；每日正向好感上限已接入真实结算 |
-| Whale DeepSeek 迁移 | PARTIAL | 状态导入与原始来源归档；本分支正在补媒体提取与 hash 对账 |
-| 备份与迁移回滚 | NOT YET | 需要快照、后续写入冲突检测和安全恢复流程 |
+| Whale DeepSeek 迁移 | PASS（模块级） | PR #4 完成 DeepSeek 媒体提取、资产 URI、原始归档与 hash 校验；需真实旧存档验收 |
+| 迁移回滚 | NOT YET | PR #5 已关闭且未合并；需重新实现并通过双版本 CI |
+| 完整备份/恢复 | NOT YET | 尚无数据库快照与用户可见恢复入口 |
 | Web overlay UI | PASS（模块级） | 自由聊天、历史分页、记忆管理、摘要确认、设定、表情与场景切换 |
 | 设置/诊断 | PARTIAL | 尚缺完整存储、模型、PPL、最近错误与备份状态诊断页 |
 | DSH Web/Desktop 实机资格 | NOT YET | 需要目标 DSH 发行版、真实模型调用和跨会话证据 |
@@ -36,18 +37,28 @@
 - 桌面宠物动画延后，不阻塞陪伴主链路。
 - 陪伴人格不接管主 Agent 身份、工具权限或任务执行。
 
-## 本轮：迁移媒体资产提取
+## 已完成：旧存档媒体提取（PR #4）
 
-目标：
-1. 仅提取 DeepSeek 角色和指定全局背景/CG 中的 data URL。
-2. 使用内容哈希与白名单 MIME 建立本地媒体资产。
-3. 角色状态只保存 asset URI；完整原始 JSON 仍保留在迁移归档。
-4. SQLite 提交失败时回收本轮新增文件；读取时重新核验 hash。
-5. 对其他角色的媒体明确标记 deferred，不混入 DeepSeek。
+- 仅处理 DeepSeek 角色与指定全局背景/CG 的图片 data URL。
+- PNG/JPEG/WebP/GIF/AVIF 白名单，单文件 12 MiB、单次迁移总媒体 64 MiB 上限。
+- 采用内容哈希、资产 URI、原始 JSON 归档与读取时 hash 校验。
+- Node 22.19 / 24 CI 通过。
 
-## 下一阶段
+## 下一阶段与发布门槛
 
-1. 完成迁移回滚：快照、后续写入冲突检测、受控恢复。
-2. 完成记忆编辑、导出、删除和摘要冲突提示。
-3. 补全设置/诊断界面与干净安装、升级、卸载回归。
-4. 获取真实 DSH Web/Desktop 环境完成模型流式调用、刷新与跨会话验收。
+1. 重新实现安全迁移回滚：迁移前状态/资产清单、后续写入冲突检测、显式确认、回滚审计。
+2. 记忆管理闭环：编辑、导出、删除、来源/共享范围展示；摘要 revision 冲突的可恢复提示。
+3. 设置与诊断：模型 provider/model、PPL 编译/IR 版本、SQLite/资产存储、最近错误、备份状态。
+4. 修复 overlay 小问题并完成浏览器交互回归；随后做 DSH Web/Desktop 实机安装。
+5. 真实模型流式调用、异常中断、刷新重载、跨会话持久化验收。
+6. clean install / upgrade / disable / uninstall / restore 回归与发布包审计。
+
+当前不能称为完成的 DSH 插件：真实宿主资格、完整记忆管理、备份恢复、设置诊断和发布生命周期尚未验收。
+
+
+## 2026-11-11 进度核对补充
+
+- PR #4 已合并到 `feat/architecture-baseline`，合并提交 `b1775eaa56b2a741038ae6f500758586ee575403`；Run #351–#354 均通过。
+- PR #5（迁移回滚）因第一次实现把方法插入类定义边界之外，Node 24 `node --check` 失败；已关闭且未合并，开发基线未受影响。
+- 当前 PR #1（79 文件、199 commits）仍开放，目标为 `main`；其 head `b1775eaa` 的 Run #355/#356 均通过，但仍需完成目标宿主资格与发布验收后再考虑合并。
+- Overlay 顶栏发现“记忆”入口重复，本分支移除重复项并将按钮命名为“记忆管理”。
