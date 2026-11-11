@@ -4,10 +4,10 @@
 
 ## 本轮验收结果
 
-GitHub Actions run #183：
+GitHub Actions run #211（最新已完成）：
 - Node 22.19.0：PPL 编译、3 个 PPL 内置测试、项目检查与单元/集成测试步骤均通过。
 - Node 24：上述步骤均通过。
-- 自动化测试：26 passed / 0 failed。
+- 自动化测试：27 passed / 0 failed。
 - PPL Persona IR 0.3：编译器检查通过，0 errors / 0 warnings；3 个 persona source tests 通过。
 - Whale 美术资源与上游 LICENSE / NOTICE / THIRD_PARTY_LICENSES：CI staging 步骤通过。
 
@@ -22,7 +22,7 @@ GitHub Actions run #183：
 | Memory service | PASS（模块级） | owner 隔离、相似合并、置顶、删除、预算 |
 | Memory candidate workflow | PASS（模块级） | 自动只提出候选，需用户点击确认才写入 |
 | Whale DeepSeek legacy import | PARTIAL | 保留完整原始 JSON，导入 DeepSeek 的关系/对话字段；图片 data URL 尚未提取成文件 |
-| DSH host API | PASS（mock contract） | Host plugin integration test；尚未在真实 DSH Web/Desktop 安装验收 |
+| DSH host API | PASS（mock contract） | Host plugin integration test；Origin / Fetch Metadata 检查已接入；尚未在真实 DSH Web/Desktop 安装验收 |
 | Web overlay UI | PARTIAL | 对话、动态回复选项、关系摘要、记忆管理、人格设定编辑；未达到 Whale 原 Galgame UI 全功能平移 |
 | Original Whale Galgame | NOT YET | 剧情、小剧场、历史/CG 图鉴与音效等需逐项移植 |
 | Desktop pet | NOT YET | spritesheet 动画与桌面生命周期尚未接入 |
@@ -53,3 +53,11 @@ GitHub Actions run #183：
 - 补充 Host API 集成测试，检查三个选项的 effect 分布为 -1 / 0 / 1。
 - README 增加 DSH 插件包结构与本地开发接入说明：Cordis Host entry、bundle patch、Web Client injection 与 API 前缀。
 - 仍未宣称真实 DSH 插件安装通过；插件管理器目录和具体安装方式需按目标 DSH 发行版实测。
+
+
+## 安全与选项生成回归增量
+
+- 修复模型生成选项的 JSON 数组提取正则；测试现在断言实际生成的三条选项文本，而非仅检查回退选项 effect。
+- DSH Host handler 已调用 same-origin / Fetch Metadata 校验；跨站和错误 Origin 测试覆盖。
+- UI 展示最近一条角色回复对应的表情资源，并使用白名单背景资源。
+- GitHub Actions run #211：Node 22.19 / 24 均通过，27 tests passed / 0 failed。
