@@ -89,3 +89,11 @@
 ### Validation boundary
 - GitHub Actions Node 22.19 / 24 runs are required for every PR.
 - UI code is syntax-checked in CI; full visual usability and DSH Web/Desktop real-host behavior still require target-version manual acceptance.
+
+
+### P2-D / P2-E follow-up
+- Profile settings now use Chinese labels and are grouped by interaction/address vs persona/expression.
+- Each field displays its allowed character count and guidance text; default profile can be restored without clearing memories or relationship.
+- Conversation history now groups messages by local calendar date and displays an explicit empty state.
+- Memory and conversation-search panels show actionable empty-result guidance.
+- These are UI-only changes except the existing profile-set API; relationship scoring and memory ranking semantics remain unchanged.
