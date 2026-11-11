@@ -96,6 +96,22 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(memory.status, 200)
     assert.equal(memory.body.view.memories, 1)
 
+    const editedMemory = await call(route.handler, {
+      action: 'memory-edit',
+      args: { memoryId: memory.body.result.memory.id, text: '主人喜欢海边的夜景，也喜欢安静的海风' },
+    })
+    assert.equal(editedMemory.status, 200)
+    assert.equal(editedMemory.body.memory.text, '主人喜欢海边的夜景，也喜欢安静的海风')
+    const invalidMemoryEdit = await call(route.handler, {
+      action: 'memory-edit',
+      args: { memoryId: memory.body.result.memory.id, text: '   ' },
+    })
+    assert.equal(invalidMemoryEdit.status, 500)
+    const memoryExport = await call(route.handler, { action: 'memory-export' })
+    assert.equal(memoryExport.status, 200)
+    assert.equal(memoryExport.body.export.schema, 'dsh-virtual-avatar.memories/1')
+    assert.equal(memoryExport.body.export.memories[0].text, '主人喜欢海边的夜景，也喜欢安静的海风')
+
     const profile = await call(route.handler, {
       action: 'profile-set',
       args: { profile: { displayName: '小鲸鱼' } },
