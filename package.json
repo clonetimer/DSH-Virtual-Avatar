@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Unified virtual persona and companion plugin for DeepSeek Harness",
-  "engines": { "node": ">=22.19.0" },
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "scripts": {
     "test": "node --test",
     "test:unit": "node --test test/unit/*.test.mjs",
-    "check": "node --check src/index.mjs && node --check src/migration/*.mjs && node --check src/persona/*.mjs",
+    "check": "node --check src/index.mjs && node --check src/migration/*.mjs && node --check src/persona/*.mjs && node --check src/characters/deepseek-whale/*.mjs && node --check src/memory/*.mjs && node --check src/storage/*.mjs && node --check src/ppl/index.mjs",
     "verify": "npm run check && npm test"
   }
 }
