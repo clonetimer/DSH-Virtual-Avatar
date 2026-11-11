@@ -16,18 +16,24 @@ test('virtual-person parser preserves raw source and extracts pin/hit metadata',
   assert.deepEqual(result.unknownMemoryLines, ['自定义备注'])
 })
 
-test('Whale inspector is read-only and reports six character summaries and embedded media', () => {
+test('Whale inspector separates DeepSeek media from deferred character media', () => {
+  const image = 'data:image/png;base64,aGVsbG8='
   const raw = JSON.stringify({
     currentCharacter: 'deepseek',
-    characters: Object.fromEntries(['deepseek','claude','chatgpt','gemini','kimi','grok'].map(id => [id, { level: 2, affection: 12, log: [{ text: 'hi' }] }])),
-    customSprite: 'data:image/png;base64,aGVsbG8=',
+    characters: {
+      deepseek: { level: 2, affection: 12, log: [{ text: 'hi' }], customSprite: { dataUrl: image } },
+      claude: { level: 2, affection: 4, customSprite: { dataUrl: image } },
+    },
+    bg: image,
   })
   const result = inspectWhaleGlobalSave(raw)
-  assert.equal(result.characterCount, 6)
+  assert.equal(result.characterCount, 2)
   assert.equal(result.characters[0].chatEntries, 1)
-  assert.equal(result.mediaDataUrls.length, 1)
-  assert.equal(result.mediaDataUrls[0].byteLength, 5)
-  assert.equal(raw, JSON.stringify(JSON.parse(raw)))
+  assert.equal(result.mediaDataUrls.length, 3)
+  assert.equal(result.deepseekMediaDataUrls.length, 2)
+  assert.equal(result.deferredMediaDataUrls.length, 1)
+  assert.equal(result.deepseekMediaDataUrls[0].byteLength, 5)
+  assert.equal(result.raw, raw)
 })
 
 test('PPL inspector rejects unsupported IR and accepts 0.3', () => {
@@ -37,14 +43,22 @@ test('PPL inspector rejects unsupported IR and accepts 0.3', () => {
   assert.equal(result.displayName, '鲸鱼娘')
 })
 
-test('migration preview performs no writes and requires explicit confirmation', () => {
+test('migration preview performs no writes and scopes media extraction to DeepSeek', () => {
   const result = createMigrationPreview([
     { sourceKind: 'virtual-person', sourceHash: 'a', memories: [1,2], unknownMemoryLines: ['x'] },
-    { sourceKind: 'whale-galgame', sourceHash: 'b', characterCount: 6, deepseekAvailable: true, deferredCharacterIds: ['claude','chatgpt','gemini','kimi','grok'], mediaDataUrls: [1] },
+    {
+      sourceKind: 'whale-galgame',
+      sourceHash: 'b',
+      characterCount: 6,
+      deepseekAvailable: true,
+      deferredCharacterIds: ['claude','chatgpt','gemini','kimi','grok'],
+      deepseekMediaDataUrls: [1],
+      deferredMediaDataUrls: [1,2],
+    },
   ])
   assert.equal(result.writesPerformed, false)
   assert.equal(result.requiresExplicitConfirmation, true)
   assert.equal(result.totalRecords, 3)
   assert.deepEqual(result.sources[0].warnings, ['UNKNOWN_MEMORY_LINES:1'])
-  assert.deepEqual(result.sources[1].warnings, ['MEDIA_EXTRACTION_REQUIRED:1', 'DEFERRED_CHARACTERS:5'])
+  assert.deepEqual(result.sources[1].warnings, ['MEDIA_EXTRACTION_REQUIRED:1', 'DEFERRED_MEDIA_ASSETS:2', 'DEFERRED_CHARACTERS:5'])
 })

@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync } from 'node:fs'
-import { dirname, isAbsolute } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, isAbsolute, join } from 'node:path'
 import { applyDeepseekWhaleAffection, createDeepseekWhaleInitialState } from '../characters/deepseek-whale/relationship.mjs'
 
 const OWNER_KINDS = new Set(['shared', 'agent-persona', 'character'])
@@ -105,6 +105,19 @@ CREATE TABLE IF NOT EXISTS migration_sources (
   FOREIGN KEY(migration_id) REFERENCES migration_runs(migration_id)
 );
 
+CREATE TABLE IF NOT EXISTS media_assets (
+  asset_id TEXT PRIMARY KEY,
+  character_id TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  relative_path TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  byte_length INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  source_path TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_media_assets_character ON media_assets(character_id, created_at);
+
 CREATE TABLE IF NOT EXISTS audit_events (
   id TEXT PRIMARY KEY,
   aggregate_kind TEXT NOT NULL,
@@ -122,12 +135,15 @@ export class SqliteAvatarStore {
   #db
   #closed = false
 
-  constructor(filename = ':memory:') {
+  constructor(filename = ':memory:', { assetDirectory = null } = {}) {
     if (filename !== ':memory:') {
       if (!isAbsolute(filename)) throw new TypeError('SQLite database path must be absolute')
       mkdirSync(dirname(filename), { recursive: true, mode: 0o700 })
     }
+    if (assetDirectory !== null && !isAbsolute(assetDirectory)) throw new TypeError('media asset directory must be absolute')
+    if (assetDirectory) mkdirSync(assetDirectory, { recursive: true, mode: 0o700 })
     this.filename = filename
+    this.assetDirectory = assetDirectory
     this.#db = new DatabaseSync(filename)
     this.#db.exec(SCHEMA)
     if (filename !== ':memory:') this.#db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
@@ -388,53 +404,134 @@ export class SqliteAvatarStore {
     return !!this.#db.prepare('SELECT 1 AS found FROM migration_sources WHERE source_kind = ? AND source_hash = ?').get(String(sourceKind), String(sourceHash))
   }
 
+  getMigrationSource(sourceKind, sourceHash) {
+    this.#assertOpen()
+    const row = this.#db.prepare('SELECT source_kind, source_hash, migration_id, source_raw, inspection_json, imported_at FROM migration_sources WHERE source_kind = ? AND source_hash = ?')
+      .get(String(sourceKind), String(sourceHash))
+    return row ? {
+      sourceKind: row.source_kind,
+      sourceHash: row.source_hash,
+      migrationId: row.migration_id,
+      raw: row.source_raw,
+      inspection: JSON.parse(row.inspection_json),
+      importedAt: row.imported_at,
+    } : null
+  }
+
+  getMediaAsset(assetId) {
+    this.#assertOpen()
+    const row = this.#db.prepare('SELECT * FROM media_assets WHERE asset_id = ?').get(String(assetId))
+    return row ? {
+      id: row.asset_id,
+      characterId: row.character_id,
+      mimeType: row.mime_type,
+      relativePath: row.relative_path,
+      sha256: row.sha256,
+      byteLength: row.byte_length,
+      sourceHash: row.source_hash,
+      sourcePath: row.source_path,
+      createdAt: row.created_at,
+    } : null
+  }
+
+  listMediaAssets(characterId = 'deepseek') {
+    this.#assertOpen()
+    return this.#db.prepare('SELECT * FROM media_assets WHERE character_id = ? ORDER BY created_at, asset_id')
+      .all(String(characterId)).map(row => ({
+        id: row.asset_id,
+        characterId: row.character_id,
+        mimeType: row.mime_type,
+        relativePath: row.relative_path,
+        sha256: row.sha256,
+        byteLength: row.byte_length,
+        sourceHash: row.source_hash,
+        sourcePath: row.source_path,
+        createdAt: row.created_at,
+      }))
+  }
+
+  readMediaAsset(assetId) {
+    this.#assertOpen()
+    const asset = this.getMediaAsset(assetId)
+    if (!asset) return null
+    if (!this.assetDirectory) throw conflict('MEDIA_STORAGE_UNAVAILABLE', 'media asset directory is not configured')
+    if (!asset.relativePath.startsWith('deepseek/') || asset.relativePath.includes('..')) {
+      throw conflict('MEDIA_ASSET_PATH_INVALID', 'stored media asset path is invalid')
+    }
+    const absolutePath = join(this.assetDirectory, asset.relativePath)
+    let bytes
+    try { bytes = readFileSync(absolutePath) } catch (cause) {
+      const error = conflict('MEDIA_ASSET_MISSING', 'stored media asset file is missing')
+      error.cause = cause
+      throw error
+    }
+    if (sha256(bytes) !== asset.sha256 || bytes.length !== asset.byteLength) {
+      throw conflict('MEDIA_ASSET_HASH_MISMATCH', 'stored media asset failed hash verification')
+    }
+    return { asset, bytes }
+  }
+
   commitMigration({ migrationId, sources }) {
     this.#assertOpen()
-    return this.transaction(() => {
-      const id = String(migrationId || randomUUID())
-      const now = new Date().toISOString()
-      const accepted = []
-      const duplicate = []
-      const warnings = []
-      this.#db.prepare('INSERT INTO migration_runs(migration_id,status,report_json,created_at) VALUES(?,?,?,?)')
-        .run(id,'committing','{}',now)
-      for (const source of sources) {
-        const key = String(source.sourceKind) + ':' + String(source.sourceHash)
-        if (this.hasSource(source.sourceKind, source.sourceHash)) {
-          duplicate.push(key)
-          continue
+    const createdFiles = []
+    try {
+      return this.transaction(() => {
+        const id = String(migrationId || randomUUID())
+        const now = new Date().toISOString()
+        const accepted = []
+        const duplicate = []
+        const warnings = []
+        this.#db.prepare('INSERT INTO migration_runs(migration_id,status,report_json,created_at) VALUES(?,?,?,?)')
+          .run(id,'committing','{}',now)
+        for (const source of sources) {
+          const key = String(source.sourceKind) + ':' + String(source.sourceHash)
+          if (this.hasSource(source.sourceKind, source.sourceHash)) {
+            duplicate.push(key)
+            continue
+          }
+          const inspection = source.inspection || {}
+          const raw = typeof inspection.raw === 'string'
+            ? inspection.raw
+            : JSON.stringify(inspection.ir || inspection.parsed || inspection)
+          const { raw: _raw, parsed: _parsed, ir: _ir, ...inspectionSummary } = inspection
+          this.#db.prepare('INSERT INTO migration_sources(source_kind,source_hash,migration_id,source_raw,inspection_json,imported_at) VALUES(?,?,?,?,?,?)')
+            .run(source.sourceKind,source.sourceHash,id,raw,stableJson(inspectionSummary),now)
+          if (source.sourceKind === 'virtual-person') {
+            this.#importVirtualPerson(inspection)
+          } else if (source.sourceKind === 'whale-galgame') {
+            const imported = this.#importWhaleDeepseek(inspection, source.sourceHash, createdFiles)
+            if (imported.deferredCharacters.length || imported.mediaAssetsImported || imported.activeCharacterConflict) {
+              warnings.push({
+                source: key,
+                deferredCharacters: imported.deferredCharacters,
+                mediaAssetsImported: imported.mediaAssetsImported,
+                activeCharacterConflict: imported.activeCharacterConflict === true,
+              })
+            }
+          } else if (source.sourceKind === 'ppl-persona-ir') {
+            this.upsertPersona({
+              id: inspection.personaId,
+              kind: 'companion',
+              version: inspection.version,
+              sourceFormat: 'ppl-ir',
+              content: JSON.stringify(inspection.ir),
+              metadata: { sourceHash: source.sourceHash, displayName: inspection.displayName },
+            })
+          }
+          accepted.push(key)
         }
-        const inspection = source.inspection || {}
-        const raw = typeof inspection.raw === 'string'
-          ? inspection.raw
-          : (inspection.parsed ? JSON.stringify(inspection.parsed) : JSON.stringify(inspection.ir || inspection))
-        this.#db.prepare(`
-          INSERT INTO migration_sources(source_kind,source_hash,migration_id,source_raw,inspection_json,imported_at)
-          VALUES(?,?,?,?,?,?)
-        `).run(source.sourceKind,source.sourceHash,id,raw,stableJson({ ...inspection, raw: undefined }),now)
-        if (source.sourceKind === 'virtual-person') {
-          this.#importVirtualPerson(inspection)
-        } else if (source.sourceKind === 'whale-galgame') {
-          const imported = this.#importWhaleDeepseek(inspection)
-          if (imported.deferredCharacters.length) warnings.push({ source: key, deferredCharacters: imported.deferredCharacters })
-        } else if (source.sourceKind === 'ppl-persona-ir') {
-          this.upsertPersona({
-            id: inspection.personaId,
-            kind: 'companion',
-            version: inspection.version,
-            sourceFormat: 'ppl-ir',
-            content: JSON.stringify(inspection.ir),
-            metadata: { sourceHash: source.sourceHash, displayName: inspection.displayName },
-          })
-        }
-        accepted.push(key)
+        const report = { accepted, duplicate, warnings }
+        this.#db.prepare('UPDATE migration_runs SET status=?, report_json=?, committed_at=? WHERE migration_id=?')
+          .run('committed',stableJson(report),new Date().toISOString(),id)
+        this.#recordAudit('migration', id, 'MIGRATION_COMMITTED', null, null, report, {})
+        return report
+      })
+    } catch (error) {
+      for (const filename of createdFiles) {
+        try { rmSync(filename, { force: true }) } catch { /* preserve the original migration error */ }
       }
-      const report = { accepted, duplicate, warnings }
-      this.#db.prepare('UPDATE migration_runs SET status=?, report_json=?, committed_at=? WHERE migration_id=?')
-        .run('committed',stableJson(report),new Date().toISOString(),id)
-      this.#recordAudit('migration', id, 'MIGRATION_COMMITTED', null, null, report, {})
-      return report
-    })
+      throw error
+    }
   }
 
   #importVirtualPerson(inspection) {
@@ -458,32 +555,132 @@ export class SqliteAvatarStore {
     }
   }
 
-  #importWhaleDeepseek(inspection) {
+  #extractMediaReferences(value, { sourceHash, sourcePath, createdFiles, assets }) {
+    const MAX_MEDIA_ASSET_BYTES = 12 * 1024 * 1024
+    const extensions = Object.freeze({
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+      'image/avif': 'avif',
+    })
+    if (typeof value === 'string') {
+      if (!/^data:image\//i.test(value)) return value
+      const match = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)$/i.exec(value)
+      if (!match) throw conflict('INVALID_MEDIA_DATA_URL', 'legacy image data URL is malformed at ' + sourcePath)
+      const mimeType = match[1].toLowerCase()
+      const extension = extensions[mimeType]
+      if (!extension) throw conflict('UNSUPPORTED_MEDIA_TYPE', 'legacy media type is not supported: ' + mimeType)
+      const encoded = match[2].replace(/\s/g, '')
+      if (!encoded || encoded.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+        throw conflict('INVALID_MEDIA_DATA_URL', 'legacy image base64 payload is malformed at ' + sourcePath)
+      }
+      const bytes = Buffer.from(encoded, 'base64')
+      if (!bytes.length || bytes.toString('base64').replace(/=+$/,'') !== encoded.replace(/=+$/,'')) {
+        throw conflict('INVALID_MEDIA_DATA_URL', 'legacy image base64 payload failed canonical validation at ' + sourcePath)
+      }
+      if (bytes.length > MAX_MEDIA_ASSET_BYTES) {
+        throw conflict('MEDIA_ASSET_TOO_LARGE', 'legacy image exceeds the 12 MiB per-asset limit at ' + sourcePath)
+      }
+      if (!this.assetDirectory) throw conflict('MEDIA_STORAGE_UNAVAILABLE', 'configure a persistent media asset directory before importing legacy images')
+
+      const contentHash = sha256(bytes)
+      const assetId = createHash('sha256').update(mimeType).update(String.fromCharCode(0)).update(bytes).digest('hex')
+      const existing = this.getMediaAsset(assetId)
+      if (existing) {
+        const verified = this.readMediaAsset(assetId)
+        if (existing.mimeType !== mimeType || existing.sha256 !== contentHash || !verified) {
+          throw conflict('MEDIA_ASSET_HASH_MISMATCH', 'existing media asset metadata does not match imported bytes')
+        }
+        assets.set(assetId, existing)
+        return 'asset://dsh-virtual-avatar/' + assetId
+      }
+
+      const relativePath = join('deepseek', contentHash + '.' + extension)
+      const absolutePath = join(this.assetDirectory, relativePath)
+      mkdirSync(dirname(absolutePath), { recursive: true, mode: 0o700 })
+      if (existsSync(absolutePath)) {
+        const existingBytes = readFileSync(absolutePath)
+        if (sha256(existingBytes) !== contentHash) {
+          throw conflict('MEDIA_ASSET_HASH_MISMATCH', 'an existing file at the content-addressed media path failed verification')
+        }
+      } else {
+        const temporaryPath = absolutePath + '.' + randomUUID() + '.tmp'
+        writeFileSync(temporaryPath, bytes, { flag: 'wx', mode: 0o600 })
+        try { renameSync(temporaryPath, absolutePath) } catch (error) {
+          try { rmSync(temporaryPath, { force: true }) } catch { /* preserve rename failure */ }
+          throw error
+        }
+        createdFiles.push(absolutePath)
+      }
+      const createdAt = new Date().toISOString()
+      const asset = {
+        id: assetId,
+        characterId: 'deepseek',
+        mimeType,
+        relativePath,
+        sha256: contentHash,
+        byteLength: bytes.length,
+        sourceHash,
+        sourcePath,
+        createdAt,
+      }
+      this.#db.prepare('INSERT INTO media_assets(asset_id,character_id,mime_type,relative_path,sha256,byte_length,source_hash,source_path,created_at) VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(asset.id,asset.characterId,asset.mimeType,asset.relativePath,asset.sha256,asset.byteLength,asset.sourceHash,asset.sourcePath,asset.createdAt)
+      assets.set(assetId, asset)
+      return 'asset://dsh-virtual-avatar/' + assetId
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry, index) => this.#extractMediaReferences(entry, {
+        sourceHash, sourcePath: sourcePath + '[' + index + ']', createdFiles, assets,
+      }))
+    }
+    if (value && typeof value === 'object') {
+      const output = {}
+      for (const [key, entry] of Object.entries(value)) {
+        output[key] = this.#extractMediaReferences(entry, {
+          sourceHash, sourcePath: sourcePath + '.' + key, createdFiles, assets,
+        })
+      }
+      return output
+    }
+    return value
+  }
+
+  #importWhaleDeepseek(inspection, sourceHash, createdFiles) {
     const parsed = inspection.parsed || {}
     const characters = parsed.characters && typeof parsed.characters === 'object' ? parsed.characters : {}
     const source = characters.deepseek
-    if (!source) return { deferredCharacters: Object.keys(characters) }
+    if (!source) return { deferredCharacters: Object.keys(characters), mediaAssetsImported: 0, activeCharacterConflict: false }
     const existing = this.loadCharacterState('deepseek')
-    if (existing) return { deferredCharacters: Object.keys(characters).filter(id => id !== 'deepseek'), activeCharacterConflict: true }
+    if (existing) return { deferredCharacters: Object.keys(characters).filter(id => id !== 'deepseek'), mediaAssetsImported: 0, activeCharacterConflict: true }
+
+    const assets = new Map()
+    const importedSource = this.#extractMediaReferences(source, {
+      sourceHash, sourcePath: '$.characters.deepseek', createdFiles, assets,
+    })
+    const importedSharedMedia = this.#extractMediaReferences({ bg: parsed.bg, cg: parsed.cg }, {
+      sourceHash, sourcePath: '$', createdFiles, assets,
+    })
     const state = createDeepseekWhaleInitialState({ sessionId: 'deepseek-whale-migrated' })
-    state.level = Math.max(1, Number(source.level) || 1)
-    state.affection = Math.max(0, Number(source.affection) || 0)
+    state.level = Math.max(1, Number(importedSource.level) || 1)
+    state.affection = Math.max(0, Number(importedSource.affection) || 0)
     state.conversation = {
-      log: Array.isArray(source.log) ? source.log : [],
-      chatLines: Array.isArray(source.chatLines) ? source.chatLines : [],
-      choices: Array.isArray(source.choices) ? source.choices : [],
+      log: Array.isArray(importedSource.log) ? importedSource.log : [],
+      chatLines: Array.isArray(importedSource.chatLines) ? importedSource.chatLines : [],
+      choices: Array.isArray(importedSource.choices) ? importedSource.choices : [],
     }
-    state.activity = source.activity || null
-    state.cgs = Array.isArray(source.cgs) ? source.cgs : []
-    state.customSprite = source.customSprite || null
-    state.chosenBuiltinBackground = source.chosenBuiltinBackground || null
-    state.profileOverrides = source.profileOverrides || {}
+    state.activity = importedSource.activity || null
+    state.cgs = Array.isArray(importedSource.cgs) ? importedSource.cgs : []
+    state.customSprite = importedSource.customSprite || null
+    state.chosenBuiltinBackground = importedSource.chosenBuiltinBackground || null
+    state.profileOverrides = importedSource.profileOverrides || {}
     state.legacy = {
       current: parsed.current || 'deepseek',
       tokens: parsed.tokens || null,
-      bg: parsed.bg || null,
+      bg: importedSharedMedia.bg ?? parsed.bg ?? null,
       backgroundRevision: parsed.backgroundRevision || 0,
-      cg: parsed.cg || null,
+      cg: importedSharedMedia.cg ?? parsed.cg ?? null,
       preferences: parsed.preferences || {},
       characterModelLabel: parsed.characterModelLabel || '',
       chatModelLabel: parsed.chatModelLabel || '',
@@ -491,7 +688,11 @@ export class SqliteAvatarStore {
       fallbackReason: parsed.fallbackReason || '',
     }
     this.saveCharacterState('deepseek', state, 0)
-    return { deferredCharacters: Object.keys(characters).filter(id => id !== 'deepseek') }
+    return {
+      deferredCharacters: Object.keys(characters).filter(id => id !== 'deepseek'),
+      mediaAssetsImported: assets.size,
+      activeCharacterConflict: false,
+    }
   }
 
   #memoryRow(row) {
@@ -532,6 +733,8 @@ export class SqliteAvatarStore {
 
 export function createAvatarStore({ dshHomePath } = {}) {
   if (typeof dshHomePath !== 'function') throw new TypeError('dshHomePath service required')
-  const filename = dshHomePath('storages', 'dsh-virtual-avatar', 'avatar.sqlite')
-  return new SqliteAvatarStore(filename)
+  const storageRoot = dshHomePath('storages', 'dsh-virtual-avatar')
+  const filename = join(storageRoot, 'avatar.sqlite')
+  const assetDirectory = join(storageRoot, 'assets')
+  return new SqliteAvatarStore(filename, { assetDirectory })
 }

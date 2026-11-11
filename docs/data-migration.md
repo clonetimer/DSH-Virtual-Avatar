@@ -1,88 +1,82 @@
-# 数据模型与迁移策略
+# 数据模型与迁移策略（Companion-first）
 
 ## 1. 数据域
 
 | 数据域 | 所有者 | 说明 |
 |---|---|---|
-| Persona Definition | Persona Registry | Markdown 原文、PPL IR、版本与来源 |
-| Shared User Facts | Memory Service | 用户明确授权跨角色共享的事实 |
-| Character Memory | Memory Service | 每个角色独立的长期记忆 |
-| Affection Progress | Galgame Domain | 等级、好感、升级记录与余额 |
-| Relationship State | PPL Character Adapter | trust、stage、privateMode 等规则状态 |
-| Conversation History | Galgame Domain / DSH | 对话与选项历史，按来源策略迁移 |
-| Activity Events | Activity Context | 固定分类、状态、匿名指纹与消费标记 |
-| Story / CG | Galgame Domain | 小剧场记录、生成提示、媒体引用 |
-| Media Assets | Asset Store | 内置素材、用户上传素材、生成 CG |
-| Audit / Migration | Platform | 迁移报告、事件来源、schema 版本 |
+| Companion Persona | PPL Runtime | 鲸鱼娘人格定义、IR 版本与来源 |
+| Character Memory | Memory Service | 鲸鱼娘私有长期记忆、确认事实与相处摘要 |
+| Affection Progress | Companion Domain | 好感度、等级、每日成长计数 |
+| Relationship State | PPL Runtime | trust、attachment、stage 与人格状态 |
+| Conversation History | Companion Domain | 自由对话历史与来源事件 |
+| Companion Continuity | Companion Domain | 用户确认事实、共同经历、长期相处摘要 |
+| Media Assets | Asset Store | 角色立绘、用户上传素材及迁移媒体 |
+| Audit / Migration | Platform | 原始来源、迁移报告、哈希、schema 版本 |
 
-## 2. 建议结构（逻辑 schema）
+## 2. 存储边界
 
-- `persona_definitions(id, kind, version, source_format, source_hash, content, enabled, created_at, updated_at)`
-- `persona_bindings(scope, scope_id, persona_id, priority)`
-- `memory_items(id, owner_kind, owner_id, text, level, pinned, hit_count, source, source_hash, created_at, last_seen_at)`
-- `memory_events(id, memory_id, event_type, source_event_id, payload_hash, created_at)`
-- `character_profiles(character_id, persona_id, display_config, asset_refs, schema_version)`
-- `affection_progress(character_id, level, affection, token_balance, last_activity_at, updated_at)`
-- `relationship_states(character_id, state_json, revision, updated_at)`
-- `domain_events(event_id, character_id, event_type, payload_hash, source, occurred_at, applied_at)`
-- `conversation_refs(id, character_id, source_workspace, source_session, payload_ref, created_at)`
-- `activity_events(fingerprint, category, status, occurred_at, source_session)`
-- `story_records(id, cast_json, transcript_json, source_refs_json, created_at)`
-- `media_assets(id, kind, path, mime_type, sha256, license_ref, created_at)`
-- `migration_runs(id, source_kind, source_path, source_hash, target_version, status, report_json, created_at)`
-- `audit_events(id, aggregate_kind, aggregate_id, event_type, source_event_id, before_hash, after_hash, created_at)`
-
-该 schema 是设计基线，P1 实施前仍需根据真实上游数据和 SQLite 访问模式评审，不代表数据库已经创建。
+- character_states 保存角色当前关系、成长、对话和连续性状态。
+- memory_items 按 owner 隔离，首发只启用 character/deepseek。
+- media_assets 保存提取后的媒体元数据；实际文件位于 DSH_HOME 下的 storages/dsh-virtual-avatar/assets/。
+- migration_sources 保留原始来源文本与 source SHA-256；解析后的摘要不重复保存完整媒体 payload。
+- 所有用户数据均保存在本机 DSH_HOME，不随插件包发布。
 
 ## 3. virtual-person 导入
 
-源文件：`<DSH_HOME>/AGENT.md`。
+源文件：DSH_HOME/AGENT.md。
 
-导入要求：
 - 保留原始 Markdown 完整副本和 SHA-256。
-- 解析角色设定正文与 `## 记忆` 分节；未知标题、自定义段落、旧版 Weight 格式均保留为原始字段或待处理条目。
+- 解析角色设定正文与“## 记忆”分节；未知标题、自定义段落和旧版 Weight 格式保留为待处理内容。
 - 保留时间戳、命中次数、pin 标记、原始行顺序和原始文本。
-- 不把整个 AGENT.md 自动变成所有六位 Galgame 角色的人格；默认导入为独立的 Global Agent Persona。
-- 用户可显式将该 persona 复制/绑定到某个角色，复制后保留来源关系但独立版本化。
-- 导入完成前不修改、不删除 AGENT.md；新插件验证完成后也保留用户可回滚的原文件。
+- 不把全局 Agent Persona 自动复制给鲸鱼娘，也不接管主 Agent。
+- 导入预览不写数据；必须由用户明确确认后提交。
 
-## 4. whale-galgame 导入
+## 4. Whale 旧存档导入
 
-源文件：`DSH_HOME/storages/dsh-whale-galgame/global.json`，以及可能存在的工作区迁移标记/旧存档副本。
+源文件：DSH_HOME/storages/dsh-whale-galgame/global.json。
 
-必须保留：
-- 当前角色与六个角色各自的等级、好感度、活动时间、token 结算余额。
-- 角色昵称、称呼、问候、性格、语气、CG 外观描述。
-- 每角色聊天记录、回复选项、已消费任务指纹/记忆。
-- 自定义立绘、背景、CG 图鉴、小剧场记录及提示/状态/错误元数据。
-- 全局活动队列、显示偏好与其他未知字段。
+首发仅导入 characters.deepseek。其他角色的状态与媒体均标记为 deferred；完整原始 JSON 仍保留在迁移来源归档中。
 
-未知字段必须进入兼容扩展区，不能因 schema 不认识而丢弃。媒体 data URL 需提取为受控文件并计算 hash；迁移报告记录源字段到目标字段映射。
+- 保留 DeepSeek 等级、好感度、自由对话历史、角色设定、CG 引用和自定义立绘元数据。
+- 保留选定的全局背景/CG 引用；不把其他角色的媒体混入 DeepSeek 资产目录。
+- 未知字段继续保存在 DeepSeek 扩展状态或原始来源归档中。
+- 只转换媒体字段中的 data URL；普通文本、时间戳和对象结构不做无关重写。
+
+### 媒体提取规则
+
+1. 仅提取 DeepSeek 角色字段及明确引用的全局 bg / cg。
+2. 支持 PNG、JPEG、WebP、GIF、AVIF；拒绝 SVG、未知 MIME 和非规范 Base64。
+3. 单个媒体文件上限为 12 MiB；超限时整个迁移事务失败，不留下半成品状态。
+4. 以媒体内容 SHA-256 生成内容寻址文件名；asset ID 同时绑定 MIME，避免相同字节被不同 MIME 误解释。
+5. 文件先写入同目录临时文件，再原子重命名；SQLite 记录与角色状态在同一事务内提交。
+6. 角色状态中的 data URL 替换为 asset://dsh-virtual-avatar/<asset-id> 引用；原始 data URL 只保留在只读来源归档。
+7. 读取媒体时重新计算 SHA-256 和字节数；不匹配或文件缺失时明确报错，不静默使用损坏素材。
+8. SQLite 事务失败时删除本次刚创建的媒体文件；不会删除迁移前已有资产。
 
 ## 5. PPL 导入与状态映射
 
-- Persona IR 保存 persona id/version/IR hash；不把 IR 中的 computed trait 当作 durable user memory。
+- Persona IR 保存 persona id、version 与 IR hash；不把 computed trait 当作 durable user memory。
 - Host Snapshot 作为可审计的解析证据，按保留策略保存，不保存完整 transcript。
-- Character Governance session ID 与角色 ID 建立稳定映射；初次导入 relationship state 时需通过受控 bootstrap 路径，不能伪造一连串 COMFORT/CONFESSION 事件。
-- PPL 当前 dev Character profile 的初始 state 是参考样例，不可直接覆盖 Whale 已有角色状态。
-- 对不兼容状态采用显式 conflict report，用户确认后再迁移。
+- PPL 关系状态只通过已完成互动事件更新；不能用伪造事件重放旧关系值。
+- 不兼容状态采用显式 conflict report，用户确认后再迁移。
 
 ## 6. 幂等、备份与回滚
 
-每次迁移：
-1. 计算源文件 hash，记录 migration id。
-2. 创建只读备份（不覆盖源文件）。
-3. 解析为 staging records，不直接写主表。
-4. 执行 schema validation、数量核对、字段 hash/媒体 hash 核对。
-5. 同一源 hash + migration version 重跑时返回既有结果，不重复导入。
-6. 用户确认后事务性提交。
-7. 生成迁移报告，包含导入数、跳过数、冲突、未知字段和校验结果。
+当前实现：
+- 计算来源 SHA-256 并归档完整原始来源。
+- 预览阶段只读；相同来源哈希重复提交不会重复导入。
+- DeepSeek 状态、媒体元数据和来源记录在 SQLite 事务内提交。
+- 文件写入采用临时文件与原子重命名；数据库失败时清理本轮新增文件。
 
-回滚通过恢复迁移前数据库快照/备份进行；不得把回滚实现为删除原始源数据。迁移失败时旧插件仍可正常读取旧存档。
+尚待实现：
+- 迁移前数据库快照与用户可见备份/恢复入口。
+- 对迁移后新增聊天、记忆或关系状态进行变更检测。
+- 仅在受影响状态未发生后续修改时允许回滚；否则返回冲突并要求人工处理。
+- 迁移 UI 向导与可下载审计报告。
 
 ## 7. 隐私
 
 - 记忆来源和共享范围必须可见。
-- 用户删除记忆时同步删除其派生索引/缓存；审计只保留必要删除事件，不保留被删除正文。
+- 删除记忆时同步删除其派生索引/缓存；审计只保留必要删除事件，不保留已删除正文。
 - 不将 Harness 文件内容、工具参数或工具输出自动迁入记忆。
-- 外部模型调用使用当前选定 DSH provider；CG 使用本机配置的服务 key。
+- 外部模型调用使用当前选定 DSH provider；API key 不进入存档或仓库。
