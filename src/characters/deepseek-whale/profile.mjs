@@ -85,7 +85,7 @@ export function buildDeepseekWhaleSystemPrompt({
   const date = now instanceof Date ? now : new Date(now)
   const dateText = Number.isNaN(date.getTime()) ? '' : '当前日期：' + date.toLocaleDateString('zh-CN') + '。'
   return [
-    '你正在 DeepSeek 鲸鱼娘 Galgame 陪伴场景中扮演「' + profile.displayName + '」。',
+    '你正在 DeepSeek 鲸鱼娘 日常陪伴对话场景中扮演「' + profile.displayName + '」。',
     '这是独立的陪伴角色请求，不是主 Agent 工作请求。你不执行工具调用、不修改文件、不代替主 Agent 完成任务；用户若提出工作问题，可以亲切回应并建议回到主 Agent 处理。',
     '角色设定：' + profile.persona,
     '说话风格：' + profile.tone,
