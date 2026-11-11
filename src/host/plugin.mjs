@@ -313,6 +313,19 @@ export function apply(ctx, config = {}) {
         return
       }
 
+      if (action === 'story-run-get') {
+        json(res, 200, { ok: true, ...service.getStoryRun() })
+        return
+      }
+
+      if (action === 'story-choice') {
+        const choiceId = typeof args.choiceId === 'string' ? args.choiceId : ''
+        const eventId = typeof args.eventId === 'string' && args.eventId ? args.eventId : randomUUID()
+        const result = service.chooseStory({ choiceId, eventId })
+        json(res, 200, { ok: true, ...result })
+        return
+      }
+
       if (action === 'story-get') {
         json(res, 200, { ok: true, storyMemory: service.getStoryMemory() })
         return
