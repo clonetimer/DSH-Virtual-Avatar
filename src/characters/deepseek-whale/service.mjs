@@ -1,6 +1,7 @@
 import { createDeepseekWhaleRuntime } from '../../ppl/index.mjs'
 import { MemoryService } from '../../memory/service.mjs'
 import { addConfirmedStoryFact, appendStoryEvent, createStoryMemory, renderStoryContinuity, updateStorySummary } from './story-memory.mjs'
+import { chooseStoryBranch, createStoryRun, DEEPSEEK_WHALE_INTRO_STORY, getStoryNode } from './story-engine.mjs'
 import {
   DEEPSEEK_WHALE_ID,
   DEEPSEEK_WHALE_PROFILE,
@@ -30,6 +31,7 @@ export class DeepseekWhaleService {
   #initialState(sessionId) {
     const state = createDeepseekWhaleInitialState({ sessionId })
     state.storyMemory = createStoryMemory()
+    state.storyRun = createStoryRun({ storyId: DEEPSEEK_WHALE_INTRO_STORY.id, startNode: DEEPSEEK_WHALE_INTRO_STORY.startNode })
     state.pplRuntime = this.ppl.initialState(sessionId)
     return state
   }
@@ -41,6 +43,7 @@ export class DeepseekWhaleService {
     if (!state.pplRuntime) state.pplRuntime = this.ppl.initialState(sessionId)
     if (!state.conversation) state.conversation = { log: [], chatLines: [], choices: [] }
     if (!state.storyMemory) state.storyMemory = createStoryMemory()
+    if (!state.storyRun) state.storyRun = createStoryRun({ storyId: DEEPSEEK_WHALE_INTRO_STORY.id, startNode: DEEPSEEK_WHALE_INTRO_STORY.startNode })
     return { state, revision: loaded.revision, updatedAt: loaded.updatedAt, persisted: true }
   }
 
@@ -199,6 +202,29 @@ export class DeepseekWhaleService {
     const storyMemory = updateStorySummary(loaded.state.storyMemory, { summary, expectedRevision: expectedStoryRevision })
     const saved = this.store.saveCharacterState(DEEPSEEK_WHALE_ID, { ...loaded.state, storyMemory }, loaded.revision)
     return { revision: saved.revision, storyMemory }
+  }
+
+  getStoryRun() {
+    const loaded = this.loadState()
+    const run = loaded.state.storyRun || createStoryRun({ storyId: DEEPSEEK_WHALE_INTRO_STORY.id, startNode: DEEPSEEK_WHALE_INTRO_STORY.startNode })
+    return { run, node: getStoryNode(DEEPSEEK_WHALE_INTRO_STORY, run) }
+  }
+
+  chooseStory({ choiceId, eventId } = {}) {
+    const loaded = this.loadState()
+    const run = loaded.state.storyRun || createStoryRun({ storyId: DEEPSEEK_WHALE_INTRO_STORY.id, startNode: DEEPSEEK_WHALE_INTRO_STORY.startNode })
+    const result = chooseStoryBranch(DEEPSEEK_WHALE_INTRO_STORY, run, { choiceId, eventId })
+    if (result.duplicate) return result
+    const next = { ...loaded.state, storyRun: result.run }
+    const event = appendStoryEvent(next.storyMemory || createStoryMemory(), {
+      id: 'story:' + eventId,
+      title: '剧情选择：' + result.choice.text,
+      detail: result.node.text,
+      sourceEventId: eventId,
+    })
+    next.storyMemory = event.storyMemory
+    const saved = this.store.saveCharacterState(DEEPSEEK_WHALE_ID, next, loaded.revision)
+    return { ...result, revision: saved.revision }
   }
 
   getStoryMemory() {
