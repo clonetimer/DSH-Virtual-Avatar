@@ -34,6 +34,9 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
       assert.match(input.system, /DeepSeek 鲸鱼娘/)
       yield { type: 'text-delta', text: '主人也辛苦啦，我一直在这里哦。' }
       yield { type: 'finish', reason: { kind: 'stop' } }
+      if (input.system.includes('生成三个自然')) {
+        yield { type: 'text-delta', text: '[{"text":"再聊一会儿","effect":0},{"text":"给她一个拥抱","effect":1},{"text":"让她休息","effect":-1}]' }
+      }
     },
   }
   const ctx = {
@@ -66,6 +69,8 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(chat.body.reply, '主人也辛苦啦，我一直在这里哦。')
     assert.equal(chat.body.view.character.relationship.trust, 0.51)
     assert.equal(chat.body.view.character.chatLines.length, 2)
+    assert.equal(chat.body.choices.length, 3)
+    assert.deepEqual(chat.body.choices.map(item => item.effect).sort(), [-1, 0, 1])
 
     const memory = await call(route.handler, {
       action: 'memory-add',
