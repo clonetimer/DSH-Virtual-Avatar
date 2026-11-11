@@ -60,3 +60,32 @@
 2. 完成记忆编辑、导出、删除和摘要冲突提示。
 3. 补全设置/诊断界面与干净安装、升级、卸载回归。
 4. 获取真实 DSH Web/Desktop 环境完成模型流式调用、刷新与跨会话验收。
+
+
+## P2 implementation log (2026-11-11)
+
+### P2-B: conversation history
+- Merged PR #11: bounded conversation search (minimum two characters, maximum 100 matches), paged history API remains available.
+- Added overlay search panel and empty-result messaging.
+- Added Host API integration tests for matching and short-query rejection.
+
+### P2-A: relationship growth feedback
+- Persist completed-turn audit detail: requested/applied affection delta, affection and level before/after, trust and attachment before/after, relationship stage before/after, and stage/level transition flags.
+- Relationship timeline filters to completed-turn and explicit affection events and renders meaningful labels, date, deltas and transitions.
+- No scoring formulas or PPL relationship rules changed.
+- PR #12 contains the explainable event detail and regression coverage; Node 22.19 / 24 CI passed before merge.
+
+### P2-C: memory interaction
+- Memory list supports text search, importance level (core/mid/edge), and pinned-state filters.
+- UI shows importance, source and last-seen time; retains edit, pin, delete confirmation and export.
+- Added API integration tests for search and pin filters.
+
+### P2-D / P2-E: profile and interaction
+- Settings fields are grouped into “称呼与互动” and “人格与表达”.
+- Each field has Chinese help text, character limit and live character count.
+- Added restore-default profile action with confirmation; it does not delete memory or relationship state.
+- Added empty states for memory filters and conversation search.
+
+### Validation boundary
+- GitHub Actions Node 22.19 / 24 runs are required for every PR.
+- UI code is syntax-checked in CI; full visual usability and DSH Web/Desktop real-host behavior still require target-version manual acceptance.
