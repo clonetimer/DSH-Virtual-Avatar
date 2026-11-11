@@ -1,0 +1,14 @@
+{
+  "name": "dsh-virtual-avatar",
+  "version": "0.1.0-dev.1",
+  "private": true,
+  "type": "module",
+  "description": "Unified virtual persona and companion plugin for DeepSeek Harness",
+  "engines": { "node": ">=22.19.0" },
+  "scripts": {
+    "test": "node --test",
+    "test:unit": "node --test test/unit/*.test.mjs",
+    "check": "node --check src/index.mjs && node --check src/migration/*.mjs && node --check src/persona/*.mjs",
+    "verify": "npm run check && npm test"
+  }
+}
