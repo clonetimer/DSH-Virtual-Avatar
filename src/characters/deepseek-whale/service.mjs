@@ -1,0 +1,208 @@
+import { createDeepseekWhaleRuntime } from '../../ppl/index.mjs'
+import { MemoryService } from '../../memory/service.mjs'
+import {
+  DEEPSEEK_WHALE_ID,
+  DEEPSEEK_WHALE_PROFILE,
+  buildDeepseekWhaleSystemPrompt,
+  resolveDeepseekWhaleProfile,
+} from './profile.mjs'
+import {
+  applyDeepseekWhaleAffection,
+  classifyDeepseekWhaleEvent,
+  createDeepseekWhaleInitialState,
+  deepseekWhaleAffectionDelta,
+  reconcileDeepseekWhalePplRelationship,
+} from './relationship.mjs'
+
+const TERMINAL_COMMIT_REASONS = new Set(['completed', 'max-tokens'])
+
+export class DeepseekWhaleService {
+  constructor({ store, memoryService, pplRuntime } = {}) {
+    if (!store || typeof store.loadCharacterState !== 'function' || typeof store.commitCharacterTurn !== 'function') {
+      throw new TypeError('DeepSeek Whale service requires a durable avatar store')
+    }
+    this.store = store
+    this.memory = memoryService || new MemoryService({ store })
+    this.ppl = pplRuntime || createDeepseekWhaleRuntime()
+  }
+
+  #initialState(sessionId) {
+    const state = createDeepseekWhaleInitialState({ sessionId })
+    state.pplRuntime = this.ppl.initialState(sessionId)
+    return state
+  }
+
+  loadState({ sessionId = 'deepseek-whale' } = {}) {
+    const loaded = this.store.loadCharacterState(DEEPSEEK_WHALE_ID)
+    if (!loaded) return { state: this.#initialState(sessionId), revision: 0, persisted: false }
+    const state = structuredClone(loaded.state)
+    if (!state.pplRuntime) state.pplRuntime = this.ppl.initialState(sessionId)
+    if (!state.conversation) state.conversation = { log: [], chatLines: [], choices: [] }
+    return { state, revision: loaded.revision, updatedAt: loaded.updatedAt, persisted: true }
+  }
+
+  prepareTurn({
+    text,
+    choice = null,
+    eventId,
+    sessionId = 'deepseek-whale',
+    turn,
+    step = 1,
+    context = { privacy: 'private', outsiders_present: false, danger: 0 },
+    activityHint = '',
+    profileOverrides,
+    now = new Date(),
+  } = {}) {
+    const input = String(text || '').trim().slice(0, 500)
+    if (!input) throw new TypeError('user message required')
+    if (!eventId) throw new TypeError('stable turn eventId required')
+    const loaded = this.loadState({ sessionId })
+    const event = classifyDeepseekWhaleEvent({ text: input, choice, eventId })
+    const resolved = this.ppl.resolve({
+      runtimeState: loaded.state.pplRuntime,
+      event,
+      context,
+      turn: turn ?? loaded.state.pplRuntime?.session?.turn ?? 0,
+      step,
+    })
+    const memoryContext = this.memory.buildContext({
+      ownerKind: 'character',
+      ownerId: DEEPSEEK_WHALE_ID,
+      maxChars: 12000,
+    })
+    const profile = resolveDeepseekWhaleProfile(profileOverrides || loaded.state.profileOverrides || {})
+    const system = buildDeepseekWhaleSystemPrompt({
+      profile,
+      pplStaticPrompt: resolved.staticPrompt,
+      pplDynamicPrompt: resolved.dynamicPrompt,
+      characterState: loaded.state,
+      memories: memoryContext.items,
+      activityHint,
+      now,
+    })
+    return {
+      characterId: DEEPSEEK_WHALE_ID,
+      eventId: String(eventId),
+      input,
+      choice: choice ? structuredClone(choice) : null,
+      event,
+      context: structuredClone(context),
+      profile,
+      memoryContext,
+      system,
+      baseState: loaded.state,
+      expectedRevision: loaded.revision,
+      pplResolution: resolved.resolution,
+      pplSnapshot: resolved.snapshot,
+      pplStaticPrompt: resolved.staticPrompt,
+      pplDynamicPrompt: resolved.dynamicPrompt,
+    }
+  }
+
+  finalizeTurn(prepared, { reply, terminalReason = 'completed', emotion = 'normal', choices = [] } = {}) {
+    if (!prepared || prepared.characterId !== DEEPSEEK_WHALE_ID) throw new TypeError('invalid prepared DeepSeek Whale turn')
+    if (!TERMINAL_COMMIT_REASONS.has(String(terminalReason))) {
+      return { committed: false, reason: String(terminalReason), state: prepared.baseState }
+    }
+    const response = String(reply || '').trim()
+    if (!response) throw new TypeError('completed turn requires a non-empty reply')
+    const pplFinal = this.ppl.finalize(prepared.baseState.pplRuntime, prepared.pplResolution, terminalReason)
+    if (!pplFinal.committed) throw new Error('PPL runtime refused completed turn commit')
+
+    const affectionDelta = deepseekWhaleAffectionDelta({ text: prepared.input, choice: prepared.choice })
+    const affectionResult = applyDeepseekWhaleAffection(prepared.baseState, { delta: affectionDelta })
+    const next = affectionResult.state
+    next.pplRuntime = pplFinal.runtimeState
+    const reconciled = reconcileDeepseekWhalePplRelationship(next, pplFinal.runtimeState)
+    reconciled.conversation = structuredClone(next.conversation || { log: [], chatLines: [], choices: [] })
+    reconciled.conversation.log.push(
+      { role: 'user', text: prepared.input },
+      { role: 'assistant', text: response },
+    )
+    if (reconciled.conversation.log.length > 24) reconciled.conversation.log = reconciled.conversation.log.slice(-24)
+    reconciled.conversation.chatLines.push({
+      who: 'user',
+      text: prepared.input,
+      at: Date.now(),
+      choiceId: prepared.choice?.id || null,
+    })
+    reconciled.conversation.chatLines.push({
+      who: 'heroine',
+      text: response,
+      emotion: String(emotion || 'normal'),
+      at: Date.now(),
+    })
+    reconciled.conversation.choices = Array.isArray(choices) ? structuredClone(choices) : []
+    if (affectionResult.levelUps.length) {
+      for (const levelUp of affectionResult.levelUps) {
+        reconciled.conversation.chatLines.push({
+          who: 'narrator',
+          text: '（好感度已满！鲸鱼娘的等级提升至 Lv.' + levelUp.level + '！正在为主人准备礼物……）',
+          at: Date.now(),
+        })
+      }
+      reconciled.conversation.choices = []
+    }
+
+    const payload = {
+      input: prepared.input,
+      choiceId: prepared.choice?.id || null,
+      reply: response,
+      terminalReason,
+      affectionDelta,
+      pplEventType: prepared.event.type,
+      pplSnapshotHash: prepared.pplSnapshot?.persona?.irSha256 || null,
+    }
+    const committed = this.store.commitCharacterTurn({
+      eventId: prepared.eventId,
+      characterId: DEEPSEEK_WHALE_ID,
+      payload,
+      state: reconciled,
+      expectedRevision: prepared.expectedRevision,
+    })
+    return {
+      committed: !committed.duplicate,
+      duplicate: committed.duplicate,
+      state: committed.state?.state || committed.state || reconciled,
+      revision: committed.revision ?? committed.state?.revision ?? null,
+      affectionDelta,
+      levelUps: affectionResult.levelUps,
+      relationship: reconciled.relationship,
+    }
+  }
+
+  remember(text, { eventId, source = 'user' } = {}) {
+    return this.memory.addCandidate({
+      ownerKind: 'character',
+      ownerId: DEEPSEEK_WHALE_ID,
+      text,
+      eventId,
+      source,
+    })
+  }
+
+  listMemories() {
+    return this.memory.list({ ownerKind: 'character', ownerId: DEEPSEEK_WHALE_ID })
+  }
+
+  pinMemory(memoryId, pinned = true) {
+    return this.memory.pin({ ownerKind: 'character', ownerId: DEEPSEEK_WHALE_ID, memoryId, pinned })
+  }
+
+  removeMemory(memoryId) {
+    return this.memory.remove({ ownerKind: 'character', ownerId: DEEPSEEK_WHALE_ID, memoryId })
+  }
+
+  updateProfile(overrides, { expectedRevision } = {}) {
+    const loaded = this.loadState()
+    const profile = resolveDeepseekWhaleProfile(overrides)
+    const next = { ...loaded.state, profileOverrides: Object.fromEntries(
+      Object.entries(profile).filter(([key, value]) => DEEPSEEP_PROFILE_FIELDS().includes(key) && value !== DEEPSEEK_WHALE_PROFILE[key]),
+    ) }
+    return this.store.saveCharacterState(DEEPSEEK_WHALE_ID, next, expectedRevision ?? loaded.revision)
+  }
+}
+
+function DEEPSEEP_PROFILE_FIELDS() {
+  return ['displayName', 'address', 'greeting', 'persona', 'tone', 'visual']
+}
