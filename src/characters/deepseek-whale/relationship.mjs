@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 import { affectionCap } from './profile.mjs'
 
-const POSITIVE_TEXT = /喜欢|爱你|可爱|想你|陪你|晚安|早安|抱抱|亲亲|约会|月圆/u
-const NEGATIVE_TEXT = /讨厌|烦|滚|走开|无聊|再见/u
+const POSITIVE_TEXT = /喜欢和你聊天|喜欢陪你|想陪你|想你|你真可爱|你好可爱|好可爱|抱抱|亲亲|约会|晚安|早安/u
+const NEGATIVE_TEXT = /^(?:我)?(?:真的|有点)?(?:不喜欢你|讨厌你|不爱你|不想和你在一起|别烦我|滚开|走开)[，。！？!?～~]*$/u
 const COMFORT_TEXT = /辛苦|累了|很累|休息|靠一会|靠着|别撑|别逞强|心疼|抱歉让你等/u
-const CONFESSION_TEXT = /喜欢你|爱你|和我在一起|交往|告白|做我的恋人/u
+const CONFESSION_TEXT = /^(?:我)?(?:真的|很)?(?:喜欢你|爱你|想和你在一起|想和你交往|愿意和你交往|交往|告白|做我的恋人)[，。！？!?～~]*$/u
 
 function hash(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -45,14 +45,14 @@ export function createDeepseekWhaleInitialState({ sessionId = 'deepseek-whale' }
   }
 }
 
-/** Convert a completed Galgame input into a deterministic PPL domain event. */
-export function classifyDeepseekWhaleEvent({ text = '', choice = null, eventId, source = 'galgame' } = {}) {
+/** Convert a completed companion message into a deterministic PPL domain event. */
+export function classifyDeepseekWhaleEvent({ text = '', choice = null, eventId, source = 'companion' } = {}) {
   const input = String(text || '').trim()
   let type = 'MESSAGE'
-  if (CONFESSION_TEXT.test(input)) type = 'CONFESSION'
+  if (choice?.effect === -1 || NEGATIVE_TEXT.test(input)) type = 'NEGATIVE_INTERACTION'
+  else if (CONFESSION_TEXT.test(input)) type = 'CONFESSION'
   else if (COMFORT_TEXT.test(input)) type = 'COMFORT'
   else if (choice?.effect === 1 || POSITIVE_TEXT.test(input)) type = 'POSITIVE_INTERACTION'
-  else if (choice?.effect === -1 || NEGATIVE_TEXT.test(input)) type = 'NEGATIVE_INTERACTION'
   const payload = { type, actor: 'admin', text: input, choiceId: choice?.id || null, source }
   return {
     eventId: String(eventId || ''),
@@ -65,9 +65,9 @@ export function deepseekWhaleAffectionDelta({ text = '', choice = null } = {}) {
   if (choice && choice.effect === 1) return 1
   if (choice && choice.effect === -1) return -1
   if (choice) return 0
-  const input = String(text || '')
-  if (POSITIVE_TEXT.test(input)) return 1
+  const input = String(text || '').trim()
   if (NEGATIVE_TEXT.test(input)) return -1
+  if (CONFESSION_TEXT.test(input) || POSITIVE_TEXT.test(input)) return 1
   return 0
 }
 

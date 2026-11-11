@@ -1,6 +1,6 @@
-# DeepSeek Whale MVP 实施状态
+# DSH Virtual Avatar 实施状态（Companion-first）
 
-更新基线：PR #1 当前分支 `feat/architecture-baseline`，提交 `7c320b24f3e354279edf6e3d4faa35dead3b46f2`。
+更新基线：PR #1 开发分支 `feat/architecture-baseline`；本轮收敛分支 `feat/a1-control-char-regression`，对应 PR #3。
 
 ## 本轮验收结果
 
@@ -23,9 +23,9 @@ GitHub Actions run #211（最新已完成）：
 | Memory candidate workflow | PASS（模块级） | 自动只提出候选，需用户点击确认才写入 |
 | Whale DeepSeek legacy import | PARTIAL | 保留完整原始 JSON，导入 DeepSeek 的关系/对话字段；图片 data URL 尚未提取成文件 |
 | DSH host API | PASS（mock contract） | Host plugin integration test；Origin / Fetch Metadata 检查已接入；尚未在真实 DSH Web/Desktop 安装验收 |
-| Web overlay UI | PARTIAL | 对话、动态回复选项、关系摘要、记忆管理、人格设定编辑；未达到 Whale 原 Galgame UI 全功能平移 |
-| Original Whale Galgame | NOT YET | 剧情、小剧场、历史/CG 图鉴与音效等需逐项移植 |
-| Desktop pet | NOT YET | spritesheet 动画与桌面生命周期尚未接入 |
+| Web overlay UI | PASS（模块级） | 自由聊天、历史分页、记忆管理、摘要确认、角色设定、表情与白名单场景切换；真实 DSH Host 仍待实机验收 |
+| Original Whale Galgame | DEFERRED / OUT OF SCOPE | 章节、分支、结局、游戏选项、小剧场与 CG 不属于当前产品范围 |
+| Desktop pet | DEFERRED | 桌面动画生命周期作为后续独立评估项，不阻塞陪伴插件首发 |
 | Settings / diagnostics | PARTIAL | API 具备 profile / memory endpoints，完整插件设置和诊断页未完成 |
 | Backup / rollback | NOT YET | migration source 原文入库；尚无用户可见备份恢复与安全回滚流程 |
 | Web/Desktop real-host qualification | NOT YET | 需要真实 DSH 目标环境 |
@@ -33,7 +33,7 @@ GitHub Actions run #211（最新已完成）：
 ## 重要边界
 
 - 首发仅启用 DeepSeek 鲸鱼娘。其余五位角色在迁移预览中明确标记为 deferred，不做隐式转换。
-- 主 Agent 人格没有被此插件接管；陪伴提示仅用于本插件的 Galgame chat 请求。
+- 主 Agent 人格没有被此插件接管；陪伴提示仅用于本插件的独立 Companion Character 请求。
 - 关系 trust / stage 由 PPL Runtime 决定；好感度/等级沿用 Whale 游戏进度模型，两个状态域不混用。
 - 记忆候选不会自动写入。只有用户明确确认后才保存。
 - CI 通过不能替代真实 DSH Web/Desktop 安装、模型供应商调用、跨会话存档和 UI 交互验收。
@@ -42,15 +42,15 @@ GitHub Actions run #211（最新已完成）：
 
 1. 完成 Whale 原存档中 DeepSeek 角色媒体 data URL 的受控提取、hash 对账和备份恢复。
 2. 建立迁移回滚的事务/冲突保护，防止覆盖迁移后产生的新聊天或关系状态。
-3. 扩展对话服务：模型生成的三条选项、选择效果与事件结算的完整闭环。
-4. 移植 Whale Galgame 原 UI 的对话呈现、表情、背景切换、历史、CG、小剧场和桌宠。
-5. 增加设置/诊断页面、隐私说明、Origin 校验和数据导出/删除。
-6. 完成 DSH Web 与 Desktop 实机安装验收，再判断是否进入下一发布阶段。
+3. 完成迁移备份、冲突保护与可恢复回滚，避免覆盖迁移后新增状态。
+4. 完成记忆查看/编辑/删除/导出和隐私说明的 UI 体验收敛。
+5. 增加设置/诊断页面，展示 PPL、存储、模型调用和最近错误状态。
+6. 完成 DSH Web 与 Desktop 实机安装、真实模型流式调用和跨会话重载验收，再判断是否进入发布阶段。
 
 ## 最新增量（PR #1 后续提交）
 
-- 增加上下文驱动的三选项生成；模型输出格式异常或请求失败时回退至三条安全的本地选项。
-- 补充 Host API 集成测试，检查三个选项的 effect 分布为 -1 / 0 / 1。
+- 历史版本曾实现上下文驱动的三选项生成；按 Companion-first 决策，当前已从陪伴主流程移除，不再作为首发能力。
+- 旧选项生成回归仅保留在历史记录中，不作为当前产品验收项。
 - README 增加 DSH 插件包结构与本地开发接入说明：Cordis Host entry、bundle patch、Web Client injection 与 API 前缀。
 - 仍未宣称真实 DSH 插件安装通过；插件管理器目录和具体安装方式需按目标 DSH 发行版实测。
 
@@ -117,8 +117,7 @@ GitHub Actions run #211（最新已完成）：
 - Story Memory 与普通 Character Memory 分开，避免相似文本合并破坏剧情语义。
 
 ### 本轮待验收
-- 当前分支最新提交：`3e2bd2b30fc80fe11c4e240de3294f3c5e4dc327`。
-- 需要 GitHub Actions 对当前 head 重新执行 Node 22.19 / 24 测试；在新 run 通过前不标记 PASS。
+- 该阶段的测试结果属于历史提交，不代表当前 head 的验收状态。
 
 
 ## 产品方向调整：对话、记忆与陪伴（停止 Galgame 剧情）
@@ -140,3 +139,26 @@ GitHub Actions run #211（最新已完成）：
 - 相关度检索目前采用本地文本相似度排序，不宣称语义向量检索。
 - 需要当前 head 的 Node 22.19 / 24 CI 通过后，才能标记 A1 模块级验收。
 - 真实 DSH Web/Desktop 对话与跨会话验收仍未完成。
+
+## 2026-11-11：A1 / P1 Companion-first 收敛验收
+
+### 已完成
+- 修复 \`memory-summary.mjs\` 中 C0/C1 控制字符清理正则的重复转义，并增加回归测试。
+- 退役不再被产品使用的 Galgame story-engine 及其独立分支测试；保留共同经历、确认事实和长期相处摘要作为陪伴连续性记忆。
+- 将 PPL 人格约束中的 Galgame 场景描述改为独立陪伴对话场景，并由 CI 使用固定 PPL Core 重新生成 PIR。
+- 修正旧测试对 Host API、事实提示标题和摘要标题的过期假设。
+- 将每日正向成长上限接入实际角色好感度结算；不再只更新旁路 growth 统计。
+- 关系事件来源统一为 \`companion\`；否定表达与无关的“喜欢”语句不再误触发正向好感。
+- README、SRS、上游功能基线和测试计划统一到 Companion-first 范围。
+
+### 验收证据
+- GitHub Actions Run #341：Node 22.19.0 与 Node 24 均通过。
+- GitHub Actions Run #344：Node 22.19.0 与 Node 24 均通过；Node 24 测试为 42 passed / 0 failed。
+- PPL Persona 0.3：编译检查 0 errors / 0 warnings；生成 IR 与当前 PPL source 一致。
+- 以上是 CI 与模块级证据，不等同于真实 DSH Web/Desktop 实机验收。
+
+### 当前剩余工作
+1. DSH Web/Desktop 真实宿主安装、DeepSeek 流式调用、刷新与跨会话持久化验收。
+2. Whale 旧存档 DeepSeek 媒体提取、源 hash 对账、备份和迁移回滚。
+3. 记忆管理 UI 的可理解性、长期摘要确认冲突提示和数据导出/删除体验。
+4. 设置/诊断界面与干净安装、升级、卸载回归。
