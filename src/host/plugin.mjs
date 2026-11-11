@@ -313,6 +313,21 @@ export function apply(ctx, config = {}) {
         return
       }
 
+      if (action === 'history') {
+        const loaded = service.loadState()
+        const lines = loaded.state.conversation?.chatLines || []
+        const limit = Math.min(100, Math.max(1, Number.isSafeInteger(args.limit) ? args.limit : 30))
+        const before = Number.isSafeInteger(args.before) ? Math.max(0, args.before) : lines.length
+        const start = Math.max(0, before - limit)
+        json(res, 200, {
+          ok: true,
+          lines: lines.slice(start, before),
+          nextBefore: start > 0 ? start : null,
+          total: lines.length,
+        })
+        return
+      }
+
       if (action === 'view') {
         json(res, 200, publicView(service, memoryService, runtimeConfig))
         return
