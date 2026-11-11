@@ -447,21 +447,9 @@ export class SqliteAvatarStore {
     if (row.status !== 'available') return { available: false, reason: 'ROLLBACK_ALREADY_USED', status: row.status }
     const current = this.loadCharacterState(row.character_id)
     if (!current || current.revision !== row.after_revision) {
-      return {
-        available: false,
-        reason: 'POST_MIGRATION_STATE_CHANGED',
-        expectedRevision: row.after_revision,
-        currentRevision: current?.revision ?? null,
-      }
+      return { available: false, reason: 'POST_MIGRATION_STATE_CHANGED', expectedRevision: row.after_revision, currentRevision: current?.revision ?? null }
     }
-    return {
-      available: true,
-      migrationId: row.migration_id,
-      characterId: row.character_id,
-      expectedRevision: row.after_revision,
-      restoreRevision: row.before_revision,
-      createdAssetCount: JSON.parse(row.created_asset_ids_json).length,
-    }
+    return { available: true, migrationId: row.migration_id, characterId: row.character_id, expectedRevision: row.after_revision, restoreRevision: row.before_revision, createdAssetCount: JSON.parse(row.created_asset_ids_json).length }
   }
 
   rollbackMigration(migrationId, { confirmed = false } = {}) {
@@ -473,34 +461,24 @@ export class SqliteAvatarStore {
     const result = this.transaction(() => {
       const row = this.#db.prepare('SELECT * FROM migration_rollback_snapshots WHERE migration_id = ?').get(String(migrationId))
       const current = this.loadCharacterState(row.character_id)
-      if (!current || current.revision !== row.after_revision) {
-        throw conflict('POST_MIGRATION_STATE_CHANGED', 'character state changed after migration; rollback is blocked')
-      }
+      if (!current || current.revision !== row.after_revision) throw conflict('POST_MIGRATION_STATE_CHANGED', 'character state changed after migration; rollback is blocked')
       this.#db.prepare('DELETE FROM character_states WHERE character_id = ?').run(row.character_id)
-      const assetIds = JSON.parse(row.created_asset_ids_json)
-      for (const assetId of assetIds) {
+      for (const assetId of JSON.parse(row.created_asset_ids_json)) {
         const asset = this.getMediaAsset(assetId)
         if (asset) {
-          if (!this.assetDirectory || !asset.relativePath.startsWith('deepseek/')) {
-            throw conflict('MEDIA_ASSET_PATH_INVALID', 'rollback encountered an invalid media asset path')
-          }
+          if (!this.assetDirectory || !asset.relativePath.startsWith('deepseek/') || asset.relativePath.includes('..')) throw conflict('MEDIA_ASSET_PATH_INVALID', 'rollback encountered an invalid media asset path')
           filesToRemove.push(join(this.assetDirectory, asset.relativePath))
           this.#db.prepare('DELETE FROM media_assets WHERE asset_id = ?').run(assetId)
         }
       }
-      this.#db.prepare("UPDATE migration_rollback_snapshots SET status='rolled_back', rolled_back_at=? WHERE migration_id=?")
-        .run(new Date().toISOString(), String(migrationId))
-      this.#db.prepare("UPDATE migration_runs SET status='rolled_back' WHERE migration_id=?")
-        .run(String(migrationId))
-      this.#recordAudit('migration', String(migrationId), 'MIGRATION_ROLLED_BACK', null, current.state, null, {
-        characterId: row.character_id,
-        removedAssetCount: filesToRemove.length,
-      })
-      return { migrationId: String(migrationId), status: 'rolled_back', removedAssetCount: filesToRemove.length }
+      this.#db.prepare("UPDATE migration_rollback_snapshots SET status='rolled_back', rolled_back_at=? WHERE migration_id=?").run(new Date().toISOString(),String(migrationId))
+      this.#db.prepare("UPDATE migration_runs SET status='rolled_back' WHERE migration_id=?").run(String(migrationId))
+      this.#recordAudit('migration',String(migrationId),'MIGRATION_ROLLED_BACK',null,current.state,null,{characterId:row.character_id,removedAssetCount:filesToRemove.length})
+      return { migrationId:String(migrationId),status:'rolled_back',removedAssetCount:filesToRemove.length }
     })
     const cleanupErrors = []
     for (const filename of filesToRemove) {
-      try { rmSync(filename, { force: true }) } catch (error) { cleanupErrors.push({ filename, message: error.message }) }
+      try { rmSync(filename,{force:true}) } catch(error) { cleanupErrors.push({filename,message:error.message}) }
     }
     return { ...result, cleanupErrors }
   }
@@ -561,7 +539,6 @@ export class SqliteAvatarStore {
   commitMigration({ migrationId, sources }) {
     this.#assertOpen()
     const createdFiles = []
-    const createdAssetIds = []
     try {
       return this.transaction(() => {
         const id = String(migrationId || randomUUID())
@@ -618,6 +595,10 @@ export class SqliteAvatarStore {
       for (const filename of createdFiles) {
         try { rmSync(filename, { force: true }) } catch { /* preserve the original migration error */ }
       }
+      throw error
+    }
+  }
+ }
       throw error
     }
   }
@@ -780,16 +761,7 @@ export class SqliteAvatarStore {
       INSERT INTO migration_rollback_snapshots(
         migration_id,character_id,before_state_json,before_revision,after_revision,created_asset_ids_json,status,created_at
       ) VALUES(?,?,?,?,?,?,?,?)
-    `).run(
-      migrationId,
-      'deepseek',
-      null,
-      0,
-      saved.revision,
-      stableJson(createdAssetIds),
-      'available',
-      new Date().toISOString(),
-    )
+    `).run(migrationId,'deepseek',null,0,saved.revision,stableJson(createdAssetIds),'available',new Date().toISOString())
     return {
       deferredCharacters: Object.keys(characters).filter(id => id !== 'deepseek'),
       mediaAssetsImported: assets.size,
