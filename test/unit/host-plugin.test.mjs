@@ -325,7 +325,7 @@ test('runtime diagnostics reports model PPL storage and companion health without
     const result = await call(route.handler, { action: 'diagnostics' })
     assert.equal(result.status, 200)
     const d = result.body.diagnostics
-    assert.equal(d.model.status, 'configured')
+    assert.equal(d.model.status, 'selected')
     assert.equal(d.model.selected.provider, 'deepseek-official')
     assert.equal(d.persona.runtime, 'loaded')
     assert.equal(d.persona.ir.status, 'valid')
