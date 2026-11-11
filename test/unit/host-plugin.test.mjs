@@ -106,6 +106,29 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
 })
 
 
+test('DeepSeek Whale view exposes a character-art launcher asset', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-pet-'))
+  let route
+  let cleanup
+  const llm = { stream: async function* () { yield { type: 'text-delta', text: '你好' }; yield { type: 'finish', reason: { kind: 'stop' } } } }
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm,
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject() {},
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    const result = await call(route.handler, { action: 'view' })
+    assert.match(result.body.character.imageUrl, /maid-left\\.webp$/)
+    assert.match(result.body.character.backgroundUrl, /palace-night\\.webp$/)
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('DSH companion API rejects cross-site and mismatched Origin requests', async () => {
   const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-origin-'))
   let route
