@@ -16,7 +16,7 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 
 当前 CI 采用 Node 22.19 / 24 双矩阵。请查看 [实施状态与验收证据](docs/implementation-status.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
 
-## DSH 插件安装
+## DSH 插件安装与 P4 宿主验收
 
 本项目按 DSH 插件包结构组织：
 - `package.json` 提供插件入口、`dsh.bundle.patch` 和 Web Client injection。
@@ -25,18 +25,20 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 - `cordis.patch.yml` 将 `dsh-virtual-avatar` 插入 DSH 插件 bundle。
 - Host API 前缀为 `/api/dsh-virtual-avatar`。
 
-### 本地开发安装
+### 本地开发安装（需要按目标 DSH 发行版确认）
 
 1. 使用 Node.js 22.19 或更高版本。
-2. 将仓库放入 DSH 可加载的本地插件/扩展目录，或按当前 DSH 插件管理器的本地插件方式添加该包。
-3. 在 DSH bundle 中应用仓库的 `cordis.patch.yml`，并确认插件名为 `dsh-virtual-avatar`。
-4. 启动 DSH Web，确认插件加载日志无错误。
-5. 打开页面右下角鲸鱼按钮，发送一条自由对话测试消息。
-6. 通过“记忆”“整理记忆”和“设定”入口验证记忆确认、摘要确认和人格配置的持久化。
+2. 先运行 `npm ci && npm run verify`。
+3. 运行 `npm pack --dry-run --json` 或 `npm run pack:check`，检查交付文件清单。
+4. 将生成的插件包放入目标 DSH 发行版支持的本地插件目录，或使用该版本插件管理器添加。
+5. 在测试 bundle 中应用 `cordis.patch.yml`，确认插件 ID 为 `dsh-virtual-avatar`。
+6. 启动 DSH Web，检查插件加载日志、唯一 API 路由和右下角鲸鱼入口。
+7. 在 DSH 主模型设置中选定 Provider/Model，打开“运行诊断”执行模型连接测试，再发送一条中文消息。
+8. 验证刷新、插件重载、长期记忆和备份恢复。
 
-空的 `chatProvider` / `chatModel` 默认尝试跟随 DSH 主界面当前模型；若宿主未提供当前模型选择，可在插件 config 中显式配置。插件不要求单独运行 PPL Gateway。
+空的 `chatProvider` / `chatModel` 默认跟随 DSH 主界面当前模型；若宿主未提供当前模型选择，可在插件 config 中显式配置。插件不要求单独运行 PPL Gateway。
 
-> DSH 不同发行版的插件目录与安装管理方式可能不同；以上是包结构和 bundle 接入方式，不能代替目标版本的真实安装验收。
+**Desktop 尚未被声明为已支持。** 当前 `package.json` 声明 `dsh.client.platform: web`。必须按目标 DSH Desktop 版本单独执行 `docs/test-plan.md` 的 P4-D，不能由 Web 端测试推断 Desktop 兼容性。
 
 ## 开发验证
 

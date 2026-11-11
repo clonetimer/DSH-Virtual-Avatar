@@ -40,3 +40,40 @@ Galgame 章节、剧情分支、剧情结局、游戏式回复选项、小剧场
 - release audit（素材 hash、许可文件、bundle 文件列表）。
 
 真实 DSH Web/Desktop 验收不能由 CI mock 替代。
+
+
+## P4 — DSH host qualification protocol
+
+### Qualification boundary
+- Package declares a Cordis host plugin entry and a Web client injection. This is not evidence that a specific DSH release accepts the bundle patch or that Desktop embeds the same Web client runtime.
+- Run the protocol separately for DSH Web and DSH Desktop. Record exact DSH build/version, OS, Node runtime (if exposed), install method and date.
+- A mock Host test or GitHub Actions run is contract evidence only; it cannot be marked as real-host qualification.
+
+### P4-A: package/install
+1. Run `npm ci`, `npm run verify`, `npm pack --dry-run --json`.
+2. Confirm the package audit reports required entry/client/host/PPL/assets/patch files and excludes tests, CI checkout, SQLite/database files and local credentials.
+3. Install the resulting package using the target DSH version's supported local plugin workflow.
+4. Apply the supplied Cordis patch only in a disposable/test DSH bundle first.
+5. Confirm exactly one plugin instance and one `/api/dsh-virtual-avatar` route are registered.
+
+### P4-B: real model
+1. Select a configured provider/model in DSH's main model settings.
+2. Open the whale companion and run the diagnostics model test.
+3. Send one short Chinese message; confirm streamed completion and no duplicate response.
+4. Cause a controlled invalid-provider or offline failure; confirm bounded error display and no persisted partial turn.
+5. Confirm the main Agent's selected provider/model and prompt remain unchanged.
+
+### P4-C: persistence/reload
+1. Create a memory, change profile and send multiple turns.
+2. Reload the Web page; confirm chat, memory, profile and relationship state persist.
+3. Disable/re-enable or restart the plugin using supported DSH controls; confirm route is disposed/re-registered once and data remains.
+4. Create a backup, alter state, restore it and verify media, memory, profile and relationship values.
+5. Confirm diagnostics contains no API keys/provider credentials.
+
+### P4-D: Desktop
+1. Repeat P4-A through P4-C in DSH Desktop.
+2. Verify whether the target Desktop release supports the declared `dsh.client.platform: web` injection model; do not infer support from Web.
+3. Verify window close/reopen and application restart behavior.
+
+### Evidence record
+For each platform capture: DSH version/build, OS, install route, package filename + SHA-256, bundle patch result, plugin load log, model test result (credential-free), chat screenshot, reload persistence, backup restore result, disable/uninstall data-retention result, tester/date, blockers. Mark PASS only with evidence; use BLOCKED when the target runtime/build is unavailable.

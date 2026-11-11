@@ -11,7 +11,8 @@
     "test": "node --test",
     "test:unit": "node --test test/unit/*.test.mjs",
     "check": "node --check src/index.mjs && find src/migration src/persona src/characters/deepseek-whale src/memory src/storage src/ppl src/host -type f \\( -name '*.mjs' -o -name '*.js' \\) -print0 | xargs -0 -n1 node --check && node --check lib/index.js && node --check lib/client.js && node --check src/client/index.mjs && node --check lib/client.js",
-    "verify": "npm run check && npm test"
+    "verify": "npm run check && npm test && npm run pack:check",
+    "pack:check": "npm pack --dry-run --json | node verify-pack.mjs"
   },
   "main": "./lib/index.js",
   "exports": {

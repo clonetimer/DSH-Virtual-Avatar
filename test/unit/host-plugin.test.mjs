@@ -339,3 +339,44 @@ test('runtime diagnostics reports model PPL storage and companion health without
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+
+test('host plugin lifecycle disposes its route once and preserves DSH_HOME data across reload', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-lifecycle-'))
+  let route = null
+  let disposeCount = 0
+  let cleanup = null
+  const makeContext = () => ({
+    webServer: {
+      register(value) {
+        assert.equal(route, null, 'only one companion route may be registered')
+        route = value
+        return () => { disposeCount++; route = null }
+      },
+    },
+    llm: { stream: async function* () { yield { type: 'text-delta', text: '你好' }; yield { type: 'finish', reason: { kind: 'stop' } } } },
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject() {},
+    effect(fn) { cleanup = fn() },
+  })
+  try {
+    const first = apply(makeContext(), {})
+    const saved = await call(route.handler, { action: 'profile-set', args: { profile: { displayName: '持久化鲸鱼娘' } } })
+    assert.equal(saved.status, 200)
+    cleanup()
+    assert.equal(route, null)
+    assert.equal(disposeCount, 1)
+    const second = apply(makeContext(), {})
+    assert.ok(route)
+    const view = await call(route.handler, { action: 'view' })
+    assert.equal(view.status, 200)
+    assert.equal(view.body.character.name, '持久化鲸鱼娘')
+    cleanup()
+    assert.equal(route, null)
+    assert.equal(disposeCount, 2)
+    assert.notEqual(first.store, second.store)
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
