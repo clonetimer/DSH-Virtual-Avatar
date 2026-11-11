@@ -40,7 +40,7 @@ test('PPL inspector rejects unsupported IR and accepts 0.3', () => {
 test('migration preview performs no writes and requires explicit confirmation', () => {
   const result = createMigrationPreview([
     { sourceKind: 'virtual-person', sourceHash: 'a', memories: [1,2], unknownMemoryLines: ['x'] },
-    { sourceKind: 'whale-galgame', sourceHash: 'b', characterCount: 6, mediaDataUrls: [1] },
+    { sourceKind: 'whale-galgame', sourceHash: 'b', characterCount: 6, deepseekAvailable: true, deferredCharacterIds: ['claude','chatgpt','gemini','kimi','grok'], mediaDataUrls: [1] },
   ])
   assert.equal(result.writesPerformed, false)
   assert.equal(result.requiresExplicitConfirmation, true)
