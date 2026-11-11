@@ -72,6 +72,7 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(chat.body.view.character.chatLines.length, 2)
     assert.equal(chat.body.choices.length, 3)
     assert.deepEqual(chat.body.choices.map(item => item.effect).sort(), [-1, 0, 1])
+    assert.deepEqual(chat.body.choices.map(item => item.text), ['再聊一会儿', '给她一个拥抱', '让她休息'])
 
     const memory = await call(route.handler, {
       action: 'memory-add',
