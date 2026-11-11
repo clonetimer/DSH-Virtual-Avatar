@@ -136,7 +136,17 @@ export class DeepseekWhaleService {
       emotion: String(emotion || 'normal'),
       at: Date.now(),
     })
-    reconciled.conversation.choices = Array.isArray(choices) ? structuredClone(choices) : []\n    reconciled.storyMemory = reconciled.storyMemory || createStoryMemory()\n    if (prepared.choice) {\n      const eventResult = appendStoryEvent(reconciled.storyMemory, {\n        id: 'choice:' + prepared.eventId,\n        title: '主人选择了：' + prepared.choice.text,\n        detail: '互动选项 effect=' + String(prepared.choice.effect),\n        sourceEventId: prepared.eventId,\n      })\n      reconciled.storyMemory = eventResult.storyMemory\n    }
+    reconciled.conversation.choices = Array.isArray(choices) ? structuredClone(choices) : []
+    reconciled.storyMemory = reconciled.storyMemory || createStoryMemory()
+    if (prepared.choice) {
+      const eventResult = appendStoryEvent(reconciled.storyMemory, {
+        id: 'choice:' + prepared.eventId,
+        title: '主人选择了：' + prepared.choice.text,
+        detail: '互动选项 effect=' + String(prepared.choice.effect),
+        sourceEventId: prepared.eventId,
+      })
+      reconciled.storyMemory = eventResult.storyMemory
+    }
     if (affectionResult.levelUps.length) {
       for (const levelUp of affectionResult.levelUps) {
         reconciled.conversation.chatLines.push({
