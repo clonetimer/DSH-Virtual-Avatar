@@ -125,7 +125,7 @@ async function generateChoices(llm, model, reply, userText, signal) {
         throw new Error(chunk.reason?.failure?.message || 'choice generation failed')
       }
     }
-    const match = output.match(/\\[[\\s\\S]*\\]/)
+    const match = output.match(/\[[\s\S]*\]/)
     if (!match) return fallback
     const parsed = JSON.parse(match[0])
     if (!Array.isArray(parsed) || parsed.length !== 3) return fallback
