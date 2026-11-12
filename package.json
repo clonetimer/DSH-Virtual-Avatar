@@ -1,6 +1,6 @@
 {
   "name": "dsh-virtual-avatar",
-  "version": "0.1.0-dev.3",
+  "version": "0.1.0-dev.4",
   "private": true,
   "type": "module",
   "description": "Unified virtual persona and companion plugin for DeepSeek Harness",
