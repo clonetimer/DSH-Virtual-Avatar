@@ -34,7 +34,7 @@ node --version
 npm --version
 ```
 
-从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop` artifact 下载以下文件：
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.2` artifact 下载以下文件：
 - `dsh-virtual-avatar-0.1.0-dev.2.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
