@@ -17,7 +17,7 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 
 **当前产品不开发 Galgame 章节、剧情分支、结局、游戏式回复选项、小剧场或 CG。** 桌面宠物动画也不作为本阶段交付门槛。上游 Whale 项目仅作为角色设定、存档和素材来源。
 
-当前目标宿主为 DSH 0.2.2-rc.1，要求 Node.js >=24.9.0；CI 采用 Node 24.9.0 / 24 双矩阵。插件通过 `engines.dsh` 声明兼容范围 `>=0.2.2-rc.1 <0.2.3-0`。请查看 [实施状态与验收证据](docs/implementation-status.md) 和 [PPL-2 情绪状态与互动意图](docs/ppl-emotion-state.md) 和 [PPL Persona Registry](docs/ppl-persona-registry.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
+当前目标宿主为 DSH 0.2.2-rc.1，要求 Node.js >=24.9.0；CI 采用 Node 24.9.0 / 24 双矩阵。插件通过 `engines.dsh` 声明兼容范围 `>=0.2.2-rc.1 <0.2.3-0`。请查看 [实施状态与验收证据](docs/implementation-status.md)、[PPL-2 情绪状态与互动意图](docs/ppl-emotion-state.md) 和 [PPL Persona Registry](docs/ppl-persona-registry.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
 
 ## DSH 插件安装与 P4 宿主验收
 
@@ -90,7 +90,7 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - `dev.1` 的 `lib/client.js` 直接包含 ESM `import`，与 DSH 使用的经典 `<script>` 模块工厂加载协议不兼容，可能在启动时出现 `Cannot use import statement outside a module`。
 - `dev.3` 将 `src/client/companion.mjs` 构建为 `window.__ModuleLoader__.load({id:'dsh-virtual-avatar',factory})` 注册格式，React 与 ReactDOM 使用 DSH 平台共享模块，避免双 React 副本。
 - 每次运行 `npm run verify` 和 `npm pack` 均执行客户端构建。新增 `node:vm` 经典脚本加载回归，不再仅依赖 `node --check` 检查 ESM 语法。
-- 已安装 `dev.1` 的用户应先在 Desktop 插件管理器中禁用或卸载旧版，再安装 `dev.3`；升级不会以清除用户数据为手段。
+- 已安装 `dev.1` 的用户应先在 Desktop 插件管理器中禁用或卸载旧版，再安装 `dev.5`；升级不会以清除用户数据为手段。
 
 - `dev.3` 增加持久化互动场景：私密空间使用 `PRIVATE_HOME`，公开场合使用 `PUBLIC_SPACE`；场景由界面显式选择，并在每次对话中交给 PPL Runtime。
 - `dev.3` 增加 `acquaintance → trusted → close` 关系阶段演化，以及低信任告白的 `confession` 中间阶段；关系阶段成为亲密表达的主要依据，好感度等级不再单独提升亲密程度。
