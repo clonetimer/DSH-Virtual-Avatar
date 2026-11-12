@@ -20,6 +20,17 @@ const CSS = `
 .dva-notice{padding:8px 11px;border:1px solid #74b6d344;border-radius:10px;background:#123b55;color:#c8eaff;font-size:12px}
 .dva-utility-overlay{position:absolute;inset:0;z-index:20;display:flex;align-items:stretch;padding:14px;background:#06172aee;border:1px solid #6ea9cc;border-radius:14px;box-shadow:0 14px 40px #0008;backdrop-filter:blur(10px)}
 .dva-utility-overlay>.dva-memories,.dva-utility-overlay>.dva-memory-panel{width:100%;height:100%;max-height:100%;box-sizing:border-box;}
+.dva-memory-head{position:sticky;top:0;z-index:2;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:2px 0 12px;margin-bottom:12px;border-bottom:1px solid #ffffff22;background:#0b2238}
+.dva-memory-head>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.dva-memory-head small{color:#9abbd2;line-height:1.5}
+.dva-panel-back{flex:0 0 auto;border:1px solid #77b8df;border-radius:999px;background:#174b70;color:#f2f9ff;padding:8px 13px;cursor:pointer}
+.dva-memory-toolbar{display:grid;grid-template-columns:minmax(160px,1fr) minmax(110px,auto) minmax(110px,auto) auto auto;gap:8px;align-items:center;margin:10px 0}
+.dva-memory-toolbar input,.dva-memory-toolbar select{width:100%;min-width:0;box-sizing:border-box;border:1px solid #4d7796;border-radius:9px;background:#06172a;color:#f2f9ff;padding:9px 10px}
+.dva-memory-toolbar button{min-height:36px;border:1px solid #77b8df;border-radius:9px;background:#174b70;color:#f2f9ff;padding:8px 12px;cursor:pointer}
+.dva-memory-toolbar button:disabled{opacity:.5;cursor:wait}
+.dva-memory-count{display:block;margin:8px 0;color:#9abbd2}
+.dva-memory-empty{padding:14px;border:1px dashed #ffffff2e;border-radius:10px;color:#a9c9df;background:#ffffff08}
+@media(max-width:900px){.dva-memory-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dva-memory-toolbar input{grid-column:1/-1}.dva-memory-head{align-items:center}.dva-panel-back{padding:7px 10px}}
 .dva-title{font-size:18px;font-weight:700}.dva-sub{font-size:12px;color:#a9c9df;margin-top:4px}
 .dva-main{display:grid;grid-template-columns:minmax(180px,28%) minmax(0,1fr);grid-template-rows:minmax(0,1fr);min-height:0;flex:1;overflow:hidden}
 .dva-character{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:10px;min-height:0;overflow-y:auto;padding:14px 20px;background:radial-gradient(ellipse at center,#16466b,#091b30 70%)}
@@ -129,6 +140,12 @@ function Companion() {
     setShowMoreMenu(false)
     setError('')
     setNotice('')
+  }
+
+  const closeUtilityPanel = () => {
+    setActivePanel(null)
+    setShowMoreMenu(false)
+    setError('')
   }
 
   const refresh = useCallback(async () => {
@@ -346,8 +363,9 @@ function Companion() {
   }
 
   const loadMemories = async (filters = {}) => {
-    setShowMoreMenu(false)
-    setActivePanel('memories')
+    // Panel visibility belongs to the caller, not this async data loader.
+    // If the user returns to chat while the request is pending, completion
+    // must never reopen the memory panel.
     setMemoryLoading(true)
     try {
       const result = await callApi('memory-list', {
@@ -356,9 +374,7 @@ function Companion() {
         pinned: filters.pinned ?? memoryPinned,
       })
       setMemories(result.memories || [])
-      setActivePanel('memories')
-      setShowMoreMenu(false)
-    } catch (err) { setActivePanel(null); setError(err.message || String(err)) }
+    } catch (err) { setError(err.message || String(err)) }
     finally { setMemoryLoading(false) }
   }
 
@@ -419,7 +435,7 @@ function Companion() {
           React.createElement('div', { className: 'dva-menu-group' },
             React.createElement('strong', null, '记忆管理'),
             React.createElement('div', { className: 'dva-menu-grid' },
-              React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', disabled: memoryLoading, onClick: () => void loadMemories() }, memoryLoading ? '读取记忆…' : '查看记忆'),
+              React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', disabled: memoryLoading, onClick: () => { openUtilityPanel('memories'); void loadMemories() } }, memoryLoading ? '读取记忆…' : '查看记忆'),
               React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: () => void loadSummaryCandidate() }, '整理长期摘要'),
             ),
           ),
@@ -677,23 +693,38 @@ function Companion() {
           React.createElement('button', { onClick: () => setActivePanel(null) }, '关闭备份'),
         ) : null,
         activePanel === 'memories' ? React.createElement('div', { className: 'dva-memories' },
-            React.createElement('strong', null, '鲸鱼娘的长期记忆'),
-            React.createElement('button', { onClick: () => void exportMemories() }, '导出记忆'),
-            React.createElement('input', { value: memoryQuery, placeholder: '搜索记忆内容', onChange: event => setMemoryQuery(event.target.value) }),
-            React.createElement('select', { value: memoryLevel, onChange: event => setMemoryLevel(event.target.value) },
-              React.createElement('option', { value: 'all' }, '全部层级'),
-              React.createElement('option', { value: 'core' }, '核心记忆'),
-              React.createElement('option', { value: 'mid' }, '重要记忆'),
-              React.createElement('option', { value: 'edge' }, '普通记忆'),
+            React.createElement('div', { className: 'dva-memory-head' },
+              React.createElement('div', null,
+                React.createElement('strong', null, '鲸鱼娘的长期记忆'),
+                React.createElement('small', null, '这些内容用于保持你们后续对话的连续性。你可以编辑、置顶或删除。'),
+              ),
+              React.createElement('button', {
+                type: 'button',
+                className: 'dva-panel-back',
+                'aria-label': '返回聊天',
+                onClick: closeUtilityPanel,
+              }, '← 返回聊天'),
             ),
-            React.createElement('select', { value: memoryPinned, onChange: event => setMemoryPinned(event.target.value) },
-              React.createElement('option', { value: 'all' }, '全部状态'),
-              React.createElement('option', { value: 'pinned' }, '仅置顶'),
-              React.createElement('option', { value: 'normal' }, '未置顶'),
+            React.createElement('div', { className: 'dva-memory-toolbar' },
+              React.createElement('input', { value: memoryQuery, placeholder: '搜索记忆内容', 'aria-label': '搜索记忆内容', onChange: event => setMemoryQuery(event.target.value) }),
+              React.createElement('select', { value: memoryLevel, 'aria-label': '记忆层级', onChange: event => setMemoryLevel(event.target.value) },
+                React.createElement('option', { value: 'all' }, '全部层级'),
+                React.createElement('option', { value: 'core' }, '核心记忆'),
+                React.createElement('option', { value: 'mid' }, '重要记忆'),
+                React.createElement('option', { value: 'edge' }, '普通记忆'),
+              ),
+              React.createElement('select', { value: memoryPinned, 'aria-label': '置顶状态', onChange: event => setMemoryPinned(event.target.value) },
+                React.createElement('option', { value: 'all' }, '全部状态'),
+                React.createElement('option', { value: 'pinned' }, '仅置顶'),
+                React.createElement('option', { value: 'normal' }, '未置顶'),
+              ),
+              React.createElement('button', { type: 'button', disabled: memoryLoading, onClick: () => void loadMemories() }, memoryLoading ? '筛选中…' : '筛选'),
+              React.createElement('button', { type: 'button', onClick: () => void exportMemories() }, '导出记忆'),
             ),
-            React.createElement('button', { onClick: () => void loadMemories() }, '筛选'),
-            React.createElement('small', null, '共显示 ' + memories.length + ' 条记忆'),
-            memories.length === 0 ? React.createElement('p', null, '没有符合条件的记忆。可以调整筛选条件，或在对话中确认保存新的记忆。') : null,
+            React.createElement('small', { className: 'dva-memory-count', role: 'status' },
+              memoryLoading ? '正在读取记忆…' : '共显示 ' + memories.length + ' 条记忆',
+            ),
+            !memoryLoading && memories.length === 0 ? React.createElement('p', { className: 'dva-memory-empty' }, '目前没有符合条件的记忆。你可以调整筛选条件，或在聊天中确认保存新的记忆。') : null,
 
             ...memories.map(item => React.createElement('div', { key: item.id, className: 'dva-memory-row' },
               editingMemoryId === item.id
@@ -708,7 +739,6 @@ function Companion() {
               React.createElement('button', { onClick: async () => { try { await callApi('memory-pin', { memoryId: item.id, pinned: !item.pinned }); await loadMemories() } catch (err) { setError(err.message || String(err)) } } }, item.pinned ? '取消置顶' : '置顶'),
               React.createElement('button', { onClick: async () => { if (!window.confirm('确定删除这条长期记忆吗？删除后将不再用于后续对话。')) return; try { await callApi('memory-delete', { memoryId: item.id }); await loadMemories() } catch (err) { setError(err.message || String(err)) } } }, '删除'),
             )),
-            React.createElement('button', { onClick: () => setActivePanel(null) }, '关闭记忆'),
           ) : null,
           ) : null,
         !hasConversation && !busy ? React.createElement('div', { className: 'dva-starters', 'aria-label': '聊天建议' },
