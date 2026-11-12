@@ -47,6 +47,7 @@ The client now provides restrained ambient movement:
 - A short body sway is scheduled about every 24 seconds while the companion is open, idle and not displaying a utility panel.
 - The sway pauses during model requests and while a management panel is open.
 - PPL-derived state profiles slightly alter the idle animation: shy sway, tense micro-shake, nervous movement, subdued breathing or resting motion.
+- Patting feedback follows the current PPL-derived expression (for example, a shy reply or a gentle boundary when the character is angry) instead of always forcing the same shy response. It remains visual-only and does not award affection.
 - Thinking, response and patting actions retain priority over ambient movement.
 
 All CSS motion is disabled when the operating system requests `prefers-reduced-motion`.
