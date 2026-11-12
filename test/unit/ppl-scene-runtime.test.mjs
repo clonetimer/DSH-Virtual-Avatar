@@ -187,6 +187,7 @@ test('event classification is shared by PPL and affection and avoids common fals
   assert.equal(classifyDeepseekWhaleEvent({ text: '辛苦了' }).type, 'COMFORT')
   assert.equal(classifyDeepseekWhaleEvent({ text: '抱抱' }).type, 'POSITIVE_INTERACTION')
   assert.equal(classifyDeepseekWhaleEvent({ text: '早安' }).type, 'MESSAGE')
+  assert.equal(classifyDeepseekWhaleEvent({ text: '晚安' }).type, 'MESSAGE')
   assert.equal(classifyDeepseekWhaleEvent({ text: '我不累' }).type, 'MESSAGE')
   assert.equal(classifyDeepseekWhaleEvent({ text: '我不喜欢你这种说法' }).type, 'MESSAGE')
 
