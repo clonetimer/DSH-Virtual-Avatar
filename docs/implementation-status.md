@@ -264,3 +264,19 @@
 - DyberPet native motion compatibility tests: PASS.
 - Windows Web/Desktop candidate `0.1.0-dev.8` generated; the ZIP includes `package-info.json` and a matching `.sha256` file, which are authoritative for exact package size and checksum.
 - Google Drive file updated in place; real DSH Desktop 0.2.2-rc.1 interaction remains a manual acceptance gate.
+## PPL-driven expression and autonomous idle behavior record (2026-11-12)
+
+### Implemented in the dev.9 candidate
+- Added a read-only Whale presentation resolver: persistent PPL anger/grief/anxiety/embarrassment state overrides the latest one-turn reply expression when thresholds are crossed; overlapping states use strongest normalized intensity.
+- Reuses existing licensed Whale expression portraits; no new art or synthetic frames are produced.
+- PPL character fatigue selects a slower ambient animation tempo without changing facial expression or exposing fatigue as a user-health measure.
+- Added restrained state-specific idle motion and a periodic body sway while the expanded companion is open and idle. It pauses during model turns and utility panels; the collapsed desktop pet also has a gentle float.
+- All motion honors `prefers-reduced-motion`; no blink, lip-sync, gaze tracking or rigged animation is claimed.
+
+### Verification added
+- Presentation resolver tests cover neutral baseline, reply fallback, shy/angry/serious/frightened states, overlapping state precedence, fatigue tempo and invalid values.
+- Host integration test sends eight explicit praise events through the actual chat route and verifies that PPL embarrassment selects the existing shy portrait.
+- Client regression checks state-specific animation classes, the 24-second idle scheduler and reduced-motion behavior.
+
+### Acceptance boundary
+- This is a PPL-to-existing-art presentation layer, not a new frame-art package. True frame-by-frame Whale movement still requires matching authorized Whale artwork.
