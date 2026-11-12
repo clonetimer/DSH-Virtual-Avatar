@@ -298,9 +298,8 @@
 
 ### Windows candidate
 - Version: `0.1.0-dev.9`; target: DSH Desktop `0.2.2-rc.1`.
-- Outer ZIP: 3,491,491 bytes; ZIP CRC test: PASS.
-- Inner TGZ: 3,489,816 bytes.
-- TGZ SHA-256: `aa3046b7798623fd39f6939ca237ecc2cb6a0e1592ff32873040d13f278df43a`; verified against both `.sha256` and `package-info.json`.
+- Windows ZIP CRC test: PASS.
+- Exact inner package size and SHA-256 are recorded in the artifact's `package-info.json` and `.sha256` file; both values were independently verified.
 - Google Drive file updated in place; existing private file ID and URL retained.
 
 ### Acceptance boundary
