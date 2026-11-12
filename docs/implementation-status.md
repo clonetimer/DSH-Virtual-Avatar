@@ -213,3 +213,21 @@
 - Classic DSH client loader and npm package verification: PASS.
 - Windows Web/Desktop candidate artifact 0.1.0-dev.5 generated and uploaded to Google Drive.
 - Real DSH Desktop 0.2.2-rc.1 installation remains a separate manual qualification gate.
+## Companion everyday UX implementation record (2026-11-12)
+
+### Implemented in PR #24
+- Replaced the crowded header action row with a grouped More menu for conversation/relationship, memory, character/appearance and data/support actions.
+- All utility panels now share one active-panel state and a consistent overlay presentation; search, relationship, summary, profile, diagnostics, backup and memory panels have explicit close behavior.
+- Added Escape-key dismissal and outside-click dismissal for the More menu.
+- Replaced raw PPL state percentages with qualitative character-owned energy/mood/expression labels; renamed the scene control to plain-language interaction setting.
+- Simplified relationship summary by removing duplicate stage text and using the user-facing term proximity (`亲近度`).
+- Preserved the user's message draft until the chat request succeeds; optional memory suggestion failure no longer makes a successful chat look failed.
+- Added empty-state guidance for search, relationship history and backups; successful backup/restore/background operations use neutral status feedback.
+- Kept the classic DSH client loader and shared React contract unchanged.
+
+### CI evidence
+- Run ID 43187649151: Node 24 and Node 24.9.0 both PASS.
+- Full project tests: 72 passed / 0 failed on both matrix legs.
+- Classic DSH client loader, UX artifact assertions and npm package verification: PASS.
+- Windows Web/Desktop artifact 0.1.0-dev.6 generated.
+- Actual visual spacing, keyboard/menu behavior and Desktop 0.2.2-rc.1 model streaming still require real-host acceptance.
