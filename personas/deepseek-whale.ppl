@@ -139,6 +139,39 @@ persona DEEPSEEK_WHALE version "0.3.0" {
         }
     }
 
+    transition ESTABLISH_TRUSTED_STAGE {
+        target relationships.admin.stage;
+        from [acquaintance];
+        to trusted;
+        when {
+            event.type != CONFESSION
+            and relationships.admin.trust >= 0.65
+            and relationships.admin.attachment >= 0.20;
+        }
+    }
+
+    transition ESTABLISH_CLOSE_STAGE {
+        target relationships.admin.stage;
+        from [trusted];
+        to close;
+        when {
+            event.type != CONFESSION
+            and relationships.admin.trust >= 0.80
+            and relationships.admin.attachment >= 0.45;
+        }
+    }
+
+    transition ENTER_CONFESSION_STAGE {
+        target relationships.admin.stage;
+        from [acquaintance, trusted, close];
+        to confession;
+        when {
+            event.type == CONFESSION
+            and event.actor == admin
+            and relationships.admin.trust < 0.75;
+        }
+    }
+
     transition ACCEPT_MASTER_CONFESSION {
         target relationships.admin.stage;
         from [acquaintance, trusted, close, confession];
