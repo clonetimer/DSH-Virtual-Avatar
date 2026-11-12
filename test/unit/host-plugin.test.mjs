@@ -404,7 +404,7 @@ test('PPL emotion state drives the Whale portrait across completed turns', async
     const initial = await call(route.handler, { action: 'view' })
     assert.equal(initial.body.character.presentation.expression, 'neutral')
     assert.equal(initial.body.character.presentation.expressionSource, 'baseline')
-    assert.match(initial.body.character.imageUrl, /maid-left\\.webp$/)
+    assert.match(initial.body.character.imageUrl, /maid-left\.webp$/)
 
     for (let index = 0; index < 8; index++) {
       const turn = await call(route.handler, {
@@ -422,7 +422,7 @@ test('PPL emotion state drives the Whale portrait across completed turns', async
     assert.ok(afterPraise.body.character.pplState.embarrassment >= 0.70)
     assert.equal(afterPraise.body.character.presentation.expression, 'shy')
     assert.equal(afterPraise.body.character.presentation.expressionSource, 'ppl-state')
-    assert.match(afterPraise.body.character.imageUrl, /whale-shy\\.webp$/)
+    assert.match(afterPraise.body.character.imageUrl, /whale-shy\.webp$/)
   } finally {
     if (typeof cleanup === 'function') cleanup()
     rmSync(home, { recursive: true, force: true })
