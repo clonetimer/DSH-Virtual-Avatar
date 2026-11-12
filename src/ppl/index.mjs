@@ -7,6 +7,25 @@ const IR_PATH = fileURLToPath(new URL('../../personas/deepseek-whale.pir.json', 
 const COMMIT_REASONS = new Set(['completed', 'max-tokens'])
 let cachedPersona = null
 
+export function validatePersonaIR(ir, expectedId) {
+  if (ir?.schema !== 'ppl.persona-ir/0.3') {
+    const error = new Error('expected PPL 0.3 Persona IR')
+    error.code = 'PPL_IR_SCHEMA_MISMATCH'
+    throw error
+  }
+  if (expectedId && ir?.persona?.id !== expectedId) {
+    const error = new Error('Persona IR id does not match the requested persona id')
+    error.code = 'PPL_IR_ID_MISMATCH'
+    throw error
+  }
+  if (!ir?.persona?.id || !ir.symbols || !Array.isArray(ir.rules) || !ir.runtimeInitial) {
+    const error = new Error('Persona IR is missing required runtime fields')
+    error.code = 'PPL_IR_INCOMPLETE'
+    throw error
+  }
+  return ir
+}
+
 export function loadDeepseekWhalePersona(raw = readFileSync(IR_PATH, 'utf8')) {
   let ir
   try { ir = JSON.parse(raw) } catch (cause) {
@@ -14,35 +33,36 @@ export function loadDeepseekWhalePersona(raw = readFileSync(IR_PATH, 'utf8')) {
     error.code = 'PPL_IR_INVALID_JSON'
     throw error
   }
-  if (ir?.schema !== 'ppl.persona-ir/0.3' || ir?.persona?.id !== 'DEEPSEEK_WHALE') {
-    const error = new Error('expected PPL 0.3 DEEPSEEK_WHALE Persona IR')
-    error.code = 'PPL_IR_SCHEMA_MISMATCH'
-    throw error
-  }
-  if (!ir.symbols || !Array.isArray(ir.rules) || !ir.runtimeInitial) {
-    const error = new Error('DeepSeek Whale PPL IR is missing required runtime fields')
-    error.code = 'PPL_IR_INCOMPLETE'
-    throw error
-  }
-  return ir
+  return validatePersonaIR(ir, 'DEEPSEEK_WHALE')
 }
 
 export function getDeepseekWhalePersona() {
   if (!cachedPersona) cachedPersona = loadDeepseekWhalePersona()
-  return cachedPersona
+  return structuredClone(cachedPersona)
 }
 
 export function resetDeepseekWhalePersonaCache() {
   cachedPersona = null
 }
 
-export function createDeepseekWhaleRuntime({ scene, context, profile = 'standard' } = {}) {
-  const ir = getDeepseekWhalePersona()
+/**
+ * Create an isolated PPL Runtime adapter for any validated Persona IR.
+ * Runtime state is always caller-owned; the adapter never mutates shared IR.
+ */
+export function createPplRuntime({
+  persona,
+  scene,
+  context,
+  profile = 'standard',
+  hostKind = 'unknown',
+} = {}) {
+  validatePersonaIR(persona)
+  const ir = structuredClone(persona)
   const runtime = new PersonaRuntime({ persona: ir, scene, context, profile })
   return {
     ir,
     binding: runtime.personaBinding(),
-    initialState(sessionId = 'deepseek-whale') {
+    initialState(sessionId = ir.persona.id.toLowerCase()) {
       return {
         ...structuredClone(ir.runtimeInitial || {}),
         session: { id: sessionId, turn: 0 },
@@ -51,13 +71,13 @@ export function createDeepseekWhaleRuntime({ scene, context, profile = 'standard
     staticPrompt(runtimeState) {
       return runtime.staticPrompt(runtimeState)
     },
-    resolve(input) {
+    resolve(input = {}) {
       return runtime.resolveHostStep({
         runtime: input.runtimeState,
         scene: input.scene ?? scene,
         context: input.context || {},
         event: input.event || {},
-        hostKind: 'dsh-virtual-avatar/deepseek-whale',
+        hostKind: input.hostKind ?? hostKind,
         turn: input.turn ?? input.runtimeState?.session?.turn ?? 0,
         step: input.step ?? 1,
       })
@@ -78,4 +98,14 @@ export function createDeepseekWhaleRuntime({ scene, context, profile = 'standard
       }
     },
   }
+}
+
+export function createDeepseekWhaleRuntime({ scene, context, profile = 'standard' } = {}) {
+  return createPplRuntime({
+    persona: getDeepseekWhalePersona(),
+    scene,
+    context,
+    profile,
+    hostKind: 'dsh-virtual-avatar/deepseek-whale',
+  })
 }
