@@ -396,7 +396,11 @@ test('PPL emotion state drives the Whale portrait across completed turns', async
     webServer: { register(value) { route = value; return () => { route = null } } },
     llm,
     dshHomePath: (...segments) => join(home, ...segments),
-    inject() {},
+    inject(names, callback) {
+      if (names.includes('agentDefaultModel')) {
+        callback({ agentDefaultModel: { currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }) } })
+      }
+    },
     effect(fn) { cleanup = fn() },
   }
   try {
