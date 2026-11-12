@@ -242,9 +242,9 @@
 - Added reduced-motion support and regression assertions for the layout, composer, avatar states, starter prompts and keyframes.
 
 ### CI evidence
-- Run ID 43236787107: Node 24.9.0 and Node 24 both PASS.
+- Run ID 43237458835: Node 24.9.0 and Node 24 both PASS.
 - Full project tests: 72 passed / 0 failed on both matrix legs.
 - Classic DSH client loader and npm package verification: PASS.
-- Windows Web/Desktop artifact `0.1.0-dev.7` generated; ZIP 3,477,881 bytes.
-- TGZ SHA-256: `bdc92beb6bc06a5fb6c22b4c5b1fdf0b635aa39652212bb93a2f0884c87007ba`.
+- Windows Web/Desktop artifact `0.1.0-dev.7` generated; ZIP 3,478,775 bytes.
+- TGZ SHA-256: `3f77283c3b6592a73465634aa4d72cb5c646d24ebe6cd4c100d932db7d331b86`.
 - Google Drive file was updated in place, preserving its existing URL; actual DSH Desktop visual acceptance remains pending.
