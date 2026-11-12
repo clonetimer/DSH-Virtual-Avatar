@@ -54,3 +54,13 @@ The existing DSH classic-script loader check remains in place; this UX change do
 ## Acceptance boundary
 
 Automated CI verifies syntax, classic-script loading, packaged artifact contents and existing project tests. Actual visual spacing, menu dismissal, keyboard behavior and Windows DSH Desktop 0.2.2-rc.1 interaction still require real-host acceptance.
+
+## Chat composer visibility and avatar motion（dev.7）
+
+- Main layout uses an explicit constrained grid row; the character column can scroll independently and cannot force the chat column below the panel viewport.
+- The chat history region is the only flexible scroll area. The composer is a non-shrinking footer anchored to the bottom of the visible panel.
+- New conversations show three first-message suggestions and the input explains Enter-to-send.
+- The portrait uses a gentle idle float, a distinct thinking motion while the model request is pending, and a short response bounce after a successful turn.
+- Existing emotion-specific static portraits remain responsible for expression changes after a completed reply.
+- The current portrait assets are static full-body images. dev.7 does not claim skeletal animation, independent limb motion or lip-sync; those require layered/rigged art or a dedicated Live2D/Spine asset pipeline.
+- The animation respects the operating system's reduced-motion preference.
