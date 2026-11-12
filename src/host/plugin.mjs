@@ -217,6 +217,8 @@ function publicView(service, memoryService, config) {
         expression: presentation.expression,
         expressionLabel: presentation.expressionLabel,
         expressionSource: presentation.expressionSource,
+        patExpression: presentation.patExpression,
+        patReply: presentation.patReply,
         motion: presentation.motion,
         tempo: presentation.tempo,
         mood: presentation.mood,
