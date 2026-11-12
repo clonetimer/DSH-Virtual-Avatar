@@ -380,3 +380,51 @@ test('host plugin lifecycle disposes its route once and preserves DSH_HOME data 
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+
+test('PPL emotion state drives the Whale portrait across completed turns', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-presentation-'))
+  let route
+  let cleanup
+  const llm = {
+    stream: async function* () {
+      yield { type: 'text-delta', text: '你好呀，主人。' }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    },
+  }
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm,
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject() {},
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    const initial = await call(route.handler, { action: 'view' })
+    assert.equal(initial.body.character.presentation.expression, 'neutral')
+    assert.equal(initial.body.character.presentation.expressionSource, 'baseline')
+    assert.match(initial.body.character.imageUrl, /maid-left\\.webp$/)
+
+    for (let index = 0; index < 8; index++) {
+      const turn = await call(route.handler, {
+        action: 'chat',
+        args: {
+          text: '你真可爱',
+          eventId: 'presentation-praise-' + index,
+          sessionId: 'presentation-session',
+        },
+      })
+      assert.equal(turn.status, 200)
+    }
+
+    const afterPraise = await call(route.handler, { action: 'view' })
+    assert.ok(afterPraise.body.character.pplState.embarrassment >= 0.70)
+    assert.equal(afterPraise.body.character.presentation.expression, 'shy')
+    assert.equal(afterPraise.body.character.presentation.expressionSource, 'ppl-state')
+    assert.match(afterPraise.body.character.imageUrl, /whale-shy\\.webp$/)
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
