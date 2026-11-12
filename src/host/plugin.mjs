@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { createAvatarStore } from '../storage/sqlite-store.mjs'
 import { DeepseekWhaleService } from '../characters/deepseek-whale/service.mjs'
+import { createDefaultPersonaRegistry } from '../ppl/registry.mjs'
 import { extractMemoryCandidates } from '../memory/candidates.mjs'
 import { DEEPSEEK_WHALE_PROFILE, affectionCap, relationshipStageLabel, resolveDeepseekWhaleProfile } from '../characters/deepseek-whale/profile.mjs'
 
@@ -251,7 +252,11 @@ export function apply(ctx, config = {}) {
   const backupRoot = join(storageRoot, 'backups')
   mkdirSync(backupRoot, { recursive: true, mode: 0o700 })
   const store = createAvatarStore({ dshHomePath })
-  const service = new DeepseekWhaleService({ store })
+  const personaRegistry = createDefaultPersonaRegistry()
+  const service = new DeepseekWhaleService({
+    store,
+    pplRuntime: personaRegistry.createRuntime('DEEPSEEK_WHALE'),
+  })
   const memoryService = service.memory
   const recentErrors = []
   let lastSuccessfulTurnAt = null
@@ -320,9 +325,9 @@ export function apply(ctx, config = {}) {
     } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
     return {
       checkedAt,
-      plugin: { id: name, version: '0.1.0-dev.4', enabled: runtimeConfig.enabled },
+      plugin: { id: name, version: '0.1.0-dev.5', enabled: runtimeConfig.enabled },
       model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
-      persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0 },
+      persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0, registered: personaRegistry.list() },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, mediaDirectory, backupDirectory },
       companion: {
         level: loaded.state.level,
@@ -361,7 +366,7 @@ export function apply(ctx, config = {}) {
       return
     }
     if (req.method === 'GET') {
-      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.4' })
+      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.5' })
       return
     }
     if (req.method !== 'POST') {
