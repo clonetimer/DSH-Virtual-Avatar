@@ -38,15 +38,15 @@ node --version
 npm --version
 ```
 
-从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.6` artifact 下载以下文件：
-- `dsh-virtual-avatar-0.1.0-dev.6.tgz`
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.7` artifact 下载以下文件：
+- `dsh-virtual-avatar-0.1.0-dev.7.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
 
 先校验包文件（在下载目录执行）：
 
 ```powershell
-Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.6.tgz -Algorithm SHA256
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.7.tgz -Algorithm SHA256
 ```
 
 将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
@@ -54,14 +54,14 @@ Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.6.tgz -Algorithm SHA256
 **DSH Web（web profile）：**
 
 ```powershell
-dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.6.tgz"
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.7.tgz"
 dsh --profile web --dump-config
 ```
 
 **DSH Desktop：** 建议直接使用桌面版「插件 → 添加插件」，输入 `.tgz` 的完整绝对路径。若在 DSH 桌面版「应用 → 管理 dsh 命令…」安装了专用 CLI，可在完全退出 Desktop 后使用其保留的 `desktop` profile：
 
 ```powershell
-dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.6.tgz"
+dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.7.tgz"
 dsh --profile desktop --dump-config
 ```
 
@@ -86,7 +86,7 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 
 保留 `third_party/` 中的上游许可、署名与素材说明。Whale 部分默认图片受 CC BY-NC-SA 4.0 约束，不能视为 MIT 代码素材。
 
-## Desktop 0.2.2-rc.1 与 PPL 场景/情绪运行时（dev.6）
+## Desktop 0.2.2-rc.1 与 PPL 场景/情绪运行时（dev.7）
 
 - `dev.1` 的 `lib/client.js` 直接包含 ESM `import`，与 DSH 使用的经典 `<script>` 模块工厂加载协议不兼容，可能在启动时出现 `Cannot use import statement outside a module`。
 - `dev.3` 将 `src/client/companion.mjs` 构建为 `window.__ModuleLoader__.load({id:'dsh-virtual-avatar',factory})` 注册格式，React 与 ReactDOM 使用 DSH 平台共享模块，避免双 React 副本。
@@ -103,14 +103,14 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - PPL Runtime 维护角色自身的疲劳、焦虑、悲伤、愤怒和羞赧状态；成功完成的对话才提交状态变化，中断/失败的模型请求不会结算。
 - UI 展示角色自身的 PPL 状态指标；这些指标不代表对用户的情绪或健康评估，也不会把用户的短暂压力表达自动写入长期记忆。
 
-## PPL Persona Registry（dev.6）
+## PPL Persona Registry（dev.7）
 
 - PPL Runtime 已抽取为通用 Persona IR 工厂；每次创建 Runtime 都持有独立的 IR 副本和独立的调用状态。
 - 新增 PersonaRuntimeRegistry，按稳定的 Persona ID 注册、查询、枚举和创建 Runtime；注册时校验 PPL 0.3 IR schema、Persona ID、必需字段和重复 ID。
 - DSH Host 当前通过 Registry 创建 DeepSeek 鲸鱼娘 Runtime，而不是直接依赖单一角色工厂。
 - 当前 Registry 只注册 DEEPSEEK_WHALE。其他角色的资料导入、独立角色服务、UI 切换和数据迁移尚未作为已交付能力。
 
-## Companion everyday UX（dev.6）
+## Companion everyday UX（dev.7）
 
 - 主界面顶部仅保留“更多”和“收起”；搜索对话、关系记录、记忆、角色设定、背景、备份和诊断按类别收纳在“更多”菜单中。
 - 记忆、摘要、角色设定、备份和诊断在独立浮层中打开，不再混入聊天消息滚动区域；同一时间只显示一个管理面板。
@@ -118,3 +118,12 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - 关系区去除重复的阶段信息，将 attachment 显示为“亲近度”；互动环境改为“互动场合”，减少内部实现术语。
 - 模型请求失败时保留输入草稿；消息发送成功但记忆建议暂不可用时单独提示，不将已成功的对话误报为失败。
 - 备份创建、恢复和背景切换等成功结果使用中性提示，不再显示为红色错误。
+
+
+## Avatar motion and first-chat guidance（dev.7）
+
+- The chat composer is anchored to the bottom of the companion panel; the main grid and history region are constrained so the input does not fall below the visible window.
+- Empty conversations show three first-message suggestions; the input placeholder explains that Enter sends the message.
+- The character has a subtle idle float, a distinct thinking motion while the model request is pending, and a short response bounce after a successful reply.
+- Existing emotion-specific portraits are retained and switch after a completed reply; the UI does not claim lip-sync or skeletal animation because the current art pack contains static full-body portraits.
+- Reduced-motion preferences disable the CSS motion.
