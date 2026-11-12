@@ -8,7 +8,8 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 - SQLite 角色状态、事务提交、事件幂等和审计记录。
 - 角色私有长期记忆：相关检索、置顶、删除、预算控制和用户确认。
 - 长期相处摘要候选：显示来源摘要与 revision，只有用户确认后才覆盖长期摘要。
-- PPL 信任/依恋/关系阶段，以及有每日正向成长上限的好感度和等级。
+- PPL 信任/依恋/关系阶段，以及有每日正向成长上限的好感度和等级；私密/公开场景直接驱动 PPL Runtime。
+- PPL 关系阶段由信任、依恋和告白事件推进；事件分类、好感变化与 PPL 事件共用同一分类结果。
 - DSH Cordis 插件入口与 Web Client overlay；支持自由聊天、历史分页、角色设定、表情和内置场景切换。
 - Whale 旧存档的 DeepSeek 角色导入原型；其他角色明确延期，原始存档保留。
 
@@ -34,15 +35,15 @@ node --version
 npm --version
 ```
 
-从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.2` artifact 下载以下文件：
-- `dsh-virtual-avatar-0.1.0-dev.2.tgz`
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.3` artifact 下载以下文件：
+- `dsh-virtual-avatar-0.1.0-dev.3.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
 
 先校验包文件（在下载目录执行）：
 
 ```powershell
-Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.2.tgz -Algorithm SHA256
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.3.tgz -Algorithm SHA256
 ```
 
 将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
@@ -50,14 +51,14 @@ Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.2.tgz -Algorithm SHA256
 **DSH Web（web profile）：**
 
 ```powershell
-dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.2.tgz"
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.3.tgz"
 dsh --profile web --dump-config
 ```
 
 **DSH Desktop：** 建议直接使用桌面版「插件 → 添加插件」，输入 `.tgz` 的完整绝对路径。若在 DSH 桌面版「应用 → 管理 dsh 命令…」安装了专用 CLI，可在完全退出 Desktop 后使用其保留的 `desktop` profile：
 
 ```powershell
-dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.2.tgz"
+dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.3.tgz"
 dsh --profile desktop --dump-config
 ```
 
@@ -82,9 +83,14 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 
 保留 `third_party/` 中的上游许可、署名与素材说明。Whale 部分默认图片受 CC BY-NC-SA 4.0 约束，不能视为 MIT 代码素材。
 
-## Desktop 0.2.2-rc.1 修复说明（dev.2）
+## Desktop 0.2.2-rc.1 与 PPL 场景运行时（dev.3）
 
 - `dev.1` 的 `lib/client.js` 直接包含 ESM `import`，与 DSH 使用的经典 `<script>` 模块工厂加载协议不兼容，可能在启动时出现 `Cannot use import statement outside a module`。
-- `dev.2` 将 `src/client/companion.mjs` 构建为 `window.__ModuleLoader__.load({id:'dsh-virtual-avatar',factory})` 注册格式，React 与 ReactDOM 使用 DSH 平台共享模块，避免双 React 副本。
+- `dev.3` 将 `src/client/companion.mjs` 构建为 `window.__ModuleLoader__.load({id:'dsh-virtual-avatar',factory})` 注册格式，React 与 ReactDOM 使用 DSH 平台共享模块，避免双 React 副本。
 - 每次运行 `npm run verify` 和 `npm pack` 均执行客户端构建。新增 `node:vm` 经典脚本加载回归，不再仅依赖 `node --check` 检查 ESM 语法。
-- 已安装 `dev.1` 的用户应先在 Desktop 插件管理器中禁用或卸载旧版，再安装 `dev.2`；升级不会以清除用户数据为手段。
+- 已安装 `dev.1` 的用户应先在 Desktop 插件管理器中禁用或卸载旧版，再安装 `dev.3`；升级不会以清除用户数据为手段。
+
+- `dev.3` 增加持久化互动场景：私密空间使用 `PRIVATE_HOME`，公开场合使用 `PUBLIC_SPACE`；场景由界面显式选择，并在每次对话中交给 PPL Runtime。
+- `dev.3` 增加 `acquaintance → trusted → close` 关系阶段演化，以及低信任告白的 `confession` 中间阶段；关系阶段成为亲密表达的主要依据，好感度等级不再单独提升亲密程度。
+- 互动事件分类统一供 PPL 和好感度结算使用；“早安/晚安”不再自动加好感，“我不累”等否定表达不会仅因包含“累”而触发安慰事件。
+- CI 使用固定 PPL Core 编译 `personas/deepseek-whale.ppl`，自动刷新并提交对应 PIR；Node 24.9.0 / 24 矩阵分别验证运行时和打包。
