@@ -195,3 +195,21 @@
 - DSH classic-script client loader regression and npm package verification: PASS.
 - Windows Web/Desktop candidate artifact 0.1.0-dev.4 generated.
 - Real DSH Desktop 0.2.2-rc.1 installation and visual/streaming behavior remain a separate manual acceptance gate.
+## PPL-3 implementation record (2026-11-12)
+
+### Implemented in PR #23
+- Extracted a generic PPL 0.3 Persona IR runtime factory.
+- Added PersonaRuntimeRegistry with stable ID validation, duplicate/mismatch rejection, safe metadata enumeration, Runtime creation and unregister.
+- Runtime instances receive independent Persona IR clones, initial state and session counters; the registry stores definitions only.
+- DSH Host now creates the production DeepSeek Whale Runtime through the default Persona Registry.
+- Diagnostics exposes registered persona metadata without exposing full mutable IR definitions.
+- Added registry tests for default registration, validation failures, missing IDs and cross-persona Runtime/state isolation.
+- Only DEEPSEEK_WHALE is currently registered. Additional playable roles, character-specific service/UI switching and migration are not claimed as complete.
+
+### CI evidence
+- Run ID 43177485565: Node 24.9.0 and Node 24 both PASS.
+- Full project tests: 72 passed / 0 failed on both matrix legs.
+- PPL Core compile and embedded Persona tests: PASS.
+- Classic DSH client loader and npm package verification: PASS.
+- Windows Web/Desktop candidate artifact 0.1.0-dev.5 generated and uploaded to Google Drive.
+- Real DSH Desktop 0.2.2-rc.1 installation remains a separate manual qualification gate.
