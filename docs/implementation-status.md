@@ -247,3 +247,21 @@
 - Classic DSH client loader and npm package verification: PASS.
 - Windows Web/Desktop artifact `0.1.0-dev.7` generated; `package-info.json` in the ZIP is the authoritative source for exact package size and SHA-256.
 - Google Drive file is updated in place, preserving its existing URL; actual DSH Desktop visual acceptance remains pending.
+## Memory panel return and DyberPet interaction record (2026-11-12)
+
+### Implemented in PR #26
+- Removed panel state changes from the asynchronous memory loader. The menu opens the panel before loading; a late response can no longer reopen a panel after the user has returned to chat.
+- Added a persistent `返回聊天` action to the memory panel header and retained Escape dismissal.
+- Grouped memory search, level filter, pin filter and export controls; added distinct loading and empty states.
+- Added a keyboard-accessible portrait `patpat` interaction using the existing shy portrait, a short bounce and a speech bubble. It is visual-only and does not change affection or relationship scores.
+- Added an independently implemented DyberPet native role schema adapter for `pet_conf.json`, `act_conf.json`, numeric PNG frame ordering, frame timing, repeats, movement, anchors, `patpat` tiers and `random_act` validation/playback indexing.
+- No unrelated Kitty/ChrisKitty artwork was substituted for the Whale. The current Whale still uses its own portrait assets; real frame-by-frame Whale animation awaits a matching authorized frame package.
+
+### CI evidence
+- Run ID `43244938053`: Node 24 and Node 24.9.0 both PASS.
+- Full project tests: 76 passed / 0 failed on both matrix legs.
+- Classic DSH client loader and npm package verification: PASS.
+- DyberPet native motion compatibility tests: PASS.
+- Windows Web/Desktop candidate `0.1.0-dev.8` generated; ZIP 3,486,664 bytes.
+- TGZ: 3,484,996 bytes; SHA-256: `506c9599993c3e19177895d8dd9c1dfe2c70a51bc47f1f3b1d9fd9ba81a5c1cd`.
+- Google Drive file updated in place; real DSH Desktop 0.2.2-rc.1 interaction remains a manual acceptance gate.
