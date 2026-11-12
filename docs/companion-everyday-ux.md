@@ -57,7 +57,7 @@ Automated CI verifies syntax, classic-script loading, packaged artifact contents
 
 ## Chat composer visibility and avatar motion（dev.7）
 
-- Main layout uses an explicit constrained grid row; the character column can scroll independently and cannot force the chat column below the panel viewport.
+- Main layout uses explicit constrained grid rows for desktop and narrow windows; the character column can scroll independently and cannot force the chat column below the panel viewport.
 - The chat history region is the only flexible scroll area. The composer is a non-shrinking footer anchored to the bottom of the visible panel.
 - New conversations show three first-message suggestions and the input explains Enter-to-send.
 - The portrait uses a gentle idle float, a distinct thinking motion while the model request is pending, and a short response bounce after a successful turn.
