@@ -43,7 +43,8 @@ const CSS = `
 .dva-actions button,.dva-send{border:1px solid #77b8df;border-radius:999px;background:#174b70;color:#f2f9ff;padding:8px 13px;cursor:pointer}
 .dva-input{display:flex;gap:8px}.dva-input input{flex:1;min-width:0;border:1px solid #4d7796;border-radius:12px;background:#06172a;color:#fff;padding:11px}
 .dva-actions{display:flex;gap:8px;align-items:center}.dva-actions button:disabled,.dva-send:disabled{opacity:.45;cursor:wait}
-.dva-memories,.dva-memory-panel{max-height:44vh;overflow:auto;font-size:12px;color:#c2dced;background:#0b2238;border:1px solid #ffffff22;border-radius:12px;padding:12px}.dva-memory-row{padding:6px 0;border-bottom:1px solid #ffffff18}.dva-memory-row button{margin:4px;border:1px solid #77b8df;border-radius:999px;background:#174b70;color:#f2f9ff;padding:4px 8px}.dva-error{color:#ffb5a9;font-size:12px}
+.dva-memories,.dva-memory-panel{max-height:44vh;overflow:auto;font-size:12px;color:#c2dced;background:#0b2238;border:1px solid #ffffff22;border-radius:12px;padding:12px}.dva-memory-row{padding:6px 0;border-bottom:1px solid #ffffff18}.dva-memory-row button{margin:4px;border:1px solid #77b8df;border-radius:999px;background:#174b70;color:#f2f9ff;padding:4px 8px}.dva-error{position:relative;z-index:25;color:#ffb5a9;font-size:12px}
+.dva-notice{position:relative;z-index:25}
 @media(max-width:760px){.dva-panel{inset:2vh 2vw}.dva-head{padding:12px}.dva-head-tools{gap:6px}.dva-more-trigger,.dva-collapse{padding:7px 10px}.dva-more-menu{width:min(330px,88vw)}.dva-main{grid-template-columns:1fr}.dva-character{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;justify-content:stretch;padding:10px;gap:10px}.dva-character img{width:64px;height:64px;max-height:none}.dva-stats{text-align:left;font-size:11px}.dva-state-strip{grid-column:1/-1;justify-content:flex-start;max-width:none;margin-top:0}.dva-state-label{text-align:left}.dva-scene-toggle{grid-column:1/-1;max-width:none;margin-top:0}.dva-chat{padding:12px}}
 `
 
@@ -138,6 +139,18 @@ function Companion() {
     return () => { active = false; clearInterval(timer) }
   }, [open])
 
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = event => {
+      if (event.key !== 'Escape') return
+      if (showMoreMenu) setShowMoreMenu(false)
+      else if (activePanel) setActivePanel(null)
+      else setOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, showMoreMenu, activePanel])
+
   const send = useCallback(async (message, choiceId) => {
     const clean = String(message || '').trim()
     if (!clean || busy) return
@@ -190,30 +203,28 @@ function Companion() {
       const result = await callApi('history-search', { query: historyQuery })
       setHistoryMatches(result.matches || [])
       setActivePanel('history')
-    } catch (err) { setError(err.message || String(err)) }
+    } catch (err) { setActivePanel(null); setError(err.message || String(err)) }
     finally { setHistorySearchLoading(false) }
   }
 
   const loadRelationshipHistory = async () => {
     setShowMoreMenu(false)
-    setActivePanel('relationship')
     setRelationshipLoading(true)
     try {
       const result = await callApi('relationship-history', { limit: 50 })
       setRelationshipEvents(result.events || [])
       setActivePanel('relationship')
-    } catch (err) { setError(err.message || String(err)) }
+    } catch (err) { setActivePanel(null); setError(err.message || String(err)) }
     finally { setRelationshipLoading(false) }
   }
 
   const loadSummaryCandidate = async () => {
     setShowMoreMenu(false)
-    setActivePanel('summary')
     try {
       const result = await callApi('summary-candidate')
       setSummaryCandidate(result.candidate)
       setActivePanel('summary')
-    } catch (err) { setError(err.message || String(err)) }
+    } catch (err) { setActivePanel(null); setError(err.message || String(err)) }
   }
 
   const confirmSummary = async () => {
@@ -271,7 +282,7 @@ function Companion() {
     try {
       const result = await callApi('diagnostics')
       setDiagnostics(result.diagnostics)
-    } catch (err) { setError(err.message || String(err)) }
+    } catch (err) { setActivePanel(null); setError(err.message || String(err)) }
     finally { setDiagnosticsBusy(false) }
   }
 
@@ -281,7 +292,7 @@ function Companion() {
     try {
       const result = await callApi('backup-list')
       setBackups(result.backups || [])
-    } catch (err) { setError(err.message || String(err)) }
+    } catch (err) { setActivePanel(null); setError(err.message || String(err)) }
   }
 
   const createBackup = async () => {
@@ -323,7 +334,7 @@ function Companion() {
       setMemories(result.memories || [])
       setActivePanel('memories')
       setShowMoreMenu(false)
-    } catch (err) { setError(err.message || String(err)) }
+    } catch (err) { setActivePanel(null); setError(err.message || String(err)) }
     finally { setMemoryLoading(false) }
   }
 
@@ -349,7 +360,14 @@ function Companion() {
     groups[groups.length - 1].rows.push({ ...line, key: index })
     return groups
   }, [])
-  return React.createElement('section', { className: 'dva-panel', role: 'dialog', 'aria-label': 'DeepSeek 鲸鱼娘', style: { backgroundImage: character?.backgroundUrl ? 'linear-gradient(180deg,rgba(4,15,29,.88),rgba(4,15,29,.94)),url(' + character.backgroundUrl + ')' : undefined, backgroundSize: 'cover', backgroundPosition: 'center' } },
+  return React.createElement('section', {
+    className: 'dva-panel',
+    role: 'dialog',
+    'aria-label': 'DeepSeek 鲸鱼娘',
+    onClick: event => {
+      if (showMoreMenu && !event.target?.closest?.('.dva-head-tools')) setShowMoreMenu(false)
+    },
+    style: { backgroundImage: character?.backgroundUrl ? 'linear-gradient(180deg,rgba(4,15,29,.88),rgba(4,15,29,.94)),url(' + character.backgroundUrl + ')' : undefined, backgroundSize: 'cover', backgroundPosition: 'center' } },
     React.createElement('header', { className: 'dva-head' },
       React.createElement('div', null,
         React.createElement('div', { className: 'dva-title' }, character?.name || 'DeepSeek 鲸鱼娘'),
@@ -464,11 +482,14 @@ function Companion() {
           React.createElement('input', { value: historyQuery, placeholder: '搜索过去的对话（至少两个字）', onChange: event => setHistoryQuery(event.target.value) }),
           React.createElement('button', { disabled: historySearchLoading, onClick: () => void searchHistory() }, historySearchLoading ? '搜索中…' : '搜索'),
           ...historyMatches.map(item => React.createElement('div', { key: item.index, className: 'dva-memory-row' }, '[' + (item.who || item.role || '') + '] ' + item.text)),
-          historyMatches.length === 0 ? React.createElement('small', null, '暂无匹配记录，请尝试其他关键词。') : null,
+          historyMatches.length === 0 ? React.createElement('small', null,
+            historyQuery.trim().length < 2 ? '输入至少两个字后搜索。' : '没有找到匹配的对话，可以换个关键词试试。',
+          ) : null,
           React.createElement('button', { onClick: () => setActivePanel(null) }, '关闭搜索'),
         ) : null,
         activePanel === 'relationship' ? React.createElement('div', { className: 'dva-memory-panel' },
           React.createElement('strong', null, '关系变化记录'),
+          relationshipEvents.length === 0 ? React.createElement('p', null, '目前还没有关系变化记录。随着你们的互动，这里会显示关系阶段和成长变化。') : null,
           ...relationshipEvents.map(item => React.createElement('div', { key: item.id, className: 'dva-memory-row' },
             React.createElement('strong', null, item.label || item.type),
             React.createElement('div', null, new Date(item.createdAt).toLocaleString()),
@@ -605,7 +626,9 @@ function Companion() {
         ) : null,
         activePanel === 'backups' ? React.createElement('div', { className: 'dva-memories' },
           React.createElement('strong', null, '本地备份与恢复'),
+          React.createElement('p', null, '备份会保存鲸鱼娘的角色状态、记忆和媒体资源。建议在升级或迁移前创建备份。'),
           React.createElement('button', { disabled: backupBusy, onClick: () => void createBackup() }, backupBusy ? '处理中…' : '立即创建备份'),
+          backups.length === 0 ? React.createElement('small', null, '还没有本地备份。') : null,
           ...backups.map(item => React.createElement('div', { key: item.id, className: 'dva-memory-row' },
             item.id + ' · ' + (item.createdAt || '清单异常'),
             React.createElement('button', { disabled: backupBusy || item.valid === false, onClick: () => void restoreBackup(item.id) }, '校验并恢复'),
