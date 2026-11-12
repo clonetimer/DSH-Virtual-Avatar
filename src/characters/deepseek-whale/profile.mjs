@@ -109,7 +109,7 @@ export function buildDeepseekWhaleSystemPrompt({
   const level = Math.max(1, Number(characterState.level) || 1)
   const affection = Math.max(0, Number(characterState.affection) || 0)
   const cap = affectionCap(level)
-  const relationshipStage = String(characterState.relationship?.stage || characterState.pplRuntime?.relationships?.admin?.stage || 'acquaintance')
+  const relationshipStage = String(characterState.pplRuntime?.relationships?.admin?.stage || characterState.relationship?.stage || 'acquaintance')
   const memoryText = memories.length
     ? memories.map(item => '- ' + String(item.text || '')).join('\n')
     : '（目前没有需要主动提起的长期记忆。）'
