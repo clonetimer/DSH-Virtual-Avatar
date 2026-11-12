@@ -175,3 +175,23 @@
 - CI now creates an actual installable `.tgz` on Node 24.9.0, copies it into an artifact directory, writes SHA-256 and package-info manifest, and uploads a Windows Web/Desktop install artifact.
 - README and test plan now include PowerShell hash verification and separate Web/selected-Desktop-profile install/restart procedures.
 - Real Web/Desktop installation remains NOT RUN until artifact is installed in the user's Windows DSH environment and evidence is returned.
+
+## PPL-2 implementation record (2026-11-12)
+
+### Implemented in PR #22
+- Separated user stress disclosure and support requests from comfort directed to the character.
+- Added deterministic event classes for user stress disclosure, support request, character comfort, rest encouragement and praise.
+- Added persistent PPL character emotion state: anxiety, grief, anger and embarrassment; retained physical fatigue as the character's own state.
+- Added PPL rules for supportive replies, praise response, comfort, rest encouragement, negative interaction and gradual emotional recovery.
+- User stress disclosure/support requests do not award trust, attachment or affection and are not automatically written to long-term memory.
+- Only completed model turns commit PPL state. Interrupted and failed turns leave the runtime state unchanged.
+- Legacy saves receive missing PPL state defaults without overwriting existing saved values.
+- Companion UI and diagnostics expose the character-owned PPL state; UI labels it explicitly to avoid confusion with user mental/health state.
+
+### CI evidence
+- Run #531 (43176223043): Node 24.9.0 and Node 24 both PASS.
+- Full project tests: 68 passed / 0 failed on both matrix legs.
+- PPL Core source compile and embedded persona tests: PASS.
+- DSH classic-script client loader regression and npm package verification: PASS.
+- Windows Web/Desktop candidate artifact 0.1.0-dev.4 generated.
+- Real DSH Desktop 0.2.2-rc.1 installation and visual/streaming behavior remain a separate manual acceptance gate.
