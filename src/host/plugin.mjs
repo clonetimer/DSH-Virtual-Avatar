@@ -8,6 +8,7 @@ import { DeepseekWhaleService } from '../characters/deepseek-whale/service.mjs'
 import { createDefaultPersonaRegistry } from '../ppl/registry.mjs'
 import { extractMemoryCandidates } from '../memory/candidates.mjs'
 import { DEEPSEEK_WHALE_PROFILE, affectionCap, relationshipStageLabel, resolveDeepseekWhaleProfile } from '../characters/deepseek-whale/profile.mjs'
+import { resolveDeepseekWhalePresentation } from '../characters/deepseek-whale/presentation.mjs'
 
 export const name = 'dsh-virtual-avatar'
 export const inject = ['webServer', 'llm']
@@ -192,6 +193,8 @@ function publicView(service, memoryService, config) {
     grief: Number(runtimeEmotion.grief ?? 0),
     anger: Number(runtimeEmotion.anger ?? 0),
   }
+  const lastReplyEmotion = state.conversation?.chatLines?.filter(line => line.who === 'heroine').at(-1)?.emotion || 'normal'
+  const presentation = resolveDeepseekWhalePresentation({ pplState, replyEmotion: lastReplyEmotion })
   const relationshipStage = String(pplRelationship.stage || state.relationship?.stage || 'acquaintance')
   const relationship = {
     ...state.relationship,
@@ -209,16 +212,18 @@ function publicView(service, memoryService, config) {
       address: profile.address,
       greeting: profile.greeting,
       visual: profile.visual,
-      imageUrl: API_PATH + '/assets/' + ({
-        cheerful: 'whale-cheerful.webp',
-        shy: 'whale-shy.webp',
-        serious: 'whale-serious.webp',
-        confused: 'whale-confused.webp',
-        angry: 'whale-angry.webp',
-        frightened: 'whale-frightened.webp',
-        exasperated: 'whale-exasperated.webp',
-        starry: 'whale-starry.webp',
-      }[state.conversation?.chatLines?.filter(line => line.who === 'heroine').at(-1)?.emotion] || 'maid-left.webp'),
+      imageUrl: API_PATH + '/assets/' + presentation.asset,
+      presentation: {
+        expression: presentation.expression,
+        expressionLabel: presentation.expressionLabel,
+        expressionSource: presentation.expressionSource,
+        patExpression: presentation.patExpression,
+        patReply: presentation.patReply,
+        motion: presentation.motion,
+        tempo: presentation.tempo,
+        mood: presentation.mood,
+        shyness: presentation.shyness,
+      },
       backgroundUrl: API_PATH + '/assets/' + safeBackgroundAsset(state),
       expressionUrls: Object.fromEntries(Object.keys(ASSET_TYPES).filter(key => key.startsWith('whale-')).map(key => [key.replace('whale-', '').replace('.webp', ''), API_PATH + '/assets/' + key])),
       level: state.level,
@@ -325,7 +330,7 @@ export function apply(ctx, config = {}) {
     } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
     return {
       checkedAt,
-      plugin: { id: name, version: '0.1.0-dev.8', enabled: runtimeConfig.enabled },
+      plugin: { id: name, version: '0.1.0-dev.9', enabled: runtimeConfig.enabled },
       model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
       persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0, registered: personaRegistry.list() },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, mediaDirectory, backupDirectory },
@@ -366,7 +371,7 @@ export function apply(ctx, config = {}) {
       return
     }
     if (req.method === 'GET') {
-      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.8' })
+      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.9' })
       return
     }
     if (req.method !== 'POST') {

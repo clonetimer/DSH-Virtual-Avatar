@@ -18,7 +18,7 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 
 **当前产品不开发 Galgame 章节、剧情分支、结局、游戏式回复选项、小剧场或 CG。** 桌面宠物动画也不作为本阶段交付门槛。上游 Whale 项目仅作为角色设定、存档和素材来源。
 
-当前目标宿主为 DSH 0.2.2-rc.1，要求 Node.js >=24.9.0；CI 采用 Node 24.9.0 / 24 双矩阵。插件通过 `engines.dsh` 声明兼容范围 `>=0.2.2-rc.1 <0.2.3-0`。请查看 [实施状态与验收证据](docs/implementation-status.md)、[PPL-2 情绪状态与互动意图](docs/ppl-emotion-state.md)、[PPL Persona Registry](docs/ppl-persona-registry.md)、[日常交互体验改进](docs/companion-everyday-ux.md) 和 [DyberPet 动作兼容与记忆面板修复](docs/dyberpet-motion-compatibility.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
+当前目标宿主为 DSH 0.2.2-rc.1，要求 Node.js >=24.9.0；CI 采用 Node 24.9.0 / 24 双矩阵。插件通过 `engines.dsh` 声明兼容范围 `>=0.2.2-rc.1 <0.2.3-0`。请查看 [实施状态与验收证据](docs/implementation-status.md)、[PPL-2 情绪状态与互动意图](docs/ppl-emotion-state.md)、[PPL Persona Registry](docs/ppl-persona-registry.md)、[日常交互体验改进](docs/companion-everyday-ux.md) 和 [DyberPet 动作兼容与记忆面板修复](docs/dyberpet-motion-compatibility.md) 和 [PPL 表情驱动与自主待机行为](docs/ppl-driven-whale-presentation.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
 
 ## DSH 插件安装与 P4 宿主验收
 
@@ -38,15 +38,15 @@ node --version
 npm --version
 ```
 
-从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.8` artifact 下载以下文件：
-- `dsh-virtual-avatar-0.1.0-dev.8.tgz`
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.9` artifact 下载以下文件：
+- `dsh-virtual-avatar-0.1.0-dev.9.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
 
 先校验包文件（在下载目录执行）：
 
 ```powershell
-Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.8.tgz -Algorithm SHA256
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.9.tgz -Algorithm SHA256
 ```
 
 将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
@@ -54,14 +54,14 @@ Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.8.tgz -Algorithm SHA256
 **DSH Web（web profile）：**
 
 ```powershell
-dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.8.tgz"
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.9.tgz"
 dsh --profile web --dump-config
 ```
 
 **DSH Desktop：** 建议直接使用桌面版「插件 → 添加插件」，输入 `.tgz` 的完整绝对路径。若在 DSH 桌面版「应用 → 管理 dsh 命令…」安装了专用 CLI，可在完全退出 Desktop 后使用其保留的 `desktop` profile：
 
 ```powershell
-dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.8.tgz"
+dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.9.tgz"
 dsh --profile desktop --dump-config
 ```
 
@@ -135,3 +135,12 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - 记忆搜索、层级、置顶筛选和导出改为分组工具栏；加载中与空记忆状态分开呈现。
 - 点击或键盘聚焦鲸鱼娘立绘可触发“摸摸”反馈：短暂切换害羞表情、弹跳动作和气泡。该视觉互动不暗中增加好感度或关系分数。
 - 新增 DyberPet 原生动作配置适配器，支持校验 `pet_conf.json`、`act_conf.json`、帧序列、帧间隔、重复次数、移动方向、锚点、`patpat` 与 `random_act`。当前 Whale 仍使用现有表情立绘；尚未导入真正的多帧 Whale 美术包。
+
+## PPL-driven expression and autonomous idle behavior（dev.9）
+
+- The Host derives a presentation snapshot from the Whale's own PPL emotion state. Persistent anger, grief, anxiety and embarrassment take precedence over the one-turn reply-text heuristic; the reply emotion is only a fallback.
+- The expression resolver is read-only: it does not write PPL state, change relationship points or infer the user's emotional/health state.
+- Existing upstream Whale expression assets are reused for shy, angry, serious, frightened and other expressions; no new character artwork is synthesized.
+- PPL emotion state also selects a restrained idle motion profile. High character fatigue slows the ambient animation; it does not change the expression unless an emotion threshold is crossed.
+- The expanded portrait has subtle state-specific idle motion, and the collapsed desktop pet gently floats. When the companion panel is open and idle, a small body sway occurs about every 24 seconds; it pauses while chatting or reading a utility panel.
+- All ambient motion respects `prefers-reduced-motion`. No blink, lip-sync, rigged limbs or frame-by-frame movement is claimed for the current static portrait pack.
