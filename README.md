@@ -35,14 +35,14 @@ npm --version
 ```
 
 从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop` artifact 下载以下文件：
-- `dsh-virtual-avatar-0.1.0-dev.1.tgz`
+- `dsh-virtual-avatar-0.1.0-dev.2.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
 
 先校验包文件（在下载目录执行）：
 
 ```powershell
-Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.1.tgz -Algorithm SHA256
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.2.tgz -Algorithm SHA256
 ```
 
 将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
@@ -50,15 +50,15 @@ Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.1.tgz -Algorithm SHA256
 **DSH Web（web profile）：**
 
 ```powershell
-dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.1.tgz"
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.2.tgz"
 dsh --profile web --dump-config
 ```
 
-**DSH Desktop：** 使用 Desktop 当前选中的 profile 名称替换下面的 `<profile>`，不要默认猜测 profile 一定叫 web：
+**DSH Desktop：** 建议直接使用桌面版「插件 → 添加插件」，输入 `.tgz` 的完整绝对路径。若在 DSH 桌面版「应用 → 管理 dsh 命令…」安装了专用 CLI，可在完全退出 Desktop 后使用其保留的 `desktop` profile：
 
 ```powershell
-dsh plugin --profile "<profile>" add ".\dsh-virtual-avatar-0.1.0-dev.1.tgz"
-dsh --profile "<profile>" --dump-config
+dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.2.tgz"
+dsh --profile desktop --dump-config
 ```
 
 安装后完全退出并重新启动对应 DSH Web / Desktop，再打开插件页面。确认插件 `dsh-virtual-avatar` 已加载，鲸鱼入口出现，诊断页显示 PPL、SQLite 和模型选择状态。模型连接测试需在 DSH 主界面已配置 Provider 后执行。
@@ -81,3 +81,10 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - [PPL](https://github.com/clonetimer/PPL)
 
 保留 `third_party/` 中的上游许可、署名与素材说明。Whale 部分默认图片受 CC BY-NC-SA 4.0 约束，不能视为 MIT 代码素材。
+
+## Desktop 0.2.2-rc.1 修复说明（dev.2）
+
+- `dev.1` 的 `lib/client.js` 直接包含 ESM `import`，与 DSH 使用的经典 `<script>` 模块工厂加载协议不兼容，可能在启动时出现 `Cannot use import statement outside a module`。
+- `dev.2` 将 `src/client/companion.mjs` 构建为 `window.__ModuleLoader__.load({id:'dsh-virtual-avatar',factory})` 注册格式，React 与 ReactDOM 使用 DSH 平台共享模块，避免双 React 副本。
+- 每次运行 `npm run verify` 和 `npm pack` 均执行客户端构建。新增 `node:vm` 经典脚本加载回归，不再仅依赖 `node --check` 检查 ESM 语法。
+- 已安装 `dev.1` 的用户应先在 Desktop 插件管理器中禁用或卸载旧版，再安装 `dev.2`；升级不会以清除用户数据为手段。
