@@ -78,3 +78,13 @@ test('invalid and out-of-range PPL values are safely normalized', () => {
   assert.equal(result.state.fatigue, 1)
   assert.equal(result.tempo, 'slow')
 })
+
+test('patting feedback follows the current expression without changing PPL state', () => {
+  const angry = resolveDeepseekWhalePresentation({ pplState: { anger: 0.8 } })
+  const neutral = resolveDeepseekWhalePresentation({ pplState: { embarrassment: 0.1 } })
+
+  assert.equal(angry.patExpression, 'angry')
+  assert.equal(angry.patReply, '唔……主人轻一点啦。')
+  assert.equal(neutral.patExpression, 'shy')
+  assert.equal(neutral.patReply, '嘿嘿，主人摸摸我啦～')
+})
