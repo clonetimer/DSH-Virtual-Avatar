@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 const API = '/api/dsh-virtual-avatar'
 const CSS = `
 .dva-root{position:fixed;right:18px;bottom:104px;z-index:8999;font-family:system-ui,"Microsoft YaHei",sans-serif;color:#eaf5ff}
-.dva-pet{width:112px;height:132px;border:0;border-radius:18px;background:transparent;box-shadow:none;cursor:pointer;padding:0;filter:drop-shadow(0 8px 14px #00172b88);transition:transform .18s ease}.dva-pet:hover{transform:translateY(-5px) scale(1.035)}.dva-pet img{width:100%;height:100%;object-fit:contain}.dva-pet span{display:block;margin-top:-4px;padding:4px 8px;border:1px solid #8bcdf288;border-radius:999px;background:#092642dd;color:#eaf5ff;font-size:11px;text-align:center}
+.dva-pet{width:112px;height:132px;border:0;border-radius:18px;background:transparent;box-shadow:none;cursor:pointer;padding:0;filter:drop-shadow(0 8px 14px #00172b88);transition:transform .18s ease}.dva-pet:hover{transform:translateY(-5px) scale(1.035)}.dva-pet img{width:100%;height:100%;object-fit:contain};animation:dva-pet-idle 5.2s ease-in-out infinite;transform-origin:50% 88%.dva-pet span{display:block;margin-top:-4px;padding:4px 8px;border:1px solid #8bcdf288;border-radius:999px;background:#092642dd;color:#eaf5ff;font-size:11px;text-align:center}
 .dva-panel{position:fixed;inset:5vh 5vw;z-index:9000;display:flex;flex-direction:column;overflow:hidden;border:1px solid #6ea9cc;border-radius:20px;background:linear-gradient(160deg,#0b2340,#07172b 65%,#0b3152);box-shadow:0 24px 80px #000b;color:#eaf5ff}
 .dva-head{position:relative;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 20px;border-bottom:1px solid #ffffff22}
 .dva-head-tools{position:relative;display:flex;align-items:center;gap:8px;flex-shrink:0}
@@ -48,6 +48,7 @@ const CSS = `
 .dva-avatar-stage.is-idle.is-state-nervous img{animation:dva-avatar-state-nervous 2.8s ease-in-out infinite}
 .dva-avatar-stage.is-idle.is-state-subdued img{animation:dva-avatar-state-subdued 6s ease-in-out infinite}
 .dva-avatar-stage.is-idle.is-state-resting img{animation:dva-avatar-state-resting 6.8s ease-in-out infinite}
+.dva-avatar-stage.is-idle[data-tempo="slow"] img{animation-duration:6.8s}
 .dva-avatar-bubble{position:absolute;z-index:4;left:50%;top:3%;transform:translate(-50%,-100%);max-width:210px;padding:7px 11px;border:1px solid #9bd9ff99;border-radius:13px;background:#f1f9ff;color:#17405d;font-size:12px;line-height:1.4;white-space:nowrap;box-shadow:0 5px 18px #0005;animation:dva-bubble-pop .18s ease-out both}
 .dva-avatar-bubble::after{content:"";position:absolute;left:50%;bottom:-6px;width:10px;height:10px;transform:translateX(-50%) rotate(45deg);background:#f1f9ff;border-right:1px solid #9bd9ff99;border-bottom:1px solid #9bd9ff99}
 .dva-avatar-hint{display:block;margin-top:-5px;color:#9abbd2;font-size:10px;text-align:center}
@@ -92,7 +93,8 @@ const CSS = `
 @keyframes dva-avatar-state-resting{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.006)}}
 @keyframes dva-bubble-pop{from{opacity:0;transform:translate(-50%,-88%) scale(.92)}to{opacity:1;transform:translate(-50%,-100%) scale(1)}}
 @keyframes dva-avatar-shadow{0%,100%{transform:scaleX(1);opacity:.45}50%{transform:scaleX(.82);opacity:.25}}
-@media(prefers-reduced-motion:reduce){.dva-avatar-stage img,.dva-avatar-stage::after,.dva-avatar-bubble{animation:none!important;transition:none!important}}
+@keyframes dva-pet-idle{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-3px) rotate(.35deg)}}
+@media(prefers-reduced-motion:reduce){.dva-pet img,.dva-avatar-stage img,.dva-avatar-stage::after,.dva-avatar-bubble{animation:none!important;transition:none!important}}
 @media(max-width:760px){.dva-panel{inset:2vh 2vw}.dva-head{padding:12px}.dva-head-tools{gap:6px}.dva-more-trigger,.dva-collapse{padding:7px 10px}.dva-more-menu{width:min(330px,88vw)}.dva-main{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.dva-character{display:grid;grid-template-columns:64px minmax(0,1fr);grid-template-rows:auto auto auto;align-items:center;justify-content:stretch;padding:10px;gap:8px}.dva-avatar-stage{grid-column:1;grid-row:1;width:64px;height:64px}.dva-avatar-stage img{width:64px;height:64px;max-height:none}.dva-avatar-stage::after{display:none}.dva-avatar-status{left:50%;bottom:-12px;font-size:9px;padding:2px 6px}.dva-avatar-bubble{top:0;left:0;transform:translate(0,-100%);max-width:min(220px,72vw);font-size:10px;padding:4px 7px;animation-name:dva-bubble-pop-mobile}.dva-avatar-bubble::after{left:30px}.dva-avatar-hint{display:none}.dva-stats{text-align:left;font-size:11px}.dva-state-strip{grid-column:1/-1;justify-content:flex-start;max-width:none;margin-top:0}.dva-state-label{text-align:left}.dva-scene-toggle{grid-column:1/-1;max-width:none;margin-top:0}.dva-chat{padding:12px}.dva-input{gap:6px}.dva-starter{padding:6px 9px}}
 @keyframes dva-bubble-pop-mobile{from{opacity:0;transform:translate(0,-88%) scale(.92)}to{opacity:1;transform:translate(0,-100%) scale(1)}}
 `
