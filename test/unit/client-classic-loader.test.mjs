@@ -79,7 +79,7 @@ test('built client preserves companion features without bundling its own React',
   assert.doesNotMatch(artifact, /角色状态 · PPL/)
   assert.doesNotMatch(source, /setShowHistorySearch|setShowDiagnostics|setShowBackups/)
     assert.match(artifact, /返回聊天/)
-    assert.match(artifact, /aria-label: '返回聊天'/)
+    assert.match(artifact, /'aria-label': '返回聊天'/)
     assert.match(artifact, /onClick: closeUtilityPanel/)
     assert.match(artifact, /openUtilityPanel\('memories'\); void loadMemories\(\)/)
     assert.match(artifact, /dva-memory-toolbar/)
