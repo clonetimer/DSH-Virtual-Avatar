@@ -22,6 +22,16 @@ const TERMINAL_COMMIT_REASONS = new Set(['completed', 'max-tokens'])
 const INTERACTION_SCENES = new Set(['PRIVATE_HOME', 'PUBLIC_SPACE'])
 const DEFAULT_INTERACTION_SCENE = 'PRIVATE_HOME'
 
+function mergeObjectDefaults(defaults, current = {}) {
+  const out = { ...defaults, ...(current && typeof current === 'object' && !Array.isArray(current) ? current : {}) }
+  for (const [key, value] of Object.entries(defaults || {})) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      out[key] = mergeObjectDefaults(value, current?.[key])
+    }
+  }
+  return out
+}
+
 export class DeepseekWhaleService {
   constructor({ store, memoryService, pplRuntime } = {}) {
     if (!store || typeof store.loadCharacterState !== 'function' || typeof store.commitCharacterTurn !== 'function') {
@@ -44,7 +54,7 @@ export class DeepseekWhaleService {
     const loaded = this.store.loadCharacterState(DEEPSEEK_WHALE_ID)
     if (!loaded) return { state: this.#initialState(sessionId), revision: 0, persisted: false }
     const state = structuredClone(loaded.state)
-    if (!state.pplRuntime) state.pplRuntime = this.ppl.initialState(sessionId)
+    state.pplRuntime = mergeObjectDefaults(this.ppl.initialState(sessionId), state.pplRuntime || {})
     if (!state.conversation) state.conversation = { log: [], chatLines: [], choices: [] }
     if (!state.storyMemory) state.storyMemory = createStoryMemory()
     if (!state.growth) state.growth = createGrowthState()
