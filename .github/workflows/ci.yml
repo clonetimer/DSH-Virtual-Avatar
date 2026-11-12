@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, "feat/**", "fix/**"]
   pull_request:
-    branches: [main, "feat/**"]
+    branches: [main, "feat/**", "fix/**"]
   workflow_dispatch:
 permissions:
   contents: write
@@ -85,7 +85,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: matrix.node == '24.9.0'
         with:
-          name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop
+          name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.2
           path: |
             dist-artifact/*.tgz
             dist-artifact/*.sha256

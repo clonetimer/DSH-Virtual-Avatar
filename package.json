@@ -1,6 +1,6 @@
 {
   "name": "dsh-virtual-avatar",
-  "version": "0.1.0-dev.1",
+  "version": "0.1.0-dev.2",
   "private": true,
   "type": "module",
   "description": "Unified virtual persona and companion plugin for DeepSeek Harness",
@@ -11,9 +11,11 @@
   "scripts": {
     "test": "node --test",
     "test:unit": "node --test test/unit/*.test.mjs",
-    "check": "node --check src/index.mjs && find src/migration src/persona src/characters/deepseek-whale src/memory src/storage src/ppl src/host -type f \\( -name '*.mjs' -o -name '*.js' \\) -print0 | xargs -0 -n1 node --check && node --check lib/index.js && node --check lib/client.js && node --check src/client/index.mjs && node --check lib/client.js",
-    "verify": "npm run check && npm test && npm run pack:check",
-    "pack:check": "npm pack --dry-run --json | node verify-pack.mjs"
+    "check": "node --check src/index.mjs && find src/migration src/persona src/characters/deepseek-whale src/memory src/storage src/ppl src/host -type f \\( -name '*.mjs' -o -name '*.js' \\) -print0 | xargs -0 -n1 node --check && node --check lib/index.js && node --check lib/client.js && node --check src/client/index.mjs && node --check src/client/companion.mjs && node --check lib/client.js",
+    "verify": "npm run build:client && npm run check && npm test && npm run pack:check",
+    "pack:check": "npm pack --dry-run --json | node verify-pack.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "prepack": "npm run build:client"
   },
   "main": "./lib/index.js",
   "exports": {
