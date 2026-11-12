@@ -25,12 +25,12 @@ assert.ok(source.startsWith(header), 'unexpected imports in the companion source
 const body = source.slice(header.length)
   .replace(/^export const name =/m, 'const name =')
   .replace(/^export const inject =/m, 'const inject =')
-  .replace(/^export function apply\\(/m, 'function apply(')
+  .replace('export function apply(', 'function apply(')
 
 assert.ok(body.includes("const name = 'dsh-virtual-avatar-client'"), 'missing client plugin name')
 assert.ok(body.includes("const inject = ['slots']"), 'missing client slot injection')
 assert.ok(body.includes('function apply(ctx)'), 'missing client apply')
-assert.ok(!/^(?:import|export)\\s/m.test(body), 'client contains unsupported ESM declarations')
+assert.ok(body.split('\n').every(line => !line.startsWith('import ') && !line.startsWith('export ')), 'client contains unsupported ESM declarations')
 
 const output = [
   '// Generated from src/client/companion.mjs. Do not edit by hand.',
