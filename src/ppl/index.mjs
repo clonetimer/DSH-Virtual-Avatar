@@ -62,7 +62,7 @@ export function createPplRuntime({
   return {
     ir,
     binding: runtime.personaBinding(),
-    initialState(sessionId = ir.persona.id.toLowerCase()) {
+    initialState(sessionId = ir.persona.id.toLowerCase().replaceAll('_', '-')) {
       return {
         ...structuredClone(ir.runtimeInitial || {}),
         session: { id: sessionId, turn: 0 },
