@@ -271,6 +271,7 @@
 - Reuses existing licensed Whale expression portraits; no new art or synthetic frames are produced.
 - PPL character fatigue selects a slower ambient animation tempo without changing facial expression or exposing fatigue as a user-health measure.
 - Added restrained state-specific idle motion and a periodic body sway while the expanded companion is open and idle. It pauses during model turns and utility panels; the collapsed desktop pet also has a gentle float.
+- Patting feedback now follows the current PPL-derived expression and remains visual-only; it does not add affection.
 - All motion honors `prefers-reduced-motion`; no blink, lip-sync, gaze tracking or rigged animation is claimed.
 
 ### Verification added
