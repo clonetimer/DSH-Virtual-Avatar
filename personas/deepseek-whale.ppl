@@ -82,7 +82,7 @@ persona DEEPSEEK_WHALE version "0.3.0" {
 
     rule EMOTION_BASELINE_RECOVERY priority 100 {
         when {
-            event.type != "";
+            event.actor == admin;
         }
         commit {
             state.emotion.anxiety -= 0.005;
