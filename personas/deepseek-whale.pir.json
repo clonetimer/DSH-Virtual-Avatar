@@ -734,6 +734,167 @@
         }
       },
       "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "ENTER_CONFESSION_STAGE",
+      "target": "relationships.admin.stage",
+      "from": [
+        "acquaintance",
+        "trusted",
+        "close"
+      ],
+      "to": "confession",
+      "condition": {
+        "kind": "binary",
+        "operator": "and",
+        "left": {
+          "kind": "binary",
+          "operator": "and",
+          "left": {
+            "kind": "binary",
+            "operator": "==",
+            "left": {
+              "kind": "path",
+              "path": "event.type"
+            },
+            "right": {
+              "kind": "literal",
+              "value": "CONFESSION"
+            }
+          },
+          "right": {
+            "kind": "binary",
+            "operator": "==",
+            "left": {
+              "kind": "path",
+              "path": "event.actor"
+            },
+            "right": {
+              "kind": "literal",
+              "value": "admin"
+            }
+          }
+        },
+        "right": {
+          "kind": "binary",
+          "operator": "<",
+          "left": {
+            "kind": "path",
+            "path": "relationships.admin.trust"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.75
+          }
+        }
+      },
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "ESTABLISH_CLOSE_STAGE",
+      "target": "relationships.admin.stage",
+      "from": [
+        "trusted"
+      ],
+      "to": "close",
+      "condition": {
+        "kind": "binary",
+        "operator": "and",
+        "left": {
+          "kind": "binary",
+          "operator": "and",
+          "left": {
+            "kind": "binary",
+            "operator": "!=",
+            "left": {
+              "kind": "path",
+              "path": "event.type"
+            },
+            "right": {
+              "kind": "literal",
+              "value": "CONFESSION"
+            }
+          },
+          "right": {
+            "kind": "binary",
+            "operator": ">=",
+            "left": {
+              "kind": "path",
+              "path": "relationships.admin.trust"
+            },
+            "right": {
+              "kind": "literal",
+              "value": 0.8
+            }
+          }
+        },
+        "right": {
+          "kind": "binary",
+          "operator": ">=",
+          "left": {
+            "kind": "path",
+            "path": "relationships.admin.attachment"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.45
+          }
+        }
+      },
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "ESTABLISH_TRUSTED_STAGE",
+      "target": "relationships.admin.stage",
+      "from": [
+        "acquaintance"
+      ],
+      "to": "trusted",
+      "condition": {
+        "kind": "binary",
+        "operator": "and",
+        "left": {
+          "kind": "binary",
+          "operator": "and",
+          "left": {
+            "kind": "binary",
+            "operator": "!=",
+            "left": {
+              "kind": "path",
+              "path": "event.type"
+            },
+            "right": {
+              "kind": "literal",
+              "value": "CONFESSION"
+            }
+          },
+          "right": {
+            "kind": "binary",
+            "operator": ">=",
+            "left": {
+              "kind": "path",
+              "path": "relationships.admin.trust"
+            },
+            "right": {
+              "kind": "literal",
+              "value": 0.65
+            }
+          }
+        },
+        "right": {
+          "kind": "binary",
+          "operator": ">=",
+          "left": {
+            "kind": "path",
+            "path": "relationships.admin.attachment"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.2
+          }
+        }
+      },
+      "provenance": "DEEPSEEK_WHALE"
     }
   ],
   "invariants": [
