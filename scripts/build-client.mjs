@@ -54,4 +54,4 @@ const output = [
 // script syntax. Check that contract as part of every package build.
 new Script(output, { filename: 'lib/client.js' })
 writeFileSync(outputURL, output)
-console.log('Built DSH classic client module:', output.length, 'bytes')
+// Keep stdout pristine: npm pack --json pipes it to verify-pack.mjs.
