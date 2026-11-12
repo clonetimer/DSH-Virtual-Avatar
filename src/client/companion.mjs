@@ -465,6 +465,7 @@ function Companion() {
           React.createElement('button', { disabled: historySearchLoading, onClick: () => void searchHistory() }, historySearchLoading ? '搜索中…' : '搜索'),
           ...historyMatches.map(item => React.createElement('div', { key: item.index, className: 'dva-memory-row' }, '[' + (item.who || item.role || '') + '] ' + item.text)),
           historyMatches.length === 0 ? React.createElement('small', null, '暂无匹配记录，请尝试其他关键词。') : null,
+          React.createElement('button', { onClick: () => setActivePanel(null) }, '关闭搜索'),
         ) : null,
         activePanel === 'relationship' ? React.createElement('div', { className: 'dva-memory-panel' },
           React.createElement('strong', null, '关系变化记录'),
@@ -501,6 +502,7 @@ function Companion() {
             React.createElement('button', { onClick: () => setMemoryCandidates(rows => rows.filter((_, rowIndex) => rowIndex !== index)) }, '忽略'),
           )),
         ) : null,
+        ),
         ['summary', 'profile', 'diagnostics', 'backups', 'memories'].includes(activePanel)
           ? React.createElement('div', { className: 'dva-utility-overlay' },
         activePanel === 'summary' ? React.createElement('div', { className: 'dva-memories' },
