@@ -85,7 +85,7 @@ test('built client preserves companion features without bundling its own React',
     assert.match(artifact, /dva-memory-toolbar/)
     assert.match(artifact, /点击立绘，可以摸摸鲸鱼娘/)
     assert.match(artifact, /嘿嘿，主人摸摸我啦～/)
-    assert.match(artifact, /dva-avatar-stage is-patting img/)
+    assert.match(artifact, /dva-avatar-stage\\.is-patting img/)
     assert.match(artifact, /@keyframes dva-avatar-pat/)
     assert.match(artifact, /avatarMotion !== 'patting'/)
     assert.match(artifact, /setAvatarExpressionOverride\('shy'\)/)
