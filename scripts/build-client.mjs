@@ -15,11 +15,14 @@ import { Script } from 'node:vm'
 const sourceURL = new URL('../src/client/companion.mjs', import.meta.url)
 const outputURL = new URL('../lib/client.js', import.meta.url)
 const source = readFileSync(sourceURL, 'utf8')
-const header = "import React, { useCallback, useEffect, useState } from 'react'\\n"
-  + "import { createRoot } from 'react-dom/client'\\n"
-assert.ok(source.startsWith(header.replaceAll('\\n', '\n')), 'unexpected imports in the companion source')
+const header = [
+  "import React, { useCallback, useEffect, useState } from 'react'",
+  "import { createRoot } from 'react-dom/client'",
+  '',
+].join('\n')
+assert.ok(source.startsWith(header), 'unexpected imports in the companion source')
 
-const body = source.slice(header.replaceAll('\\n', '\n').length)
+const body = source.slice(header.length)
   .replace(/^export const name =/m, 'const name =')
   .replace(/^export const inject =/m, 'const inject =')
   .replace(/^export function apply\\(/m, 'function apply(')
