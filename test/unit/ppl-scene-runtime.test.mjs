@@ -151,6 +151,9 @@ test('interaction scene persists and legacy states default to PRIVATE_HOME', () 
   delete legacy.interactionScene
   const legacyService = new DeepseekWhaleService({ store: createMemoryStore(legacy) })
   assert.equal(legacyService.loadState().state.interactionScene, 'PRIVATE_HOME')
+  assert.equal(legacyService.loadState().state.pplRuntime.state.emotion.anxiety, runtime().initialState().state.emotion.anxiety)
+  assert.equal(legacyService.loadState().state.pplRuntime.state.emotion.grief, runtime().initialState().state.emotion.grief)
+  assert.equal(legacyService.loadState().state.pplRuntime.state.emotion.anger, runtime().initialState().state.emotion.anger)
 })
 
 test('DeepseekWhaleService passes the persisted scene into each PPL turn', () => {
