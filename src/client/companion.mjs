@@ -60,15 +60,13 @@ async function callApi(action, args = {}) {
 }
 
 function describeCharacterState(state = {}) {
-  const fatigue = Math.max(0, Math.min(1, Number(state.fatigue) || 0))
   const anxiety = Math.max(0, Math.min(1, Number(state.anxiety) || 0))
   const grief = Math.max(0, Math.min(1, Number(state.grief) || 0))
   const anger = Math.max(0, Math.min(1, Number(state.anger) || 0))
   const embarrassment = Math.max(0, Math.min(1, Number(state.embarrassment) || 0))
-  const energy = fatigue >= 0.75 ? '需要休息' : fatigue >= 0.45 ? '有些疲惫' : fatigue >= 0.2 ? '状态不错' : '精力充沛'
   const mood = anger >= 0.65 ? '有些不开心' : grief >= 0.60 ? '有点低落' : anxiety >= 0.65 ? '略显紧张' : '平静'
-  const expression = embarrassment >= 0.70 ? '很害羞' : embarrassment >= 0.35 ? '有点害羞' : '自然'
-  return { energy, mood, expression }
+  const shyness = embarrassment >= 0.70 ? '很害羞' : embarrassment >= 0.35 ? '有点害羞' : '自然'
+  return { mood, shyness }
 }
 
 function Companion() {
@@ -445,13 +443,12 @@ function Companion() {
         ),
         React.createElement('div', {
           className: 'dva-state-strip',
-          title: '这是鲸鱼娘自身的 PPL 状态，不是对主人的情绪或健康评估。',
-          'aria-label': '鲸鱼娘当前 PPL 状态',
+          title: '这里展示鲸鱼娘在互动中的状态，不代表对主人的情绪或健康评估。',
+          'aria-label': '鲸鱼娘当前互动状态',
         },
           React.createElement('span', { className: 'dva-state-label' }, '鲸鱼娘现在的状态'),
-          React.createElement('span', { className: 'dva-state-chip' }, '精力 · ', React.createElement('b', null, characterState.energy)),
           React.createElement('span', { className: 'dva-state-chip' }, '心情 · ', React.createElement('b', null, characterState.mood)),
-          React.createElement('span', { className: 'dva-state-chip' }, '表现 · ', React.createElement('b', null, characterState.expression)),
+          React.createElement('span', { className: 'dva-state-chip' }, '害羞 · ', React.createElement('b', null, characterState.shyness)),
         ),
         React.createElement('div', { className: 'dva-scene-toggle' },
           React.createElement('div', { className: 'dva-scene-title' }, '互动场合'),
