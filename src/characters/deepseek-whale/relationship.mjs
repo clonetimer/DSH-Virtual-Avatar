@@ -1,13 +1,21 @@
 import { createHash } from 'node:crypto'
 import { affectionCap } from './profile.mjs'
 
-const POSITIVE_TEXT = /喜欢和你聊天|喜欢陪你|想陪你|想你|你真可爱|你好可爱|好可爱|抱抱|亲亲|约会|晚安|早安/u
-const NEGATIVE_TEXT = /^(?:我)?(?:真的|有点)?(?:不喜欢你|讨厌你|不爱你|不想和你在一起|别烦我|滚开|走开)[，。！？!?～~]*$/u
-const COMFORT_TEXT = /辛苦|累了|很累|休息|靠一会|靠着|别撑|别逞强|心疼|抱歉让你等/u
-const CONFESSION_TEXT = /^(?:我)?(?:真的|很)?(?:喜欢你|爱你|想和你在一起|想和你交往|愿意和你交往|交往|告白|做我的恋人)[，。！？!?～~]*$/u
+const POSITIVE_TEXT = /(?:喜欢和你聊天|喜欢陪你|想陪你|想你|你真可爱|你好可爱|好可爱|抱抱|亲亲|约会|想见你|我想你)/u
+const NEGATIVE_TEXT = /^(?:我)?(?:(?:真的|有点|很)?(?:不喜欢你|讨厌你|不爱你|不想和你在一起)|别烦我|滚开|走开)(?:[呀啊呢啦哦嘛吧，。！？!?～~]*)$/u
+const COMFORT_TEXT = /(?:辛苦了|你(?:今天|最近)?(?:一定)?(?:好|很|有点)?累(?:了)?|我(?:今天|最近)?(?:真的)?(?:好|很|有点)?累(?:了|死了)?|你累了(?:吧|吗)?|累了就(?:休息|歇一会)(?:吧|哦)?|我想休息(?:一下)?|我需要休息|先(?:好好)?休息(?:一下)?|好好休息|靠一会(?:儿)?|靠着我|别(?:再)?撑着|别逞强|(?:我)?心疼你|抱歉让你等|我来陪你|有我陪着你)/u
+const CONFESSION_TEXT = /^(?:我)?(?:(?:真的)?(?:很)?(?:喜欢你|爱你|想和你在一起|想和你交往|愿意和你交往|做我的恋人|想成为你的恋人|对你有好感)|告白)(?:[呀啊呢啦哦嘛吧，。！？!?～~]*)$/u
 
 function hash(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
+}
+
+function normalizeInteractionText(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim()
 }
 
 export function createDeepseekWhaleInitialState({ sessionId = 'deepseek-whale' } = {}) {
@@ -15,6 +23,7 @@ export function createDeepseekWhaleInitialState({ sessionId = 'deepseek-whale' }
     characterId: 'deepseek',
     level: 1,
     affection: 0,
+    interactionScene: 'PRIVATE_HOME',
     relationship: {
       stage: 'acquaintance',
       trust: 0.5,
@@ -45,15 +54,41 @@ export function createDeepseekWhaleInitialState({ sessionId = 'deepseek-whale' }
   }
 }
 
-/** Convert a completed companion message into a deterministic PPL domain event. */
+/** Convert a completed companion message into one deterministic PPL domain event. */
 export function classifyDeepseekWhaleEvent({ text = '', choice = null, eventId, source = 'companion' } = {}) {
-  const input = String(text || '').trim()
+  const input = String(text || '').trim().slice(0, 500)
+  const normalized = normalizeInteractionText(input)
   let type = 'MESSAGE'
-  if (choice?.effect === -1 || NEGATIVE_TEXT.test(input)) type = 'NEGATIVE_INTERACTION'
-  else if (CONFESSION_TEXT.test(input)) type = 'CONFESSION'
-  else if (COMFORT_TEXT.test(input)) type = 'COMFORT'
-  else if (choice?.effect === 1 || POSITIVE_TEXT.test(input)) type = 'POSITIVE_INTERACTION'
-  const payload = { type, actor: 'admin', text: input, choiceId: choice?.id || null, source }
+  let classification = { method: 'default', rule: 'neutral-message' }
+
+  if (choice?.effect === -1) {
+    type = 'NEGATIVE_INTERACTION'
+    classification = { method: 'choice', rule: 'negative-choice' }
+  } else if (NEGATIVE_TEXT.test(normalized)) {
+    type = 'NEGATIVE_INTERACTION'
+    classification = { method: 'pattern', rule: 'explicit-negative' }
+  } else if (CONFESSION_TEXT.test(normalized)) {
+    type = 'CONFESSION'
+    classification = { method: 'pattern', rule: 'explicit-confession' }
+  } else if (COMFORT_TEXT.test(normalized)) {
+    type = 'COMFORT'
+    classification = { method: 'pattern', rule: 'comfort-or-support' }
+  } else if (choice?.effect === 1) {
+    type = 'POSITIVE_INTERACTION'
+    classification = { method: 'choice', rule: 'positive-choice' }
+  } else if (POSITIVE_TEXT.test(normalized)) {
+    type = 'POSITIVE_INTERACTION'
+    classification = { method: 'pattern', rule: 'positive-affection' }
+  }
+
+  const payload = {
+    type,
+    actor: 'admin',
+    text: input,
+    choiceId: choice?.id || null,
+    source,
+    classification,
+  }
   return {
     eventId: String(eventId || ''),
     ...payload,
@@ -61,13 +96,11 @@ export function classifyDeepseekWhaleEvent({ text = '', choice = null, eventId, 
   }
 }
 
-export function deepseekWhaleAffectionDelta({ text = '', choice = null } = {}) {
-  if (choice && choice.effect === 1) return 1
-  if (choice && choice.effect === -1) return -1
-  if (choice) return 0
-  const input = String(text || '').trim()
-  if (NEGATIVE_TEXT.test(input)) return -1
-  if (CONFESSION_TEXT.test(input) || POSITIVE_TEXT.test(input)) return 1
+/** Affection uses the same classified event as PPL; no second keyword parser can drift. */
+export function deepseekWhaleAffectionDelta({ event, text = '', choice = null } = {}) {
+  const classified = event || classifyDeepseekWhaleEvent({ text, choice })
+  if (classified.type === 'NEGATIVE_INTERACTION') return -1
+  if (classified.type === 'CONFESSION' || classified.type === 'POSITIVE_INTERACTION') return 1
   return 0
 }
 

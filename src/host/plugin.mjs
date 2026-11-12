@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { createAvatarStore } from '../storage/sqlite-store.mjs'
 import { DeepseekWhaleService } from '../characters/deepseek-whale/service.mjs'
 import { extractMemoryCandidates } from '../memory/candidates.mjs'
-import { DEEPSEEK_WHALE_PROFILE, affectionCap, resolveDeepseekWhaleProfile } from '../characters/deepseek-whale/profile.mjs'
+import { DEEPSEEK_WHALE_PROFILE, affectionCap, relationshipStageLabel, resolveDeepseekWhaleProfile } from '../characters/deepseek-whale/profile.mjs'
 
 export const name = 'dsh-virtual-avatar'
 export const inject = ['webServer', 'llm']
@@ -181,6 +181,15 @@ function publicView(service, memoryService, config) {
   const loaded = service.loadState()
   const state = loaded.state
   const profile = resolveDeepseekWhaleProfile(state.profileOverrides || {})
+  const pplRelationship = state.pplRuntime?.relationships?.admin || {}
+  const relationshipStage = String(pplRelationship.stage || state.relationship?.stage || 'acquaintance')
+  const relationship = {
+    ...state.relationship,
+    stage: relationshipStage,
+    trust: Number(pplRelationship.trust ?? state.relationship?.trust ?? 0.5),
+    attachment: Number(pplRelationship.attachment ?? state.relationship?.attachment ?? 0.1),
+    stageLabel: relationshipStageLabel(relationshipStage),
+  }
   return {
     ok: true,
     enabled: config.enabled !== false,
@@ -205,7 +214,9 @@ function publicView(service, memoryService, config) {
       level: state.level,
       affection: state.affection,
       affectionCap: affectionCap(state.level),
-      relationship: state.relationship,
+      relationship,
+      interactionScene: state.interactionScene || 'PRIVATE_HOME',
+      interactionSceneLabel: (state.interactionScene || 'PRIVATE_HOME') === 'PUBLIC_SPACE' ? '公开场合' : '私密空间',
       chatLines: state.conversation?.chatLines || [],
       choices: state.conversation?.choices || [],
     },
@@ -299,16 +310,17 @@ export function apply(ctx, config = {}) {
     } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
     return {
       checkedAt,
-      plugin: { id: name, version: '0.1.0-dev.1', enabled: runtimeConfig.enabled },
+      plugin: { id: name, version: '0.1.0-dev.3', enabled: runtimeConfig.enabled },
       model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
       persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0 },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, mediaDirectory, backupDirectory },
       companion: {
         level: loaded.state.level,
         affection: loaded.state.affection,
-        trust: loaded.state.relationship?.trust ?? null,
-        attachment: loaded.state.relationship?.attachment ?? null,
-        relationshipStage: loaded.state.relationship?.stage || 'acquaintance',
+        trust: loaded.state.pplRuntime?.relationships?.admin?.trust ?? loaded.state.relationship?.trust ?? null,
+        attachment: loaded.state.pplRuntime?.relationships?.admin?.attachment ?? loaded.state.relationship?.attachment ?? null,
+        relationshipStage: loaded.state.pplRuntime?.relationships?.admin?.stage || loaded.state.relationship?.stage || 'acquaintance',
+        interactionScene: loaded.state.interactionScene || 'PRIVATE_HOME',
         stateRevision: loaded.revision,
         lastConversationAt: loaded.state.conversation?.chatLines?.at(-1)?.at || null,
         lastSuccessfulTurnAt,
@@ -338,7 +350,7 @@ export function apply(ctx, config = {}) {
       return
     }
     if (req.method === 'GET') {
-      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.1' })
+      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.3' })
       return
     }
     if (req.method !== 'POST') {
@@ -443,6 +455,18 @@ export function apply(ctx, config = {}) {
         return
       }
 
+      if (action === 'scene-set') {
+        const result = service.setInteractionScene(args.scene)
+        json(res, 200, {
+          ok: true,
+          scene: result.scene,
+          changed: result.changed,
+          revision: result.revision,
+          view: publicView(service, memoryService, runtimeConfig),
+        })
+        return
+      }
+
       if (action === 'chat') {
         const text = typeof args.text === 'string' ? args.text.trim().slice(0, 500) : ''
         if (!text) {
@@ -465,9 +489,7 @@ export function apply(ctx, config = {}) {
           sessionId,
           turn,
           step: Number.isSafeInteger(args.step) ? args.step : 1,
-          context: args.context && typeof args.context === 'object'
-            ? args.context
-            : { privacy: 'private', outsiders_present: false, danger: 0 },
+          context: {},
           activityHint: typeof args.activityHint === 'string' ? args.activityHint.slice(0, 600) : '',
         })
         const model = selectModel(llm, agentDefaultModel, runtimeConfig)

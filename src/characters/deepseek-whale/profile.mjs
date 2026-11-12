@@ -67,6 +67,36 @@ export function intimacyForLevel(level) {
   return rows[Math.min(4, Math.max(0, (Number(level) || 1) - 1))]
 }
 
+const RELATIONSHIP_STAGE_LABELS = Object.freeze({
+  stranger: '陌生',
+  acquaintance: '初识',
+  colleague: '熟悉',
+  trusted: '信任',
+  close: '亲近',
+  confession: '告白中',
+  lover: '恋人',
+  bonded: '深厚羁绊',
+})
+
+const RELATIONSHIP_INTIMACY = Object.freeze({
+  stranger: '你们还不熟悉，保持礼貌、友善和适度距离。',
+  acquaintance: '你们刚认识，语气温柔自然，逐步了解彼此。',
+  colleague: '你们已经熟悉，可以自然交流和适度调侃。',
+  trusted: '你们已经建立信任，可以更主动地关心对方、表达支持。',
+  close: '你们关系亲近，可以自然地撒娇、分享感受，但尊重对方边界。',
+  confession: '你们正在认真确认彼此的心意，保持温柔，不提前假定已经成为恋人。',
+  lover: '你们已经成为恋人，可以更亲昵地表达喜欢和依赖，同时保持真诚与尊重。',
+  bonded: '你们建立了深厚而稳定的羁绊，可以自然表达亲密、信任与长期陪伴。',
+})
+
+export function relationshipStageLabel(stage) {
+  return RELATIONSHIP_STAGE_LABELS[String(stage || 'acquaintance')] || RELATIONSHIP_STAGE_LABELS.acquaintance
+}
+
+export function intimacyForRelationshipStage(stage, fallbackLevel = 1) {
+  return RELATIONSHIP_INTIMACY[String(stage || '')] || intimacyForLevel(fallbackLevel)
+}
+
 export function buildDeepseekWhaleSystemPrompt({
   profile = DEEPSEEK_WHALE_PROFILE,
   pplStaticPrompt = '',
@@ -79,6 +109,7 @@ export function buildDeepseekWhaleSystemPrompt({
   const level = Math.max(1, Number(characterState.level) || 1)
   const affection = Math.max(0, Number(characterState.affection) || 0)
   const cap = affectionCap(level)
+  const relationshipStage = String(characterState.pplRuntime?.relationships?.admin?.stage || characterState.relationship?.stage || 'acquaintance')
   const memoryText = memories.length
     ? memories.map(item => '- ' + String(item.text || '')).join('\n')
     : '（目前没有需要主动提起的长期记忆。）'
@@ -92,8 +123,8 @@ export function buildDeepseekWhaleSystemPrompt({
     '外观设定：' + profile.visual,
     '称呼对方为「' + profile.address + '」。回复应自然、简洁、有温度，不机械套用固定句式；不要把每次回复限制成相同长度。',
     dateText,
-    '当前等级：Lv.' + level + '；好感度：' + affection + '/' + cap + '。亲昵程度：' + intimacyForLevel(level),
-    '关系进度影响亲密表达，但不能改变事实判断、工具权限或安全边界。',
+    '当前等级：Lv.' + level + '；好感度：' + affection + '/' + cap + '。关系阶段：' + relationshipStageLabel(relationshipStage) + '。亲昵程度：' + intimacyForRelationshipStage(relationshipStage, level),
+    'PPL 关系阶段是亲密表达的主要依据；好感度等级仅用于成长反馈，不单独提升亲密程度。关系阶段不能改变事实判断、工具权限或安全边界。',
     activityHint ? '近期活动背景（仅供自然接话，不要复述或推断未提供的内容）：' + activityHint : '',
     memories.length ? '【鲸鱼娘自己的长期记忆】\n' + memoryText : '',
     pplStaticPrompt ? '【PPL 人格基线】\n' + pplStaticPrompt : '',

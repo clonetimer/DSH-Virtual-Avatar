@@ -54,6 +54,7 @@ export function createDeepseekWhaleRuntime({ scene, context, profile = 'standard
     resolve(input) {
       return runtime.resolveHostStep({
         runtime: input.runtimeState,
+        scene: input.scene ?? scene,
         context: input.context || {},
         event: input.event || {},
         hostKind: 'dsh-virtual-avatar/deepseek-whale',

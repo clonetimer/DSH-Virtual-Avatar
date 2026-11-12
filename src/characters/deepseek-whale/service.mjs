@@ -19,6 +19,8 @@ import {
 } from './relationship.mjs'
 
 const TERMINAL_COMMIT_REASONS = new Set(['completed', 'max-tokens'])
+const INTERACTION_SCENES = new Set(['PRIVATE_HOME', 'PUBLIC_SPACE'])
+const DEFAULT_INTERACTION_SCENE = 'PRIVATE_HOME'
 
 export class DeepseekWhaleService {
   constructor({ store, memoryService, pplRuntime } = {}) {
@@ -46,7 +48,27 @@ export class DeepseekWhaleService {
     if (!state.conversation) state.conversation = { log: [], chatLines: [], choices: [] }
     if (!state.storyMemory) state.storyMemory = createStoryMemory()
     if (!state.growth) state.growth = createGrowthState()
+    if (!INTERACTION_SCENES.has(state.interactionScene)) state.interactionScene = DEFAULT_INTERACTION_SCENE
     return { state, revision: loaded.revision, updatedAt: loaded.updatedAt, persisted: true }
+  }
+
+  setInteractionScene(scene) {
+    const selected = String(scene || '').trim()
+    if (!INTERACTION_SCENES.has(selected)) {
+      const error = new TypeError('interaction scene must be PRIVATE_HOME or PUBLIC_SPACE')
+      error.code = 'INVALID_INTERACTION_SCENE'
+      throw error
+    }
+    if (typeof this.store.saveCharacterState !== 'function') {
+      throw new Error('avatar store does not support interaction-scene persistence')
+    }
+    const loaded = this.loadState()
+    if (loaded.state.interactionScene === selected) {
+      return { scene: selected, changed: false, revision: loaded.revision }
+    }
+    const next = { ...loaded.state, interactionScene: selected }
+    const saved = this.store.saveCharacterState(DEEPSEEK_WHALE_ID, next, loaded.revision)
+    return { scene: selected, changed: true, revision: saved.revision }
   }
 
   prepareTurn({
@@ -56,7 +78,7 @@ export class DeepseekWhaleService {
     sessionId = 'deepseek-whale',
     turn,
     step = 1,
-    context = { privacy: 'private', outsiders_present: false, danger: 0 },
+    context = {},
     activityHint = '',
     profileOverrides,
     now = new Date(),
@@ -66,8 +88,10 @@ export class DeepseekWhaleService {
     if (!eventId) throw new TypeError('stable turn eventId required')
     const loaded = this.loadState({ sessionId })
     const event = classifyDeepseekWhaleEvent({ text: input, choice, eventId })
+    const interactionScene = loaded.state.interactionScene || DEFAULT_INTERACTION_SCENE
     const resolved = this.ppl.resolve({
       runtimeState: loaded.state.pplRuntime,
+      scene: interactionScene,
       event,
       context,
       turn: turn ?? loaded.state.pplRuntime?.session?.turn ?? 0,
@@ -105,7 +129,8 @@ export class DeepseekWhaleService {
       input,
       choice: choice ? structuredClone(choice) : null,
       event,
-      context: structuredClone(context),
+      context: structuredClone(resolved.context || context || {}),
+      interactionScene,
       profile,
       memoryContext,
       system: systemWithContinuity,
@@ -130,7 +155,7 @@ export class DeepseekWhaleService {
     const pplFinal = this.ppl.finalize(prepared.baseState.pplRuntime, prepared.pplResolution, terminalReason)
     if (!pplFinal.committed) throw new Error('PPL runtime refused completed turn commit')
 
-    const requestedAffectionDelta = deepseekWhaleAffectionDelta({ text: prepared.input, choice: prepared.choice })
+    const requestedAffectionDelta = deepseekWhaleAffectionDelta({ event: prepared.event })
     const growthResult = applyCompanionInteraction(prepared.baseState.growth || createGrowthState(), {
       eventId: prepared.eventId,
       delta: requestedAffectionDelta,
@@ -183,6 +208,11 @@ export class DeepseekWhaleService {
       requestedAffectionDelta,
       affectionDelta,
       pplEventType: prepared.event.type,
+      pplEventClassification: prepared.event.classification || null,
+      interactionScene: prepared.interactionScene || DEFAULT_INTERACTION_SCENE,
+      pplContext: prepared.context,
+      pplActiveRules: prepared.pplResolution?.activeRules?.map(rule => rule.id) || [],
+      pplPendingTransitions: prepared.pplResolution?.pendingTransitions || [],
       pplSnapshotHash: prepared.pplSnapshot?.persona?.irSha256 || null,
     }
     const committed = this.store.commitCharacterTurn({

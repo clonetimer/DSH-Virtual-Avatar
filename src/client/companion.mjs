@@ -12,6 +12,13 @@ const CSS = `
 .dva-character{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;background:radial-gradient(ellipse at center,#16466b,#091b30 70%)}
 .dva-character img{width:min(100%,260px);max-height:56vh;object-fit:contain;filter:drop-shadow(0 12px 20px #0008)}
 .dva-stats{font-size:13px;color:#b9d8ec;line-height:1.9;text-align:center}
+.dva-scene-toggle{margin-top:16px;padding:12px;border:1px solid #ffffff22;border-radius:14px;background:#0b2238;width:100%;max-width:250px}
+.dva-scene-title{font-size:12px;color:#a9c9df;margin-bottom:8px}
+.dva-scene-options{display:flex;gap:8px}
+.dva-scene-option{flex:1;border:1px solid #6ea9cc;border-radius:999px;background:#123a58;color:#dff2ff;padding:7px 10px;cursor:pointer}
+.dva-scene-option.active{background:#d7efff;color:#123a58;border-color:#d7efff}
+.dva-scene-option:disabled{opacity:.5;cursor:wait}
+.dva-scene-hint{display:block;margin-top:7px;color:#9abbd2;font-size:11px;line-height:1.5}
 .dva-chat{display:flex;flex-direction:column;min-width:0;min-height:0;padding:18px;gap:12px}
 .dva-lines{overflow:auto;flex:1;display:flex;flex-direction:column;gap:10px;padding-right:6px}
 .dva-line{max-width:88%;padding:10px 13px;border-radius:14px;background:#173b59;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -20,7 +27,7 @@ const CSS = `
 .dva-input{display:flex;gap:8px}.dva-input input{flex:1;min-width:0;border:1px solid #4d7796;border-radius:12px;background:#06172a;color:#fff;padding:11px}
 .dva-actions{display:flex;gap:8px;align-items:center}.dva-actions button:disabled,.dva-send:disabled{opacity:.45;cursor:wait}
 .dva-memories{max-height:38vh;overflow:auto;font-size:12px;color:#c2dced;background:#0b2238;border:1px solid #ffffff22;border-radius:12px;padding:10px}.dva-memory-row{padding:6px 0;border-bottom:1px solid #ffffff18}.dva-memory-row button{margin:4px;border:1px solid #77b8df;border-radius:999px;background:#174b70;color:#f2f9ff;padding:4px 8px}.dva-error{color:#ffb5a9;font-size:12px}
-@media(max-width:760px){.dva-panel{inset:2vh 2vw}.dva-main{grid-template-columns:1fr}.dva-character{display:none}.dva-chat{padding:12px}}
+@media(max-width:760px){.dva-panel{inset:2vh 2vw}.dva-main{grid-template-columns:1fr}.dva-character{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;justify-content:stretch;padding:10px;gap:10px}.dva-character img{width:64px;height:64px;max-height:none}.dva-stats{text-align:left;font-size:11px}.dva-scene-toggle{grid-column:1/-1;max-width:none;margin-top:0}.dva-chat{padding:12px}}
 `
 
 async function callApi(action, args = {}) {
@@ -39,6 +46,7 @@ function Companion() {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sceneBusy, setSceneBusy] = useState(false)
   const [error, setError] = useState('')
   const [memories, setMemories] = useState([])
   const [memoryQuery, setMemoryQuery] = useState('')
@@ -113,6 +121,17 @@ function Companion() {
     } catch (err) { setError(err.message || String(err)) }
     finally { setBusy(false) }
   }, [busy])
+
+  const setInteractionScene = async scene => {
+    if (sceneBusy || busy || character?.interactionScene === scene) return
+    setSceneBusy(true)
+    setError('')
+    try {
+      const result = await callApi('scene-set', { scene })
+      setView(result.view)
+    } catch (err) { setError(err.message || String(err)) }
+    finally { setSceneBusy(false) }
+  }
 
   const loadOlderHistory = async () => {
     if (historyLoading || historyCursor === null && olderLines.length > 0) return
@@ -264,6 +283,9 @@ function Companion() {
 
   const character = view?.character
   const lines = [...olderLines, ...(character?.chatLines || [])]
+  const relationshipStage = character?.relationship?.stage || 'acquaintance'
+  const relationshipStageLabel = character?.relationship?.stageLabel || ({ stranger: '陌生', acquaintance: '初识', colleague: '熟悉', trusted: '信任', close: '亲近', confession: '告白中', lover: '恋人', bonded: '深厚羁绊' }[relationshipStage] || '初识')
+  const interactionScene = character?.interactionScene || 'PRIVATE_HOME'
   const chatGroups = lines.reduce((groups, line, index) => {
     const timestamp = Number(line.at || 0)
     const day = timestamp > 0 ? new Date(timestamp).toLocaleDateString() : '时间未知'
@@ -294,7 +316,7 @@ function Companion() {
             const result = await callApi('background-set', { background: next })
             setView(result.view)
           } catch (err) { setError(err.message || String(err)) }
-        } }, '切换场景'),
+        } }, '切换背景'),
         React.createElement('button', { onClick: () => { void refresh() } }, '刷新'),
         React.createElement('button', { onClick: () => setOpen(false) }, '收起'),
       ),
@@ -305,14 +327,36 @@ function Companion() {
         React.createElement('div', { className: 'dva-stats' },
           'Lv.' + (character?.level || 1) + ' · 好感度 ' + (character?.affection || 0) + '/' + (character?.affectionCap || 30),
           React.createElement('br'),
-          '信任 ' + Math.round((character?.relationship?.trust || 0) * 100) + '% · ' + (character?.relationship?.stage || 'acquaintance'),
+          '信任 ' + Math.round((character?.relationship?.trust || 0) * 100) + '% · ' + relationshipStageLabel,
           React.createElement('br'),
           '依恋 ' + Math.round((character?.relationship?.attachment || 0) * 100) + '%',
           React.createElement('br'),
-          '关系阶段 ' + ({ acquaintance: '初识', familiar: '熟悉', close: '亲近', intimate: '亲密' }[character?.relationship?.stage] || '初识'),
+          '关系阶段 ' + relationshipStageLabel,
           React.createElement('br'),
-          React.createElement('small', null, '好感度推动等级成长；信任与依恋分别反映关系质量。'),
-
+          React.createElement('small', null, '好感度推动等级成长；信任与依恋由 PPL 规则治理。'),
+        ),
+        React.createElement('div', { className: 'dva-scene-toggle' },
+          React.createElement('div', { className: 'dva-scene-title' }, '互动环境 · PPL 场景'),
+          React.createElement('div', { className: 'dva-scene-options' },
+            React.createElement('button', {
+              className: 'dva-scene-option' + (interactionScene === 'PRIVATE_HOME' ? ' active' : ''),
+              disabled: sceneBusy || busy,
+              'aria-pressed': interactionScene === 'PRIVATE_HOME',
+              onClick: () => void setInteractionScene('PRIVATE_HOME'),
+            }, '私密空间'),
+            React.createElement('button', {
+              className: 'dva-scene-option' + (interactionScene === 'PUBLIC_SPACE' ? ' active' : ''),
+              disabled: sceneBusy || busy,
+              'aria-pressed': interactionScene === 'PUBLIC_SPACE',
+              onClick: () => void setInteractionScene('PUBLIC_SPACE'),
+            }, '公开场合'),
+          ),
+          React.createElement('small', { className: 'dva-scene-hint' },
+            interactionScene === 'PUBLIC_SPACE'
+              ? '有人旁听时，PPL 会收敛私密亲昵表达。'
+              : '私密陪伴时，PPL 按当前关系阶段调整亲密表达。',
+          ),
+          sceneBusy ? React.createElement('small', { className: 'dva-scene-hint' }, '正在保存场景设置…') : null,
         ),
       ),
       React.createElement('div', { className: 'dva-chat' },
