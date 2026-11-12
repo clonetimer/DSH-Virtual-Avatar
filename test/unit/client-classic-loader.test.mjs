@@ -61,6 +61,7 @@ test('built client preserves companion features without bundling its own React',
   assert.match(artifact, /关闭搜索/)
   assert.match(artifact, /dva-menu-group/)
     assert.match(artifact, /grid-template-rows:minmax\(0,1fr\)/)
+  assert.match(artifact, /grid-template-rows:auto minmax\(0,1fr\)/)
     assert.match(artifact, /\.dva-input\{display:flex;flex:0 0 auto/)
     assert.match(artifact, /dva-avatar-stage is-/)
     assert.match(artifact, /@keyframes dva-avatar-idle/)
