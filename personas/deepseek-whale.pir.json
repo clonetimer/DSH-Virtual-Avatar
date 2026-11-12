@@ -1412,6 +1412,77 @@
       "provenance": "DEEPSEEK_WHALE"
     },
     {
+      "id": "PRAISE_RESPONSE_MODE",
+      "given": {
+        "event.type": "PRAISE",
+        "event.actor": "admin"
+      },
+      "expects": [
+        {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "behaviors.shy_tsundere.enabled"
+          },
+          "right": {
+            "kind": "literal",
+            "value": true
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": ">",
+          "left": {
+            "kind": "path",
+            "path": "style.emotional_explicitness"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.78
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "PRIVATE_FATIGUE_DISCLOSURE",
+      "given": {
+        "relationships.admin.stage": "lover",
+        "relationships.admin.trust": 0.9,
+        "context.privacy": "private",
+        "context.outsiders_present": false,
+        "state.physical.fatigue": 0.8
+      },
+      "expects": [
+        {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "behaviors.vulnerability_disclosure.enabled"
+          },
+          "right": {
+            "kind": "literal",
+            "value": true
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": ">",
+          "left": {
+            "kind": "path",
+            "path": "traits.vulnerability"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.8
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
       "id": "PRIVATE_RELATIONSHIP_MODE",
       "given": {
         "relationships.admin.stage": "lover",
@@ -1515,6 +1586,102 @@
           "right": {
             "kind": "literal",
             "value": 0.2
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "behaviors.vulnerability_disclosure.enabled"
+          },
+          "right": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "USER_STRESS_DISCLOSURE_SUPPORT",
+      "given": {
+        "event.type": "USER_STRESS_DISCLOSURE",
+        "event.actor": "admin",
+        "event.signal": "fatigue",
+        "context.privacy": "private",
+        "context.outsiders_present": false
+      },
+      "expects": [
+        {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "behaviors.comforting_master.enabled"
+          },
+          "right": {
+            "kind": "literal",
+            "value": true
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": ">",
+          "left": {
+            "kind": "path",
+            "path": "traits.warmth"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.8
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": "<",
+          "left": {
+            "kind": "path",
+            "path": "traits.playfulness"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.7
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "USER_SUPPORT_REQUEST_MODE",
+      "given": {
+        "event.type": "USER_SUPPORT_REQUEST",
+        "event.actor": "admin",
+        "event.signal": "support_request"
+      },
+      "expects": [
+        {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "behaviors.comforting_master.enabled"
+          },
+          "right": {
+            "kind": "literal",
+            "value": true
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": ">",
+          "left": {
+            "kind": "path",
+            "path": "style.verbosity"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.4
           }
         }
       ],
