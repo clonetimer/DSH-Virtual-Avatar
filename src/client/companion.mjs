@@ -39,6 +39,12 @@ const CSS = `
 .dva-avatar-stage::after{content:"";position:absolute;z-index:0;left:25%;right:25%;bottom:2%;height:10px;border-radius:50%;background:#0006;filter:blur(7px);animation:dva-avatar-shadow 4.8s ease-in-out infinite}
 .dva-avatar-stage.is-thinking img{animation:dva-avatar-thinking 1.7s ease-in-out infinite}
 .dva-avatar-stage.is-responding img{animation:dva-avatar-response .72s ease-in-out 2}
+.dva-avatar-stage[role=button]{cursor:pointer;outline:none}
+.dva-avatar-stage[role=button]:focus-visible{outline:2px solid #a9dfff;outline-offset:5px;border-radius:18px}
+.dva-avatar-stage.is-patting img{animation:dva-avatar-pat .56s ease-in-out 2}
+.dva-avatar-bubble{position:absolute;z-index:4;left:50%;top:3%;transform:translate(-50%,-100%);max-width:210px;padding:7px 11px;border:1px solid #9bd9ff99;border-radius:13px;background:#f1f9ff;color:#17405d;font-size:12px;line-height:1.4;white-space:nowrap;box-shadow:0 5px 18px #0005;animation:dva-bubble-pop .18s ease-out both}
+.dva-avatar-bubble::after{content:"";position:absolute;left:50%;bottom:-6px;width:10px;height:10px;transform:translateX(-50%) rotate(45deg);background:#f1f9ff;border-right:1px solid #9bd9ff99;border-bottom:1px solid #9bd9ff99}
+.dva-avatar-hint{display:block;margin-top:-5px;color:#9abbd2;font-size:10px;text-align:center}
 .dva-avatar-status{position:absolute;z-index:2;left:50%;bottom:-3px;transform:translateX(-50%);padding:4px 10px;border:1px solid #8bcdf288;border-radius:999px;background:#092642ee;color:#eaf5ff;font-size:11px;white-space:nowrap}
 .dva-avatar-stage.is-thinking::after{animation-duration:1.7s}
 .dva-stats{font-size:13px;color:#b9d8ec;line-height:1.9;text-align:center}
@@ -71,9 +77,11 @@ const CSS = `
 @keyframes dva-avatar-idle{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}50%{transform:translateY(-7px) rotate(.45deg) scale(1.008)}}
 @keyframes dva-avatar-thinking{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-9px) rotate(-.8deg)}}
 @keyframes dva-avatar-response{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}38%{transform:translateY(-13px) rotate(1deg) scale(1.018)}72%{transform:translateY(-3px) rotate(-.4deg) scale(1.005)}}
+@keyframes dva-avatar-pat{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}30%{transform:translateY(-12px) rotate(-2deg) scale(1.025)}62%{transform:translateY(-3px) rotate(1deg) scale(1.012)}}
+@keyframes dva-bubble-pop{from{opacity:0;transform:translate(-50%,-88%) scale(.92)}to{opacity:1;transform:translate(-50%,-100%) scale(1)}}
 @keyframes dva-avatar-shadow{0%,100%{transform:scaleX(1);opacity:.45}50%{transform:scaleX(.82);opacity:.25}}
-@media(prefers-reduced-motion:reduce){.dva-avatar-stage img,.dva-avatar-stage::after{animation:none!important;transition:none!important}}
-@media(max-width:760px){.dva-panel{inset:2vh 2vw}.dva-head{padding:12px}.dva-head-tools{gap:6px}.dva-more-trigger,.dva-collapse{padding:7px 10px}.dva-more-menu{width:min(330px,88vw)}.dva-main{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.dva-character{display:grid;grid-template-columns:64px minmax(0,1fr);grid-template-rows:auto auto auto;align-items:center;justify-content:stretch;padding:10px;gap:8px}.dva-avatar-stage{grid-column:1;grid-row:1;width:64px;height:64px}.dva-avatar-stage img{width:64px;height:64px;max-height:none}.dva-avatar-stage::after{display:none}.dva-avatar-status{left:50%;bottom:-12px;font-size:9px;padding:2px 6px}.dva-stats{text-align:left;font-size:11px}.dva-state-strip{grid-column:1/-1;justify-content:flex-start;max-width:none;margin-top:0}.dva-state-label{text-align:left}.dva-scene-toggle{grid-column:1/-1;max-width:none;margin-top:0}.dva-chat{padding:12px}.dva-input{gap:6px}.dva-starter{padding:6px 9px}}
+@media(prefers-reduced-motion:reduce){.dva-avatar-stage img,.dva-avatar-stage::after,.dva-avatar-bubble{animation:none!important;transition:none!important}}
+@media(max-width:760px){.dva-panel{inset:2vh 2vw}.dva-head{padding:12px}.dva-head-tools{gap:6px}.dva-more-trigger,.dva-collapse{padding:7px 10px}.dva-more-menu{width:min(330px,88vw)}.dva-main{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.dva-character{display:grid;grid-template-columns:64px minmax(0,1fr);grid-template-rows:auto auto auto;align-items:center;justify-content:stretch;padding:10px;gap:8px}.dva-avatar-stage{grid-column:1;grid-row:1;width:64px;height:64px}.dva-avatar-stage img{width:64px;height:64px;max-height:none}.dva-avatar-stage::after{display:none}.dva-avatar-status{left:50%;bottom:-12px;font-size:9px;padding:2px 6px}.dva-avatar-bubble{top:0;max-width:160px;font-size:10px;padding:4px 7px}.dva-avatar-hint{display:none}.dva-stats{text-align:left;font-size:11px}.dva-state-strip{grid-column:1/-1;justify-content:flex-start;max-width:none;margin-top:0}.dva-state-label{text-align:left}.dva-scene-toggle{grid-column:1/-1;max-width:none;margin-top:0}.dva-chat{padding:12px}.dva-input{gap:6px}.dva-starter{padding:6px 9px}}
 `
 
 async function callApi(action, args = {}) {
@@ -103,6 +111,8 @@ function Companion() {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [avatarMotion, setAvatarMotion] = useState('idle')
+  const [avatarBubble, setAvatarBubble] = useState('')
+  const [avatarExpressionOverride, setAvatarExpressionOverride] = useState(null)
   const [sceneBusy, setSceneBusy] = useState(false)
   const [error, setError] = useState('')
   const [memories, setMemories] = useState([])
@@ -185,15 +195,29 @@ function Companion() {
   }, [open, showMoreMenu, activePanel])
 
   useEffect(() => {
-    if (avatarMotion !== 'responding') return
-    const timer = window.setTimeout(() => setAvatarMotion('idle'), 1500)
+    if (avatarMotion !== 'responding' && avatarMotion !== 'patting') return
+    const delay = avatarMotion === 'patting' ? 1250 : 1500
+    const timer = window.setTimeout(() => {
+      setAvatarMotion('idle')
+      setAvatarBubble('')
+      setAvatarExpressionOverride(null)
+    }, delay)
     return () => window.clearTimeout(timer)
   }, [avatarMotion])
+
+  const patAvatar = () => {
+    if (busy || avatarMotion === 'thinking') return
+    setAvatarMotion('patting')
+    setAvatarExpressionOverride('shy')
+    setAvatarBubble('嘿嘿，主人摸摸我啦～')
+  }
 
   const send = useCallback(async (message, choiceId) => {
     const clean = String(message || '').trim()
     if (!clean || busy) return
     setBusy(true)
+    setAvatarBubble('')
+    setAvatarExpressionOverride(null)
     setAvatarMotion('thinking')
     setError('')
     setNotice('')
@@ -210,7 +234,12 @@ function Companion() {
           setNotice('消息已发送，但暂时无法生成记忆建议。')
         }
       }
-    } catch (err) { setAvatarMotion('idle'); setError(err.message || String(err)) }
+    } catch (err) {
+      setAvatarMotion('idle')
+      setAvatarBubble('')
+      setAvatarExpressionOverride(null)
+      setError(err.message || String(err))
+    }
     finally { setBusy(false) }
   }, [busy])
 
@@ -476,16 +505,30 @@ function Companion() {
       React.createElement('aside', { className: 'dva-character' },
         React.createElement('div', {
           className: 'dva-avatar-stage is-' + avatarMotion,
-          'aria-label': avatarMotion === 'thinking' ? '鲸鱼娘正在思考' : avatarMotion === 'responding' ? '鲸鱼娘正在回应' : '鲸鱼娘待机中',
+          role: 'button',
+          tabIndex: 0,
+          title: '点击摸摸鲸鱼娘',
+          'aria-label': avatarMotion === 'thinking' ? '鲸鱼娘正在思考' : avatarMotion === 'patting' ? '摸摸鲸鱼娘' : avatarMotion === 'responding' ? '鲸鱼娘正在回应' : '点击摸摸鲸鱼娘',
+          onClick: patAvatar,
+          onKeyDown: event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              patAvatar()
+            }
+          },
         },
           React.createElement('img', {
-            key: character?.imageUrl || 'default-avatar',
-            src: character?.imageUrl || API + '/assets/maid-left.webp',
+            key: avatarExpressionOverride || character?.imageUrl || 'default-avatar',
+            src: avatarExpressionOverride
+              ? character?.expressionUrls?.[avatarExpressionOverride] || character?.imageUrl || API + '/assets/maid-left.webp'
+              : character?.imageUrl || API + '/assets/maid-left.webp',
             alt: character?.name || '鲸鱼娘',
             draggable: false,
           }),
           avatarMotion === 'thinking' ? React.createElement('span', { className: 'dva-avatar-status', role: 'status' }, '正在思考…') : null,
+          avatarBubble ? React.createElement('span', { className: 'dva-avatar-bubble', role: 'status' }, avatarBubble) : null,
         ),
+        React.createElement('small', { className: 'dva-avatar-hint' }, '点击立绘，可以摸摸鲸鱼娘'),
         React.createElement('div', { className: 'dva-stats' },
           'Lv.' + (character?.level || 1) + ' · 好感度 ' + (character?.affection || 0) + '/' + (character?.affectionCap || 30),
           React.createElement('br'),
