@@ -42,6 +42,12 @@ const CSS = `
 .dva-avatar-stage[role=button]{cursor:pointer;outline:none}
 .dva-avatar-stage[role=button]:focus-visible{outline:2px solid #a9dfff;outline-offset:5px;border-radius:18px}
 .dva-avatar-stage.is-patting img{animation:dva-avatar-pat .56s ease-in-out 2}
+.dva-avatar-stage.is-swaying img{animation:dva-avatar-sway 1.35s ease-in-out}
+.dva-avatar-stage.is-idle.is-state-shy img{animation:dva-avatar-state-shy 4.2s ease-in-out infinite}
+.dva-avatar-stage.is-idle.is-state-tense img{animation:dva-avatar-state-tense 2.6s ease-in-out infinite}
+.dva-avatar-stage.is-idle.is-state-nervous img{animation:dva-avatar-state-nervous 2.8s ease-in-out infinite}
+.dva-avatar-stage.is-idle.is-state-subdued img{animation:dva-avatar-state-subdued 6s ease-in-out infinite}
+.dva-avatar-stage.is-idle.is-state-resting img{animation:dva-avatar-state-resting 6.8s ease-in-out infinite}
 .dva-avatar-bubble{position:absolute;z-index:4;left:50%;top:3%;transform:translate(-50%,-100%);max-width:210px;padding:7px 11px;border:1px solid #9bd9ff99;border-radius:13px;background:#f1f9ff;color:#17405d;font-size:12px;line-height:1.4;white-space:nowrap;box-shadow:0 5px 18px #0005;animation:dva-bubble-pop .18s ease-out both}
 .dva-avatar-bubble::after{content:"";position:absolute;left:50%;bottom:-6px;width:10px;height:10px;transform:translateX(-50%) rotate(45deg);background:#f1f9ff;border-right:1px solid #9bd9ff99;border-bottom:1px solid #9bd9ff99}
 .dva-avatar-hint{display:block;margin-top:-5px;color:#9abbd2;font-size:10px;text-align:center}
@@ -78,6 +84,12 @@ const CSS = `
 @keyframes dva-avatar-thinking{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-9px) rotate(-.8deg)}}
 @keyframes dva-avatar-response{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}38%{transform:translateY(-13px) rotate(1deg) scale(1.018)}72%{transform:translateY(-3px) rotate(-.4deg) scale(1.005)}}
 @keyframes dva-avatar-pat{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}30%{transform:translateY(-12px) rotate(-2deg) scale(1.025)}62%{transform:translateY(-3px) rotate(1deg) scale(1.012)}}
+@keyframes dva-avatar-sway{0%,100%{transform:translateY(0) rotate(0deg)}32%{transform:translate(5px,-4px) rotate(1.1deg)}68%{transform:translate(-3px,-2px) rotate(-.7deg)}}
+@keyframes dva-avatar-state-shy{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}50%{transform:translateY(-5px) rotate(-.7deg) scale(1.01)}}
+@keyframes dva-avatar-state-tense{0%,100%{transform:translateY(0) rotate(0deg)}25%{transform:translateY(-1px) rotate(-.7deg)}50%{transform:translateY(0) rotate(.7deg)}75%{transform:translateY(-1px) rotate(-.4deg)}}
+@keyframes dva-avatar-state-nervous{0%,100%{transform:translateY(0) rotate(0deg)}35%{transform:translate(1px,-2px) rotate(.35deg)}70%{transform:translate(-1px,0) rotate(-.35deg)}}
+@keyframes dva-avatar-state-subdued{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.003)}}
+@keyframes dva-avatar-state-resting{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.006)}}
 @keyframes dva-bubble-pop{from{opacity:0;transform:translate(-50%,-88%) scale(.92)}to{opacity:1;transform:translate(-50%,-100%) scale(1)}}
 @keyframes dva-avatar-shadow{0%,100%{transform:scaleX(1);opacity:.45}50%{transform:scaleX(.82);opacity:.25}}
 @media(prefers-reduced-motion:reduce){.dva-avatar-stage img,.dva-avatar-stage::after,.dva-avatar-bubble{animation:none!important;transition:none!important}}
@@ -96,13 +108,13 @@ async function callApi(action, args = {}) {
   return result
 }
 
-function describeCharacterState(state = {}) {
+function describeCharacterState(state = {}, presentation = {}) {
   const anxiety = Math.max(0, Math.min(1, Number(state.anxiety) || 0))
   const grief = Math.max(0, Math.min(1, Number(state.grief) || 0))
   const anger = Math.max(0, Math.min(1, Number(state.anger) || 0))
   const embarrassment = Math.max(0, Math.min(1, Number(state.embarrassment) || 0))
-  const mood = anger >= 0.65 ? '有些不开心' : grief >= 0.60 ? '有点低落' : anxiety >= 0.65 ? '略显紧张' : '平静'
-  const shyness = embarrassment >= 0.70 ? '很害羞' : embarrassment >= 0.35 ? '有点害羞' : '自然'
+  const mood = presentation.mood || (anger >= 0.65 ? '有些不开心' : grief >= 0.60 ? '有点低落' : anxiety >= 0.65 ? '略显紧张' : '平静')
+  const shyness = presentation.shyness || (embarrassment >= 0.70 ? '很害羞' : embarrassment >= 0.35 ? '有点害羞' : '自然')
   return { mood, shyness }
 }
 
@@ -203,6 +215,20 @@ function Companion() {
       setAvatarBubble('')
       setAvatarExpressionOverride(null)
     }, delay)
+    return () => window.clearTimeout(timer)
+  }, [avatarMotion])
+
+  useEffect(() => {
+    if (!open || busy || activePanel || avatarMotion !== 'idle') return
+    // A quiet, infrequent body sway makes the portrait feel present without
+    // interrupting typing, reading utility panels or an active model turn.
+    const timer = window.setTimeout(() => setAvatarMotion('swaying'), 24000)
+    return () => window.clearTimeout(timer)
+  }, [open, busy, activePanel, avatarMotion])
+
+  useEffect(() => {
+    if (avatarMotion !== 'swaying') return
+    const timer = window.setTimeout(() => setAvatarMotion('idle'), 1400)
     return () => window.clearTimeout(timer)
   }, [avatarMotion])
 
@@ -422,7 +448,7 @@ function Companion() {
   const interactionScene = character?.interactionScene || 'PRIVATE_HOME'
   const hasConversation = lines.length > 0
   const pplState = character?.pplState || {}
-  const characterState = describeCharacterState(pplState)
+  const characterState = describeCharacterState(pplState, character?.presentation || {})
   const chatGroups = lines.reduce((groups, line, index) => {
     const timestamp = Number(line.at || 0)
     const day = timestamp > 0 ? new Date(timestamp).toLocaleDateString() : '时间未知'
@@ -505,11 +531,14 @@ function Companion() {
     React.createElement('div', { className: 'dva-main' },
       React.createElement('aside', { className: 'dva-character' },
         React.createElement('div', {
-          className: 'dva-avatar-stage is-' + avatarMotion,
+          className: 'dva-avatar-stage is-' + avatarMotion + ' is-state-' + (character?.presentation?.motion || 'calm'),
+          'data-expression': character?.presentation?.expression || 'neutral',
+          'data-expression-source': character?.presentation?.expressionSource || 'baseline',
+          'data-tempo': character?.presentation?.tempo || 'normal',
           role: 'button',
           tabIndex: 0,
-          title: '点击摸摸鲸鱼娘',
-          'aria-label': avatarMotion === 'thinking' ? '鲸鱼娘正在思考' : avatarMotion === 'patting' ? '摸摸鲸鱼娘' : avatarMotion === 'responding' ? '鲸鱼娘正在回应' : '点击摸摸鲸鱼娘',
+          title: '当前表情：' + (character?.presentation?.expressionLabel || '自然') + '；点击摸摸鲸鱼娘',
+          'aria-label': avatarMotion === 'thinking' ? '鲸鱼娘正在思考' : avatarMotion === 'patting' ? '摸摸鲸鱼娘' : avatarMotion === 'responding' ? '鲸鱼娘正在回应' : '鲸鱼娘当前表情：' + (character?.presentation?.expressionLabel || '自然') + '；点击摸摸鲸鱼娘',
           onClick: patAvatar,
           onKeyDown: event => {
             if (event.key === 'Enter' || event.key === ' ') {
