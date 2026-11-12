@@ -22,6 +22,18 @@ const EXPRESSION_LABELS = Object.freeze({
   starry: '憧憬',
 })
 
+const PAT_REACTIONS = Object.freeze({
+  neutral: { expression: 'shy', reply: '嘿嘿，主人摸摸我啦～' },
+  cheerful: { expression: 'cheerful', reply: '嗯嗯，好开心呀～再摸摸？' },
+  shy: { expression: 'shy', reply: '嘿嘿，主人摸摸我啦～' },
+  serious: { expression: 'serious', reply: '谢谢主人，我会继续努力的。' },
+  confused: { expression: 'confused', reply: '咦？主人这是在摸摸我吗？' },
+  angry: { expression: 'angry', reply: '唔……主人轻一点啦。' },
+  frightened: { expression: 'frightened', reply: '呀，吓我一跳……' },
+  exasperated: { expression: 'exasperated', reply: '唔……主人别闹啦。' },
+  starry: { expression: 'starry', reply: '呀，像海浪一样舒服呢～' },
+})
+
 function unit(value) {
   const number = Number(value)
   if (!Number.isFinite(number)) return 0
@@ -68,10 +80,13 @@ export function resolveDeepseekWhalePresentation({ pplState = {}, replyEmotion =
       : '自然'
   const motion = dominant?.motion || (state.fatigue >= 0.75 ? 'resting' : 'calm')
   const tempo = state.fatigue >= 0.75 ? 'slow' : 'normal'
+  const patReaction = PAT_REACTIONS[expression] || PAT_REACTIONS.neutral
 
   return {
     expression,
     expressionLabel,
+    patExpression: patReaction.expression,
+    patReply: patReaction.reply,
     expressionSource: source,
     asset: expression === 'neutral' ? 'maid-left.webp' : 'whale-' + expression + '.webp',
     mood,
