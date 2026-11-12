@@ -18,6 +18,8 @@ const CSS = `
 .dva-menu-item:hover{background:#1b5277}
 .dva-menu-item:disabled{opacity:.5;cursor:wait}
 .dva-notice{padding:8px 11px;border:1px solid #74b6d344;border-radius:10px;background:#123b55;color:#c8eaff;font-size:12px}
+.dva-utility-overlay{position:absolute;inset:0;z-index:20;display:flex;align-items:stretch;padding:14px;background:#06172aee;border:1px solid #6ea9cc;border-radius:14px;box-shadow:0 14px 40px #0008;backdrop-filter:blur(10px)}
+.dva-utility-overlay>.dva-memories{width:100%;height:100%;max-height:100%;box-sizing:border-box;}
 .dva-title{font-size:18px;font-weight:700}.dva-sub{font-size:12px;color:#a9c9df;margin-top:4px}
 .dva-main{display:grid;grid-template-columns:minmax(180px,28%) 1fr;min-height:0;flex:1}
 .dva-character{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;background:radial-gradient(ellipse at center,#16466b,#091b30 70%)}
@@ -182,6 +184,7 @@ function Companion() {
   }
 
   const searchHistory = async () => {
+    setShowMoreMenu(false)
     setHistorySearchLoading(true)
     try {
       const result = await callApi('history-search', { query: historyQuery })
@@ -192,6 +195,8 @@ function Companion() {
   }
 
   const loadRelationshipHistory = async () => {
+    setShowMoreMenu(false)
+    setActivePanel('relationship')
     setRelationshipLoading(true)
     try {
       const result = await callApi('relationship-history', { limit: 50 })
@@ -202,6 +207,8 @@ function Companion() {
   }
 
   const loadSummaryCandidate = async () => {
+    setShowMoreMenu(false)
+    setActivePanel('summary')
     try {
       const result = await callApi('summary-candidate')
       setSummaryCandidate(result.candidate)
@@ -304,6 +311,8 @@ function Companion() {
   }
 
   const loadMemories = async (filters = {}) => {
+    setShowMoreMenu(false)
+    setActivePanel('memories')
     setMemoryLoading(true)
     try {
       const result = await callApi('memory-list', {
@@ -492,6 +501,8 @@ function Companion() {
             React.createElement('button', { onClick: () => setMemoryCandidates(rows => rows.filter((_, rowIndex) => rowIndex !== index)) }, '忽略'),
           )),
         ) : null,
+        ['summary', 'profile', 'diagnostics', 'backups', 'memories'].includes(activePanel)
+          ? React.createElement('div', { className: 'dva-utility-overlay' },
         activePanel === 'summary' ? React.createElement('div', { className: 'dva-memories' },
           React.createElement('strong', null, '长期相处摘要'),
           summaryCandidate?.summary
@@ -633,7 +644,7 @@ function Companion() {
             )),
             React.createElement('button', { onClick: () => setActivePanel(null) }, '关闭记忆'),
           ) : null,
-        ),
+          ) : null,
         error ? React.createElement('div', { className: 'dva-error', role: 'alert' }, error) : null,
         notice ? React.createElement('div', { className: 'dva-notice', role: 'status' }, notice) : null,
         React.createElement('form', { className: 'dva-input', onSubmit: event => { event.preventDefault(); void send(text) } },
