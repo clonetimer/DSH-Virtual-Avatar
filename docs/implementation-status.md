@@ -258,10 +258,10 @@
 - No unrelated Kitty/ChrisKitty artwork was substituted for the Whale. The current Whale still uses its own portrait assets; real frame-by-frame Whale animation awaits a matching authorized frame package.
 
 ### CI evidence
-- Run ID `43244938053`: Node 24 and Node 24.9.0 both PASS.
+- Run ID `43245213724`: Node 24 and Node 24.9.0 both PASS.
 - Full project tests: 76 passed / 0 failed on both matrix legs.
 - Classic DSH client loader and npm package verification: PASS.
 - DyberPet native motion compatibility tests: PASS.
-- Windows Web/Desktop candidate `0.1.0-dev.8` generated; ZIP 3,486,664 bytes.
-- TGZ: 3,484,996 bytes; SHA-256: `506c9599993c3e19177895d8dd9c1dfe2c70a51bc47f1f3b1d9fd9ba81a5c1cd`.
+- Windows Web/Desktop candidate `0.1.0-dev.8` generated; ZIP 3,487,163 bytes.
+- TGZ: 3,485,488 bytes; SHA-256: `52c0845deff33dac62220764390b33841ad8a605de834d24ae0b799e69213c76`.
 - Google Drive file updated in place; real DSH Desktop 0.2.2-rc.1 interaction remains a manual acceptance gate.
