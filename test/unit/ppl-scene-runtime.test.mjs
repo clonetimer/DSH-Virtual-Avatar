@@ -153,6 +153,27 @@ test('interaction scene persists and legacy states default to PRIVATE_HOME', () 
   assert.equal(legacyService.loadState().state.interactionScene, 'PRIVATE_HOME')
 })
 
+test('DeepseekWhaleService passes the persisted scene into each PPL turn', () => {
+  const store = createMemoryStore()
+  const service = new DeepseekWhaleService({
+    store,
+    memoryService: { retrieveContext: () => ({ items: [] }) },
+    pplRuntime: runtime(),
+  })
+  service.setInteractionScene('PUBLIC_SPACE')
+
+  const prepared = service.prepareTurn({
+    text: '你好',
+    eventId: 'scene-turn-1',
+    sessionId: 'deepseek-whale-default',
+  })
+
+  assert.equal(prepared.interactionScene, 'PUBLIC_SPACE')
+  assert.equal(prepared.context.privacy, 'public')
+  assert.equal(prepared.context.outsiders_present, true)
+  assert.equal(prepared.pplSnapshot.context.privacy, 'public')
+})
+
 test('interaction scene rejects unsupported values and does not rewrite unchanged state', () => {
   const store = createMemoryStore()
   const service = new DeepseekWhaleService({ store })
