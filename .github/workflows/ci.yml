@@ -41,11 +41,9 @@ jobs:
           node .ppl-toolchain/components/foundation/core/dist/src/cli.js test personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules
           mkdir -p .ppl-artifacts
           node .ppl-toolchain/components/foundation/core/dist/src/cli.js build personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules --out .ppl-artifacts/deepseek-whale.pir.json
-          if [ -f personas/deepseek-whale.pir.json ]; then
-            cmp personas/deepseek-whale.pir.json .ppl-artifacts/deepseek-whale.pir.json
-          else
-            cp .ppl-artifacts/deepseek-whale.pir.json personas/deepseek-whale.pir.json
-          fi
+          # The pinned compiler is the source of truth for the checked-in runtime IR.
+          # Regenerate it on every matrix leg; the Node 24.9.0 leg commits any change below.
+          cp .ppl-artifacts/deepseek-whale.pir.json personas/deepseek-whale.pir.json
       - uses: actions/checkout@v4
         with:
           repository: JAdpp/dsh-whale-galgame
@@ -85,7 +83,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: matrix.node == '24.9.0'
         with:
-          name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.2
+          name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.3
           path: |
             dist-artifact/*.tgz
             dist-artifact/*.sha256
