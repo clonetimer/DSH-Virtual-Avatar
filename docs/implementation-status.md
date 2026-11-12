@@ -231,3 +231,19 @@
 - Classic DSH client loader, UX artifact assertions and npm package verification: PASS.
 - Windows Web/Desktop artifact 0.1.0-dev.6 generated.
 - Actual visual spacing, keyboard/menu behavior and Desktop 0.2.2-rc.1 model streaming still require real-host acceptance.
+## Chat composer and avatar motion record (2026-11-12)
+
+### Implemented in PR #25
+- Constrained the companion main grid to a single minmax(0, 1fr) row; the character column scrolls independently so its portrait/status/scene controls cannot push the chat composer below the visible panel.
+- Constrained the chat column and history scroll area; the message composer is a non-shrinking footer pinned to the bottom of the visible panel.
+- Added first-message suggestions and an explicit Enter-to-send hint.
+- Added continuous idle float, model-pending thinking motion/status, and a short response bounce after a successful reply.
+- Kept existing emotion-specific portrait switching after completed replies; no lip-sync or skeletal animation is claimed for the static full-body art.
+- Added reduced-motion support and regression assertions for the layout, composer, avatar states, starter prompts and keyframes.
+
+### CI evidence
+- Run ID 43237458835: Node 24.9.0 and Node 24 both PASS.
+- Full project tests: 72 passed / 0 failed on both matrix legs.
+- Classic DSH client loader and npm package verification: PASS.
+- Windows Web/Desktop artifact `0.1.0-dev.7` generated; `package-info.json` in the ZIP is the authoritative source for exact package size and SHA-256.
+- Google Drive file is updated in place, preserving its existing URL; actual DSH Desktop visual acceptance remains pending.

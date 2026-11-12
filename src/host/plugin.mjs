@@ -325,7 +325,7 @@ export function apply(ctx, config = {}) {
     } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
     return {
       checkedAt,
-      plugin: { id: name, version: '0.1.0-dev.6', enabled: runtimeConfig.enabled },
+      plugin: { id: name, version: '0.1.0-dev.7', enabled: runtimeConfig.enabled },
       model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
       persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0, registered: personaRegistry.list() },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, mediaDirectory, backupDirectory },
@@ -366,7 +366,7 @@ export function apply(ctx, config = {}) {
       return
     }
     if (req.method === 'GET') {
-      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.6' })
+      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.7' })
       return
     }
     if (req.method !== 'POST') {
