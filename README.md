@@ -10,6 +10,7 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 - 长期相处摘要候选：显示来源摘要与 revision，只有用户确认后才覆盖长期摘要。
 - PPL 信任/依恋/关系阶段，以及有每日正向成长上限的好感度和等级；私密/公开场景直接驱动 PPL Runtime。
 - PPL 关系阶段由信任、依恋和告白事件推进；事件分类、好感变化与 PPL 事件共用同一分类结果。
+- PPL 情绪状态由已完成的互动事件驱动，包含焦虑、悲伤、愤怒、羞赧与疲劳；用户压力表达、用户陪伴请求、安慰角色、赞美和休息建议分别处理。
 - DSH Cordis 插件入口与 Web Client overlay；支持自由聊天、历史分页、角色设定、表情和内置场景切换。
 - Whale 旧存档的 DeepSeek 角色导入原型；其他角色明确延期，原始存档保留。
 
@@ -35,15 +36,15 @@ node --version
 npm --version
 ```
 
-从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.3` artifact 下载以下文件：
-- `dsh-virtual-avatar-0.1.0-dev.3.tgz`
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.4` artifact 下载以下文件：
+- `dsh-virtual-avatar-0.1.0-dev.4.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
 
 先校验包文件（在下载目录执行）：
 
 ```powershell
-Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.3.tgz -Algorithm SHA256
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.4.tgz -Algorithm SHA256
 ```
 
 将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
@@ -51,14 +52,14 @@ Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.3.tgz -Algorithm SHA256
 **DSH Web（web profile）：**
 
 ```powershell
-dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.3.tgz"
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.4.tgz"
 dsh --profile web --dump-config
 ```
 
 **DSH Desktop：** 建议直接使用桌面版「插件 → 添加插件」，输入 `.tgz` 的完整绝对路径。若在 DSH 桌面版「应用 → 管理 dsh 命令…」安装了专用 CLI，可在完全退出 Desktop 后使用其保留的 `desktop` profile：
 
 ```powershell
-dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.3.tgz"
+dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.4.tgz"
 dsh --profile desktop --dump-config
 ```
 
@@ -83,7 +84,7 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 
 保留 `third_party/` 中的上游许可、署名与素材说明。Whale 部分默认图片受 CC BY-NC-SA 4.0 约束，不能视为 MIT 代码素材。
 
-## Desktop 0.2.2-rc.1 与 PPL 场景运行时（dev.3）
+## Desktop 0.2.2-rc.1 与 PPL 场景/情绪运行时（dev.4）
 
 - `dev.1` 的 `lib/client.js` 直接包含 ESM `import`，与 DSH 使用的经典 `<script>` 模块工厂加载协议不兼容，可能在启动时出现 `Cannot use import statement outside a module`。
 - `dev.3` 将 `src/client/companion.mjs` 构建为 `window.__ModuleLoader__.load({id:'dsh-virtual-avatar',factory})` 注册格式，React 与 ReactDOM 使用 DSH 平台共享模块，避免双 React 副本。
@@ -94,3 +95,8 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - `dev.3` 增加 `acquaintance → trusted → close` 关系阶段演化，以及低信任告白的 `confession` 中间阶段；关系阶段成为亲密表达的主要依据，好感度等级不再单独提升亲密程度。
 - 互动事件分类统一供 PPL 和好感度结算使用；“早安/晚安”不再自动加好感，“我不累”等否定表达不会仅因包含“累”而触发安慰事件。
 - CI 使用固定 PPL Core 编译 `personas/deepseek-whale.ppl`，自动刷新并提交对应 PIR；Node 24.9.0 / 24 矩阵分别验证运行时和打包。
+
+- `dev.4` 区分“用户表达自己疲惫/压力”与“用户安慰鲸鱼娘”：前者进入支持性回应模式，不增加信任或依恋；后者才进入角色安慰事件。
+- `dev.4` 增加用户陪伴请求、角色休息建议和明确赞美事件；早安/晚安等普通寒暄不触发好感变化。
+- PPL Runtime 维护角色自身的疲劳、焦虑、悲伤、愤怒和羞赧状态；成功完成的对话才提交状态变化，中断/失败的模型请求不会结算。
+- UI 展示角色自身的 PPL 状态指标；这些指标不代表对用户的情绪或健康评估，也不会把用户的短暂压力表达自动写入长期记忆。
