@@ -213,4 +213,15 @@ test('relationship stage, not affection level, governs intimacy prompt', () => {
   assert.match(prompt, /你们刚认识/)
   assert.match(prompt, /好感度等级仅用于成长反馈/)
   assert.doesNotMatch(prompt, /非常亲昵，像恋人一样/)
+
+  const runtimeAuthoritativePrompt = buildDeepseekWhaleSystemPrompt({
+    characterState: {
+      level: 5,
+      affection: 10,
+      relationship: { stage: 'acquaintance' },
+      pplRuntime: { relationships: { admin: { stage: 'lover' } } },
+    },
+  })
+  assert.match(runtimeAuthoritativePrompt, /关系阶段：恋人/)
+  assert.match(runtimeAuthoritativePrompt, /你们已经成为恋人/)
 })
