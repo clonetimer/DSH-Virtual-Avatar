@@ -182,6 +182,15 @@ function publicView(service, memoryService, config) {
   const state = loaded.state
   const profile = resolveDeepseekWhaleProfile(state.profileOverrides || {})
   const pplRelationship = state.pplRuntime?.relationships?.admin || {}
+  const runtimeEmotion = state.pplRuntime?.state?.emotion || {}
+  const runtimePhysical = state.pplRuntime?.state?.physical || {}
+  const pplState = {
+    fatigue: Number(runtimePhysical.fatigue ?? 0),
+    anxiety: Number(runtimeEmotion.anxiety ?? 0),
+    embarrassment: Number(runtimeEmotion.embarrassment ?? 0),
+    grief: Number(runtimeEmotion.grief ?? 0),
+    anger: Number(runtimeEmotion.anger ?? 0),
+  }
   const relationshipStage = String(pplRelationship.stage || state.relationship?.stage || 'acquaintance')
   const relationship = {
     ...state.relationship,
@@ -217,6 +226,7 @@ function publicView(service, memoryService, config) {
       relationship,
       interactionScene: state.interactionScene || 'PRIVATE_HOME',
       interactionSceneLabel: (state.interactionScene || 'PRIVATE_HOME') === 'PUBLIC_SPACE' ? '公开场合' : '私密空间',
+      pplState,
       chatLines: state.conversation?.chatLines || [],
       choices: state.conversation?.choices || [],
     },
@@ -321,6 +331,7 @@ export function apply(ctx, config = {}) {
         attachment: loaded.state.pplRuntime?.relationships?.admin?.attachment ?? loaded.state.relationship?.attachment ?? null,
         relationshipStage: loaded.state.pplRuntime?.relationships?.admin?.stage || loaded.state.relationship?.stage || 'acquaintance',
         interactionScene: loaded.state.interactionScene || 'PRIVATE_HOME',
+        pplState: loaded.state.pplRuntime?.state || {},
         stateRevision: loaded.revision,
         lastConversationAt: loaded.state.conversation?.chatLines?.at(-1)?.at || null,
         lastSuccessfulTurnAt,
