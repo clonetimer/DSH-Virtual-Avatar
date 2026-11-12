@@ -237,8 +237,8 @@ function Companion() {
   const patAvatar = () => {
     if (busy || avatarMotion === 'thinking') return
     setAvatarMotion('patting')
-    setAvatarExpressionOverride('shy')
-    setAvatarBubble('嘿嘿，主人摸摸我啦～')
+    setAvatarExpressionOverride(view?.character?.presentation?.patExpression || 'shy')
+    setAvatarBubble(view?.character?.presentation?.patReply || '嘿嘿，主人摸摸我啦～')
   }
 
   const send = useCallback(async (message, choiceId) => {
