@@ -24,7 +24,7 @@ The management panels share one active-panel state. Summary, profile, diagnostic
 ### 3. Human-readable relationship and character state
 
 - Remove the duplicated relationship-stage line.
-- Show “关系阶段、信任、亲近度” instead of exposing the internal term “依恋”.
+- Show “关系阶段、信任、亲近度” instead of exposing the internal term “依恋”; the relationship-history view uses the same wording.
 - Replace raw PPL emotion percentages with qualitative labels: “精力、心情、表现”.
 - Replace the implementation label “互动环境 · PPL 场景” with “互动场合”; explain the behavior in ordinary language.
 
@@ -47,6 +47,7 @@ The classic DSH client test now asserts:
 - The user-facing scene/state labels replace implementation jargon.
 - The submitted message draft is cleared only after successful completion.
 - The old row of separate utility-state controls is absent.
+- Escape dismissal, outside-menu dismissal, and utility-panel empty states remain part of the client artifact.
 
 The existing DSH classic-script loader check remains in place; this UX change does not introduce a second React runtime or change the Host API contract.
 
