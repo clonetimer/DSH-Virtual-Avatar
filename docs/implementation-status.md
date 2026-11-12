@@ -280,3 +280,29 @@
 
 ### Acceptance boundary
 - This is a PPL-to-existing-art presentation layer, not a new frame-art package. True frame-by-frame Whale movement still requires matching authorized Whale artwork.
+
+## PPL-driven expression and autonomous idle behavior record (2026-11-12)
+
+### Implemented in PR #27 / dev.9
+- Added a read-only Whale presentation resolver: persistent PPL anger/grief/anxiety/embarrassment state overrides the latest one-turn reply expression when thresholds are crossed; overlapping states use strongest normalized intensity.
+- Reuses existing Whale expression portraits; no new art or synthetic frames are produced.
+- Character fatigue selects a slower ambient animation tempo without changing facial expression or representing the user's state.
+- Added restrained state-specific idle motion and a periodic body sway while the expanded companion is open and idle. It pauses during model turns and utility panels; the collapsed desktop pet also has a gentle float.
+- All motion honors `prefers-reduced-motion`; no blink, lip-sync, gaze tracking or rigged animation is claimed.
+
+### CI evidence
+- Workflow Run ID `43250968846`: Node 24 and Node 24.9.0 both PASS.
+- Full project tests: 83 passed / 0 failed on both matrix legs.
+- PPL compilation, classic DSH client loader and npm package verification: PASS.
+- DyberPet native motion tests and memory-return regression remain PASS.
+
+### Windows candidate
+- Version: `0.1.0-dev.9`; target: DSH Desktop `0.2.2-rc.1`.
+- Outer ZIP: 3,491,491 bytes; ZIP CRC test: PASS.
+- Inner TGZ: 3,489,816 bytes.
+- TGZ SHA-256: `aa3046b7798623fd39f6939ca237ecc2cb6a0e1592ff32873040d13f278df43a`; verified against both `.sha256` and `package-info.json`.
+- Google Drive file updated in place; existing private file ID and URL retained.
+
+### Acceptance boundary
+- This is a PPL-to-existing-art presentation layer, not a new frame-art package. True frame-by-frame Whale movement still requires matching authorized Whale artwork.
+- Actual Windows DSH Desktop 0.2.2-rc.1 visual acceptance remains a manual gate.
