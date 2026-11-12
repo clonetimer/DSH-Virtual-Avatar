@@ -181,6 +181,15 @@ function publicView(service, memoryService, config) {
   const loaded = service.loadState()
   const state = loaded.state
   const profile = resolveDeepseekWhaleProfile(state.profileOverrides || {})
+  const pplRelationship = state.pplRuntime?.relationships?.admin || {}
+  const relationshipStage = String(pplRelationship.stage || state.relationship?.stage || 'acquaintance')
+  const relationship = {
+    ...state.relationship,
+    stage: relationshipStage,
+    trust: Number(pplRelationship.trust ?? state.relationship?.trust ?? 0.5),
+    attachment: Number(pplRelationship.attachment ?? state.relationship?.attachment ?? 0.1),
+    stageLabel: relationshipStageLabel(relationshipStage),
+  }
   return {
     ok: true,
     enabled: config.enabled !== false,
@@ -205,7 +214,7 @@ function publicView(service, memoryService, config) {
       level: state.level,
       affection: state.affection,
       affectionCap: affectionCap(state.level),
-      relationship: { ...state.relationship, stageLabel: relationshipStageLabel(state.relationship?.stage) },
+      relationship,
       interactionScene: state.interactionScene || 'PRIVATE_HOME',
       interactionSceneLabel: (state.interactionScene || 'PRIVATE_HOME') === 'PUBLIC_SPACE' ? '公开场合' : '私密空间',
       chatLines: state.conversation?.chatLines || [],
@@ -308,9 +317,9 @@ export function apply(ctx, config = {}) {
       companion: {
         level: loaded.state.level,
         affection: loaded.state.affection,
-        trust: loaded.state.relationship?.trust ?? null,
-        attachment: loaded.state.relationship?.attachment ?? null,
-        relationshipStage: loaded.state.relationship?.stage || 'acquaintance',
+        trust: loaded.state.pplRuntime?.relationships?.admin?.trust ?? loaded.state.relationship?.trust ?? null,
+        attachment: loaded.state.pplRuntime?.relationships?.admin?.attachment ?? loaded.state.relationship?.attachment ?? null,
+        relationshipStage: loaded.state.pplRuntime?.relationships?.admin?.stage || loaded.state.relationship?.stage || 'acquaintance',
         interactionScene: loaded.state.interactionScene || 'PRIVATE_HOME',
         stateRevision: loaded.revision,
         lastConversationAt: loaded.state.conversation?.chatLines?.at(-1)?.at || null,
