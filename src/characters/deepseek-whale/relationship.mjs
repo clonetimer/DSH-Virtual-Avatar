@@ -24,6 +24,10 @@ function userStressSignal(text) {
   return 'sadness'
 }
 
+function hash(value) {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex')
+}
+
 export function createDeepseekWhaleInitialState({ sessionId = 'deepseek-whale' } = {}) {
   return {
     characterId: 'deepseek',
