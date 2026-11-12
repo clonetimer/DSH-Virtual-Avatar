@@ -35,10 +35,10 @@ export class PersonaRuntime {
     return { id: this.ir.persona.id, version: this.ir.persona.version, irSha256: this.irSha256 }
   }
 
-  materialize(runtime, context = {}) {
+  materialize(runtime, context = {}, scene = this.scene) {
     const overrides = mergeRecords(this.contextOverride, context)
-    if (!this.scene) return { runtime, context: overrides }
-    return mergeScene(this.ir, this.scene, runtime, overrides)
+    if (!scene) return { runtime, context: overrides }
+    return mergeScene(this.ir, scene, runtime, overrides)
   }
 
   staticPrompt(runtime = { session: { id: 'static', turn: 0 } }) {
@@ -47,7 +47,7 @@ export class PersonaRuntime {
   }
 
   resolveHostStep(input) {
-    const materialized = this.materialize(input.runtime, input.context)
+    const materialized = this.materialize(input.runtime, input.context, input.scene ?? this.scene)
     const resolution = resolve(this.ir, materialized.runtime, materialized.context, input.event)
     if (!resolution.valid) {
       const errors = resolution.diagnostics?.filter(x => x.severity === 'error').map(x => `${x.code}: ${x.message}`).join('; ')
