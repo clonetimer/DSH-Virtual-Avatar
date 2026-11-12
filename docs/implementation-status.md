@@ -245,6 +245,5 @@
 - Run ID 43237458835: Node 24.9.0 and Node 24 both PASS.
 - Full project tests: 72 passed / 0 failed on both matrix legs.
 - Classic DSH client loader and npm package verification: PASS.
-- Windows Web/Desktop artifact `0.1.0-dev.7` generated; ZIP 3,478,775 bytes.
-- TGZ SHA-256: `3f77283c3b6592a73465634aa4d72cb5c646d24ebe6cd4c100d932db7d331b86`.
-- Google Drive file was updated in place, preserving its existing URL; actual DSH Desktop visual acceptance remains pending.
+- Windows Web/Desktop artifact `0.1.0-dev.7` generated; `package-info.json` in the ZIP is the authoritative source for exact package size and SHA-256.
+- Google Drive file is updated in place, preserving its existing URL; actual DSH Desktop visual acceptance remains pending.
