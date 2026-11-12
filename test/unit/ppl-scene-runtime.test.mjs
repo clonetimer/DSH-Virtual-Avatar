@@ -151,6 +151,9 @@ test('interaction scene persists and legacy states default to PRIVATE_HOME', () 
   delete legacy.interactionScene
   const legacyService = new DeepseekWhaleService({ store: createMemoryStore(legacy) })
   assert.equal(legacyService.loadState().state.interactionScene, 'PRIVATE_HOME')
+  assert.equal(legacyService.loadState().state.pplRuntime.state.emotion.anxiety, runtime().initialState().state.emotion.anxiety)
+  assert.equal(legacyService.loadState().state.pplRuntime.state.emotion.grief, runtime().initialState().state.emotion.grief)
+  assert.equal(legacyService.loadState().state.pplRuntime.state.emotion.anger, runtime().initialState().state.emotion.anger)
 })
 
 test('DeepseekWhaleService passes the persisted scene into each PPL turn', () => {
@@ -188,8 +191,8 @@ test('event classification is shared by PPL and affection and avoids common fals
   assert.equal(classifyDeepseekWhaleEvent({ text: '抱抱' }).type, 'POSITIVE_INTERACTION')
   assert.equal(classifyDeepseekWhaleEvent({ text: '早安' }).type, 'MESSAGE')
   assert.equal(classifyDeepseekWhaleEvent({ text: '晚安' }).type, 'MESSAGE')
-  assert.equal(classifyDeepseekWhaleEvent({ text: '我好累' }).type, 'COMFORT')
-  assert.equal(classifyDeepseekWhaleEvent({ text: '我今天很累' }).type, 'COMFORT')
+  assert.equal(classifyDeepseekWhaleEvent({ text: '我好累' }).type, 'USER_STRESS_DISCLOSURE')
+  assert.equal(classifyDeepseekWhaleEvent({ text: '我今天很累' }).type, 'USER_STRESS_DISCLOSURE')
   assert.equal(classifyDeepseekWhaleEvent({ text: '我不累' }).type, 'MESSAGE')
   assert.equal(classifyDeepseekWhaleEvent({ text: '我不喜欢你这种说法' }).type, 'MESSAGE')
 
@@ -226,4 +229,118 @@ test('relationship stage, not affection level, governs intimacy prompt', () => {
   })
   assert.match(runtimeAuthoritativePrompt, /关系阶段：恋人/)
   assert.match(runtimeAuthoritativePrompt, /你们已经成为恋人/)
+})
+
+
+test('user stress disclosure and support requests are not misclassified as comfort given to the character', () => {
+  const fatigue = classifyDeepseekWhaleEvent({ text: '我好累' })
+  const pressure = classifyDeepseekWhaleEvent({ text: '最近工作压力很大' })
+  const sadness = classifyDeepseekWhaleEvent({ text: '我有点难过' })
+  const support = classifyDeepseekWhaleEvent({ text: '陪陪我' })
+  const hugRequest = classifyDeepseekWhaleEvent({ text: '抱抱我' })
+  const characterComfort = classifyDeepseekWhaleEvent({ text: '你辛苦了' })
+  const rest = classifyDeepseekWhaleEvent({ text: '你休息一下吧' })
+  const praise = classifyDeepseekWhaleEvent({ text: '你真棒' })
+
+  assert.equal(fatigue.type, 'USER_STRESS_DISCLOSURE')
+  assert.equal(fatigue.signal, 'fatigue')
+  assert.equal(fatigue.subject, 'user')
+  assert.equal(pressure.type, 'USER_STRESS_DISCLOSURE')
+  assert.equal(pressure.signal, 'anxiety')
+  assert.equal(sadness.type, 'USER_STRESS_DISCLOSURE')
+  assert.equal(sadness.signal, 'sadness')
+  assert.equal(support.type, 'USER_SUPPORT_REQUEST')
+  assert.equal(hugRequest.type, 'USER_SUPPORT_REQUEST')
+  assert.equal(characterComfort.type, 'COMFORT')
+  assert.equal(characterComfort.subject, 'character')
+  assert.equal(rest.type, 'CHARACTER_REST_ENCOURAGEMENT')
+  assert.equal(praise.type, 'PRAISE')
+
+  assert.equal(deepseekWhaleAffectionDelta({ event: fatigue }), 0)
+  assert.equal(deepseekWhaleAffectionDelta({ event: support }), 0)
+  assert.equal(deepseekWhaleAffectionDelta({ event: characterComfort }), 0)
+  assert.equal(deepseekWhaleAffectionDelta({ event: rest }), 0)
+  assert.equal(deepseekWhaleAffectionDelta({ event: praise }), 1)
+})
+
+test('PPL user stress disclosure activates supportive behavior without inflating relationship scores', () => {
+  const ppl = runtime()
+  const state = ppl.initialState()
+  const userStress = classifyDeepseekWhaleEvent({ text: '我今天很累', eventId: 'stress-1' })
+  const resolved = ppl.resolve({
+    runtimeState: state,
+    scene: 'PRIVATE_HOME',
+    event: userStress,
+  })
+
+  assert.equal(resolved.resolution.resolved.behaviors.comforting_master.enabled, true)
+  assert.ok(resolved.resolution.resolved.traits.warmth > 0.8)
+  assert.ok(resolved.resolution.resolved.traits.playfulness < 0.7)
+  assert.equal(resolved.resolution.pendingCommits.some(item => item.path.startsWith('relationships.admin.')), false)
+
+  const incomplete = ppl.finalize(state, resolved.resolution, 'aborted')
+  assert.equal(incomplete.committed, false)
+  assert.equal(incomplete.runtimeState.relationships.admin.trust, state.relationships.admin.trust)
+
+  const completed = ppl.finalize(state, resolved.resolution, 'completed')
+  assert.equal(completed.runtimeState.relationships.admin.trust, state.relationships.admin.trust)
+  assert.equal(completed.runtimeState.relationships.admin.attachment, state.relationships.admin.attachment)
+  assert.ok(completed.runtimeState.state.emotion.anxiety < state.state.emotion.anxiety)
+})
+
+test('PPL praise and comfort evolve transient emotion state only after completed turns', () => {
+  const ppl = runtime()
+  const state = ppl.initialState()
+
+  const praise = ppl.resolve({
+    runtimeState: state,
+    scene: 'PRIVATE_HOME',
+    event: classifyDeepseekWhaleEvent({ text: '你真棒', eventId: 'praise-1' }),
+  })
+  const praised = ppl.finalize(state, praise.resolution, 'completed').runtimeState
+  assert.ok(praised.state.emotion.embarrassment > state.state.emotion.embarrassment)
+  assert.ok(praised.state.emotion.anxiety < state.state.emotion.anxiety)
+
+  const comfort = ppl.resolve({
+    runtimeState: praised,
+    scene: 'PRIVATE_HOME',
+    event: classifyDeepseekWhaleEvent({ text: '你辛苦了', eventId: 'comfort-1' }),
+  })
+  const comforted = ppl.finalize(praised, comfort.resolution, 'completed').runtimeState
+  assert.ok(comforted.relationships.admin.trust > praised.relationships.admin.trust)
+  assert.ok(comforted.state.emotion.anxiety < praised.state.emotion.anxiety)
+  assert.ok(comforted.state.emotion.grief < praised.state.emotion.grief)
+})
+
+test('PPL rest encouragement reduces character fatigue without changing relationship trust', () => {
+  const ppl = runtime()
+  const state = ppl.initialState()
+  state.state.physical.fatigue = 0.8
+  const rest = ppl.resolve({
+    runtimeState: state,
+    scene: 'PRIVATE_HOME',
+    event: classifyDeepseekWhaleEvent({ text: '你也休息一下吧', eventId: 'rest-1' }),
+  })
+  const rested = ppl.finalize(state, rest.resolution, 'completed').runtimeState
+
+  assert.ok(rested.state.physical.fatigue < state.state.physical.fatigue)
+  assert.equal(rested.relationships.admin.trust, state.relationships.admin.trust)
+})
+
+test('PPL negative interaction raises transient anger and does not commit on interrupted turns', () => {
+  const ppl = runtime()
+  const state = ppl.initialState()
+  const negative = ppl.resolve({
+    runtimeState: state,
+    scene: 'PRIVATE_HOME',
+    event: classifyDeepseekWhaleEvent({ text: '滚开', eventId: 'negative-1' }),
+  })
+  assert.ok(negative.resolution.pendingCommits.some(item => item.path === 'state.emotion.anger'))
+
+  const interrupted = ppl.finalize(state, negative.resolution, 'aborted')
+  assert.equal(interrupted.committed, false)
+  assert.equal(interrupted.runtimeState.state.emotion.anger, state.state.emotion.anger)
+
+  const completed = ppl.finalize(state, negative.resolution, 'completed').runtimeState
+  assert.ok(completed.state.emotion.anger > state.state.emotion.anger)
 })

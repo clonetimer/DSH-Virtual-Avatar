@@ -83,7 +83,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: matrix.node == '24.9.0'
         with:
-          name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.3
+          name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.4
           path: |
             dist-artifact/*.tgz
             dist-artifact/*.sha256

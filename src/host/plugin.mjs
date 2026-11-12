@@ -182,6 +182,15 @@ function publicView(service, memoryService, config) {
   const state = loaded.state
   const profile = resolveDeepseekWhaleProfile(state.profileOverrides || {})
   const pplRelationship = state.pplRuntime?.relationships?.admin || {}
+  const runtimeEmotion = state.pplRuntime?.state?.emotion || {}
+  const runtimePhysical = state.pplRuntime?.state?.physical || {}
+  const pplState = {
+    fatigue: Number(runtimePhysical.fatigue ?? 0),
+    anxiety: Number(runtimeEmotion.anxiety ?? 0),
+    embarrassment: Number(runtimeEmotion.embarrassment ?? 0),
+    grief: Number(runtimeEmotion.grief ?? 0),
+    anger: Number(runtimeEmotion.anger ?? 0),
+  }
   const relationshipStage = String(pplRelationship.stage || state.relationship?.stage || 'acquaintance')
   const relationship = {
     ...state.relationship,
@@ -217,6 +226,7 @@ function publicView(service, memoryService, config) {
       relationship,
       interactionScene: state.interactionScene || 'PRIVATE_HOME',
       interactionSceneLabel: (state.interactionScene || 'PRIVATE_HOME') === 'PUBLIC_SPACE' ? '公开场合' : '私密空间',
+      pplState,
       chatLines: state.conversation?.chatLines || [],
       choices: state.conversation?.choices || [],
     },
@@ -310,7 +320,7 @@ export function apply(ctx, config = {}) {
     } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
     return {
       checkedAt,
-      plugin: { id: name, version: '0.1.0-dev.3', enabled: runtimeConfig.enabled },
+      plugin: { id: name, version: '0.1.0-dev.4', enabled: runtimeConfig.enabled },
       model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
       persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0 },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, mediaDirectory, backupDirectory },
@@ -321,6 +331,7 @@ export function apply(ctx, config = {}) {
         attachment: loaded.state.pplRuntime?.relationships?.admin?.attachment ?? loaded.state.relationship?.attachment ?? null,
         relationshipStage: loaded.state.pplRuntime?.relationships?.admin?.stage || loaded.state.relationship?.stage || 'acquaintance',
         interactionScene: loaded.state.interactionScene || 'PRIVATE_HOME',
+        pplState: loaded.state.pplRuntime?.state || {},
         stateRevision: loaded.revision,
         lastConversationAt: loaded.state.conversation?.chatLines?.at(-1)?.at || null,
         lastSuccessfulTurnAt,
@@ -350,7 +361,7 @@ export function apply(ctx, config = {}) {
       return
     }
     if (req.method === 'GET') {
-      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.3' })
+      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.4' })
       return
     }
     if (req.method !== 'POST') {

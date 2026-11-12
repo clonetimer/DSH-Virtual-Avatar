@@ -47,6 +47,14 @@
       "public_mode": {
         "enabled": false,
         "description": "公开或有旁人在场时保持自然、礼貌和适度克制，不展示只属于私下相处的亲密互动。"
+      },
+      "comforting_master": {
+        "enabled": false,
+        "description": "主人表达疲惫、焦虑、难过或主动请求陪伴时，先理解其感受，再提供温和回应；不擅自诊断、不淡化问题，也不强迫积极。"
+      },
+      "vulnerability_disclosure": {
+        "enabled": false,
+        "description": "自身疲劳较高、关系信任且环境私密时，可以自然承认疲惫或请求休息；不夸大、不持续诉苦。"
       }
     }
   },
@@ -71,7 +79,10 @@
         "fatigue": 0.1
       },
       "emotion": {
-        "embarrassment": 0.25
+        "embarrassment": 0.25,
+        "anxiety": 0.1,
+        "grief": 0.05,
+        "anger": 0.02
       }
     }
   },
@@ -238,6 +249,27 @@
       "semanticType": "std.state.embarrassment",
       "provenance": "DEEPSEEK_WHALE"
     },
+    "state.emotion.anxiety": {
+      "path": "state.emotion.anxiety",
+      "primitive": "Float01",
+      "mutability": "runtime",
+      "semanticType": "std.state.anxiety",
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    "state.emotion.grief": {
+      "path": "state.emotion.grief",
+      "primitive": "Float01",
+      "mutability": "runtime",
+      "semanticType": "std.state.grief",
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    "state.emotion.anger": {
+      "path": "state.emotion.anger",
+      "primitive": "Float01",
+      "mutability": "runtime",
+      "semanticType": "std.state.anger",
+      "provenance": "DEEPSEEK_WHALE"
+    },
     "style.language": {
       "path": "style.language",
       "primitive": "Symbol",
@@ -314,9 +346,85 @@
       "primitive": "String",
       "mutability": "computed",
       "provenance": "DEEPSEEK_WHALE"
+    },
+    "behaviors.comforting_master.enabled": {
+      "path": "behaviors.comforting_master.enabled",
+      "primitive": "Bool",
+      "mutability": "computed",
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    "behaviors.comforting_master.description": {
+      "path": "behaviors.comforting_master.description",
+      "primitive": "String",
+      "mutability": "computed",
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    "behaviors.vulnerability_disclosure.enabled": {
+      "path": "behaviors.vulnerability_disclosure.enabled",
+      "primitive": "Bool",
+      "mutability": "computed",
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    "behaviors.vulnerability_disclosure.description": {
+      "path": "behaviors.vulnerability_disclosure.description",
+      "primitive": "String",
+      "mutability": "computed",
+      "provenance": "DEEPSEEK_WHALE"
     }
   },
   "rules": [
+    {
+      "id": "EMOTION_BASELINE_RECOVERY",
+      "priority": 100,
+      "condition": {
+        "kind": "binary",
+        "operator": "==",
+        "left": {
+          "kind": "path",
+          "path": "event.actor"
+        },
+        "right": {
+          "kind": "literal",
+          "value": "admin"
+        }
+      },
+      "effects": [],
+      "commits": [
+        {
+          "op": "sub",
+          "path": "state.emotion.anxiety",
+          "value": {
+            "kind": "literal",
+            "value": 0.005
+          }
+        },
+        {
+          "op": "sub",
+          "path": "state.emotion.grief",
+          "value": {
+            "kind": "literal",
+            "value": 0.003
+          }
+        },
+        {
+          "op": "sub",
+          "path": "state.emotion.anger",
+          "value": {
+            "kind": "literal",
+            "value": 0.005
+          }
+        },
+        {
+          "op": "sub",
+          "path": "state.emotion.embarrassment",
+          "value": {
+            "kind": "literal",
+            "value": 0.003
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
     {
       "id": "MASTER_NEGATIVE_INTERACTION",
       "priority": 520,
@@ -356,6 +464,22 @@
           "value": {
             "kind": "literal",
             "value": 0.005
+          }
+        },
+        {
+          "op": "add",
+          "path": "state.emotion.anger",
+          "value": {
+            "kind": "literal",
+            "value": 0.08
+          }
+        },
+        {
+          "op": "add",
+          "path": "state.emotion.anxiety",
+          "value": {
+            "kind": "literal",
+            "value": 0.03
           }
         }
       ],
@@ -400,6 +524,87 @@
           "value": {
             "kind": "literal",
             "value": 0.01
+          }
+        },
+        {
+          "op": "add",
+          "path": "state.emotion.embarrassment",
+          "value": {
+            "kind": "literal",
+            "value": 0.02
+          }
+        },
+        {
+          "op": "sub",
+          "path": "state.emotion.anxiety",
+          "value": {
+            "kind": "literal",
+            "value": 0.01
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "MASTER_PRAISE_RESPONSE",
+      "priority": 530,
+      "condition": {
+        "kind": "binary",
+        "operator": "and",
+        "left": {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "event.type"
+          },
+          "right": {
+            "kind": "literal",
+            "value": "PRAISE"
+          }
+        },
+        "right": {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "event.actor"
+          },
+          "right": {
+            "kind": "literal",
+            "value": "admin"
+          }
+        }
+      },
+      "effects": [
+        {
+          "op": "add",
+          "path": "style.emotional_explicitness",
+          "value": {
+            "kind": "literal",
+            "value": 0.04
+          }
+        },
+        {
+          "op": "enable",
+          "path": "behaviors.shy_tsundere.enabled"
+        }
+      ],
+      "commits": [
+        {
+          "op": "add",
+          "path": "state.emotion.embarrassment",
+          "value": {
+            "kind": "literal",
+            "value": 0.06
+          }
+        },
+        {
+          "op": "sub",
+          "path": "state.emotion.anxiety",
+          "value": {
+            "kind": "literal",
+            "value": 0.02
           }
         }
       ],
@@ -453,8 +658,228 @@
             "kind": "literal",
             "value": 0.005
           }
+        },
+        {
+          "op": "sub",
+          "path": "state.emotion.anxiety",
+          "value": {
+            "kind": "literal",
+            "value": 0.04
+          }
+        },
+        {
+          "op": "sub",
+          "path": "state.emotion.grief",
+          "value": {
+            "kind": "literal",
+            "value": 0.03
+          }
         }
       ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "MASTER_REST_ENCOURAGEMENT",
+      "priority": 550,
+      "condition": {
+        "kind": "binary",
+        "operator": "and",
+        "left": {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "event.type"
+          },
+          "right": {
+            "kind": "literal",
+            "value": "CHARACTER_REST_ENCOURAGEMENT"
+          }
+        },
+        "right": {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "event.actor"
+          },
+          "right": {
+            "kind": "literal",
+            "value": "admin"
+          }
+        }
+      },
+      "effects": [],
+      "commits": [
+        {
+          "op": "sub",
+          "path": "state.physical.fatigue",
+          "value": {
+            "kind": "literal",
+            "value": 0.08
+          }
+        },
+        {
+          "op": "sub",
+          "path": "state.emotion.anxiety",
+          "value": {
+            "kind": "literal",
+            "value": 0.02
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "USER_STRESS_SUPPORT",
+      "priority": 560,
+      "condition": {
+        "kind": "binary",
+        "operator": "and",
+        "left": {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "event.type"
+          },
+          "right": {
+            "kind": "literal",
+            "value": "USER_STRESS_DISCLOSURE"
+          }
+        },
+        "right": {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "event.actor"
+          },
+          "right": {
+            "kind": "literal",
+            "value": "admin"
+          }
+        }
+      },
+      "effects": [
+        {
+          "op": "add",
+          "path": "traits.warmth",
+          "value": {
+            "kind": "literal",
+            "value": 0.05
+          }
+        },
+        {
+          "op": "sub",
+          "path": "traits.playfulness",
+          "value": {
+            "kind": "literal",
+            "value": 0.1
+          }
+        },
+        {
+          "op": "add",
+          "path": "style.verbosity",
+          "value": {
+            "kind": "literal",
+            "value": 0.06
+          }
+        },
+        {
+          "op": "add",
+          "path": "style.emotional_explicitness",
+          "value": {
+            "kind": "literal",
+            "value": 0.05
+          }
+        },
+        {
+          "op": "enable",
+          "path": "behaviors.comforting_master.enabled"
+        }
+      ],
+      "commits": [],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "USER_SUPPORT_REQUEST",
+      "priority": 565,
+      "condition": {
+        "kind": "binary",
+        "operator": "and",
+        "left": {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "event.type"
+          },
+          "right": {
+            "kind": "literal",
+            "value": "USER_SUPPORT_REQUEST"
+          }
+        },
+        "right": {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "event.actor"
+          },
+          "right": {
+            "kind": "literal",
+            "value": "admin"
+          }
+        }
+      },
+      "effects": [
+        {
+          "op": "add",
+          "path": "traits.warmth",
+          "value": {
+            "kind": "literal",
+            "value": 0.06
+          }
+        },
+        {
+          "op": "sub",
+          "path": "traits.playfulness",
+          "value": {
+            "kind": "literal",
+            "value": 0.12
+          }
+        },
+        {
+          "op": "add",
+          "path": "style.verbosity",
+          "value": {
+            "kind": "literal",
+            "value": 0.08
+          }
+        },
+        {
+          "op": "add",
+          "path": "style.emotional_explicitness",
+          "value": {
+            "kind": "literal",
+            "value": 0.06
+          }
+        },
+        {
+          "op": "add",
+          "path": "style.action_description",
+          "value": {
+            "kind": "literal",
+            "value": 0.04
+          }
+        },
+        {
+          "op": "enable",
+          "path": "behaviors.comforting_master.enabled"
+        }
+      ],
+      "commits": [],
       "provenance": "DEEPSEEK_WHALE"
     },
     {
@@ -520,6 +945,10 @@
             "kind": "literal",
             "value": 0.1
           }
+        },
+        {
+          "op": "enable",
+          "path": "behaviors.vulnerability_disclosure.enabled"
         }
       ],
       "commits": [],
@@ -668,6 +1097,10 @@
         {
           "op": "disable",
           "path": "behaviors.private_closeness.enabled"
+        },
+        {
+          "op": "disable",
+          "path": "behaviors.vulnerability_disclosure.enabled"
         },
         {
           "op": "enable",
@@ -979,6 +1412,77 @@
       "provenance": "DEEPSEEK_WHALE"
     },
     {
+      "id": "PRAISE_RESPONSE_MODE",
+      "given": {
+        "event.type": "PRAISE",
+        "event.actor": "admin"
+      },
+      "expects": [
+        {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "behaviors.shy_tsundere.enabled"
+          },
+          "right": {
+            "kind": "literal",
+            "value": true
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": ">",
+          "left": {
+            "kind": "path",
+            "path": "style.emotional_explicitness"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.78
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "PRIVATE_FATIGUE_DISCLOSURE",
+      "given": {
+        "relationships.admin.stage": "lover",
+        "relationships.admin.trust": 0.9,
+        "context.privacy": "private",
+        "context.outsiders_present": false,
+        "state.physical.fatigue": 0.8
+      },
+      "expects": [
+        {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "behaviors.vulnerability_disclosure.enabled"
+          },
+          "right": {
+            "kind": "literal",
+            "value": true
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": ">",
+          "left": {
+            "kind": "path",
+            "path": "traits.vulnerability"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.8
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
       "id": "PRIVATE_RELATIONSHIP_MODE",
       "given": {
         "relationships.admin.stage": "lover",
@@ -1083,6 +1587,102 @@
             "kind": "literal",
             "value": 0.2
           }
+        },
+        {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "behaviors.vulnerability_disclosure.enabled"
+          },
+          "right": {
+            "kind": "literal",
+            "value": false
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "USER_STRESS_DISCLOSURE_SUPPORT",
+      "given": {
+        "event.type": "USER_STRESS_DISCLOSURE",
+        "event.actor": "admin",
+        "event.signal": "fatigue",
+        "context.privacy": "private",
+        "context.outsiders_present": false
+      },
+      "expects": [
+        {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "behaviors.comforting_master.enabled"
+          },
+          "right": {
+            "kind": "literal",
+            "value": true
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": ">",
+          "left": {
+            "kind": "path",
+            "path": "traits.warmth"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.8
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": "<",
+          "left": {
+            "kind": "path",
+            "path": "traits.playfulness"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.7
+          }
+        }
+      ],
+      "provenance": "DEEPSEEK_WHALE"
+    },
+    {
+      "id": "USER_SUPPORT_REQUEST_MODE",
+      "given": {
+        "event.type": "USER_SUPPORT_REQUEST",
+        "event.actor": "admin",
+        "event.signal": "support_request"
+      },
+      "expects": [
+        {
+          "kind": "binary",
+          "operator": "==",
+          "left": {
+            "kind": "path",
+            "path": "behaviors.comforting_master.enabled"
+          },
+          "right": {
+            "kind": "literal",
+            "value": true
+          }
+        },
+        {
+          "kind": "binary",
+          "operator": ">",
+          "left": {
+            "kind": "path",
+            "path": "style.verbosity"
+          },
+          "right": {
+            "kind": "literal",
+            "value": 0.4
+          }
         }
       ],
       "provenance": "DEEPSEEK_WHALE"
@@ -1161,6 +1761,24 @@
       "primitive": "Float01",
       "semanticType": "std.state.embarrassment",
       "renderPriority": 58
+    },
+    "state.emotion.anxiety": {
+      "path": "state.emotion.anxiety",
+      "primitive": "Float01",
+      "semanticType": "std.state.anxiety",
+      "renderPriority": 72
+    },
+    "state.emotion.grief": {
+      "path": "state.emotion.grief",
+      "primitive": "Float01",
+      "semanticType": "std.state.grief",
+      "renderPriority": 70
+    },
+    "state.emotion.anger": {
+      "path": "state.emotion.anger",
+      "primitive": "Float01",
+      "semanticType": "std.state.anger",
+      "renderPriority": 68
     },
     "style.formality": {
       "path": "style.formality",
@@ -1414,6 +2032,66 @@
               "medium": "存在明显但可控的羞赧。",
               "high": "羞赧明显。",
               "very_high": "高度羞赧，容易明显影响表达。"
+            }
+          }
+        }
+      },
+      "std.state.anxiety": {
+        "id": "std.state.anxiety",
+        "kind": "state",
+        "primitive": "Float01",
+        "scale": "standard5",
+        "renderPriority": 72,
+        "locales": {
+          "zh_CN": {
+            "label": "焦虑",
+            "definition": "角色当前焦虑与紧张程度。",
+            "descriptors": {
+              "very_low": "非常平静。",
+              "low": "轻微紧张。",
+              "medium": "存在中等焦虑。",
+              "high": "焦虑明显。",
+              "very_high": "处于高度焦虑状态。"
+            }
+          }
+        }
+      },
+      "std.state.grief": {
+        "id": "std.state.grief",
+        "kind": "state",
+        "primitive": "Float01",
+        "scale": "standard5",
+        "renderPriority": 70,
+        "locales": {
+          "zh_CN": {
+            "label": "悲伤",
+            "definition": "角色当前悲伤与失落程度。",
+            "descriptors": {
+              "very_low": "几乎没有悲伤。",
+              "low": "轻微失落。",
+              "medium": "存在中等悲伤。",
+              "high": "悲伤明显。",
+              "very_high": "处于强烈悲伤状态。"
+            }
+          }
+        }
+      },
+      "std.state.anger": {
+        "id": "std.state.anger",
+        "kind": "state",
+        "primitive": "Float01",
+        "scale": "standard5",
+        "renderPriority": 68,
+        "locales": {
+          "zh_CN": {
+            "label": "愤怒",
+            "definition": "角色当前愤怒与敌意唤起程度。",
+            "descriptors": {
+              "very_low": "非常平静。",
+              "low": "略有不满。",
+              "medium": "存在明显不满。",
+              "high": "愤怒明显。",
+              "very_high": "处于强烈愤怒状态。"
             }
           }
         }

@@ -9,7 +9,7 @@ test('DeepSeek Whale PPL 0.3 artifact loads and all embedded source tests pass',
   assert.equal(ir.persona.id, 'DEEPSEEK_WHALE')
   const results = runSourceTests(ir)
   assert.equal(results.failed, 0, JSON.stringify(results.results.filter(item => !item.passed), null, 2))
-  assert.equal(results.passed, 3)
+  assert.equal(results.passed, 7)
 })
 
 test('PPL relationship commits are staged and only applied for completed turns', () => {

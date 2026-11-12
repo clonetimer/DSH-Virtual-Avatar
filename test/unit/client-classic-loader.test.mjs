@@ -51,5 +51,8 @@ test('built client preserves companion features without bundling its own React',
   assert.match(artifact, /PRIVATE_HOME/)
   assert.match(artifact, /PUBLIC_SPACE/)
   assert.match(artifact, /互动环境 · PPL 场景/)
+  assert.match(artifact, /角色状态 · PPL/)
+  assert.match(artifact, /pplState\.fatigue/)
+  assert.match(artifact, /pplState\.anxiety/)
   assert.match(artifact, /shell\.overlay/)
 })

@@ -12,6 +12,10 @@ const CSS = `
 .dva-character{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;background:radial-gradient(ellipse at center,#16466b,#091b30 70%)}
 .dva-character img{width:min(100%,260px);max-height:56vh;object-fit:contain;filter:drop-shadow(0 12px 20px #0008)}
 .dva-stats{font-size:13px;color:#b9d8ec;line-height:1.9;text-align:center}
+.dva-state-strip{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin-top:8px;max-width:260px}
+.dva-state-label{width:100%;font-size:10px;color:#91b4cc;text-align:center}
+.dva-state-chip{border:1px solid #ffffff24;border-radius:999px;background:#0b2943bb;color:#c6e2f4;padding:3px 7px;font-size:10px;font-variant-numeric:tabular-nums}
+.dva-state-chip b{color:#f1f9ff;font-weight:650}
 .dva-scene-toggle{margin-top:16px;padding:12px;border:1px solid #ffffff22;border-radius:14px;background:#0b2238;width:100%;max-width:250px}
 .dva-scene-title{font-size:12px;color:#a9c9df;margin-bottom:8px}
 .dva-scene-options{display:flex;gap:8px}
@@ -27,7 +31,7 @@ const CSS = `
 .dva-input{display:flex;gap:8px}.dva-input input{flex:1;min-width:0;border:1px solid #4d7796;border-radius:12px;background:#06172a;color:#fff;padding:11px}
 .dva-actions{display:flex;gap:8px;align-items:center}.dva-actions button:disabled,.dva-send:disabled{opacity:.45;cursor:wait}
 .dva-memories{max-height:38vh;overflow:auto;font-size:12px;color:#c2dced;background:#0b2238;border:1px solid #ffffff22;border-radius:12px;padding:10px}.dva-memory-row{padding:6px 0;border-bottom:1px solid #ffffff18}.dva-memory-row button{margin:4px;border:1px solid #77b8df;border-radius:999px;background:#174b70;color:#f2f9ff;padding:4px 8px}.dva-error{color:#ffb5a9;font-size:12px}
-@media(max-width:760px){.dva-panel{inset:2vh 2vw}.dva-main{grid-template-columns:1fr}.dva-character{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;justify-content:stretch;padding:10px;gap:10px}.dva-character img{width:64px;height:64px;max-height:none}.dva-stats{text-align:left;font-size:11px}.dva-scene-toggle{grid-column:1/-1;max-width:none;margin-top:0}.dva-chat{padding:12px}}
+@media(max-width:760px){.dva-panel{inset:2vh 2vw}.dva-main{grid-template-columns:1fr}.dva-character{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;justify-content:stretch;padding:10px;gap:10px}.dva-character img{width:64px;height:64px;max-height:none}.dva-stats{text-align:left;font-size:11px}.dva-state-strip{grid-column:1/-1;justify-content:flex-start;max-width:none;margin-top:0}.dva-state-label{text-align:left}.dva-scene-toggle{grid-column:1/-1;max-width:none;margin-top:0}.dva-chat{padding:12px}}
 `
 
 async function callApi(action, args = {}) {
@@ -286,6 +290,7 @@ function Companion() {
   const relationshipStage = character?.relationship?.stage || 'acquaintance'
   const relationshipStageLabel = character?.relationship?.stageLabel || ({ stranger: '陌生', acquaintance: '初识', colleague: '熟悉', trusted: '信任', close: '亲近', confession: '告白中', lover: '恋人', bonded: '深厚羁绊' }[relationshipStage] || '初识')
   const interactionScene = character?.interactionScene || 'PRIVATE_HOME'
+  const pplState = character?.pplState || {}
   const chatGroups = lines.reduce((groups, line, index) => {
     const timestamp = Number(line.at || 0)
     const day = timestamp > 0 ? new Date(timestamp).toLocaleDateString() : '时间未知'
@@ -334,6 +339,16 @@ function Companion() {
           '关系阶段 ' + relationshipStageLabel,
           React.createElement('br'),
           React.createElement('small', null, '好感度推动等级成长；信任与依恋由 PPL 规则治理。'),
+        ),
+        React.createElement('div', {
+          className: 'dva-state-strip',
+          title: '这是鲸鱼娘自身的 PPL 状态，不是对主人的情绪或健康评估。',
+          'aria-label': '鲸鱼娘当前 PPL 状态',
+        },
+          React.createElement('span', { className: 'dva-state-label' }, '角色状态 · PPL'),
+          React.createElement('span', { className: 'dva-state-chip' }, '疲劳 ', React.createElement('b', null, Math.round((pplState.fatigue || 0) * 100) + '%')),
+          React.createElement('span', { className: 'dva-state-chip' }, '焦虑 ', React.createElement('b', null, Math.round((pplState.anxiety || 0) * 100) + '%')),
+          React.createElement('span', { className: 'dva-state-chip' }, '害羞 ', React.createElement('b', null, Math.round((pplState.embarrassment || 0) * 100) + '%')),
         ),
         React.createElement('div', { className: 'dva-scene-toggle' },
           React.createElement('div', { className: 'dva-scene-title' }, '互动环境 · PPL 场景'),
