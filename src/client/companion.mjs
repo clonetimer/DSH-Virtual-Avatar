@@ -284,7 +284,7 @@ function formatChatFailure(error = {}, titleOverride = '') {
 }
 
 function describeChatFailure(error = {}) {
-  const code = String(error?.code || '')
+  const code = String(error?.code || '').toUpperCase()
   const detail = String(error?.message || error || '未知错误').trim().slice(0, 240)
   const failure = {
     title: '本次对话未完成',
@@ -296,7 +296,7 @@ function describeChatFailure(error = {}) {
     retryable: true,
     suggestedAction: null,
   }
-  if (code === 'MODEL_NOT_CONFIGURED' || code === 'MODEL_PROVIDER_UNAVAILABLE' || code === 'MODEL_SELECTION_LOCKED') {
+  if (code === 'MODEL_NOT_CONFIGURED' || code === 'MODEL_SELECTION_LOCKED' || code === 'MODEL_SELECTION_INCOMPLETE' || code === 'MODEL_CATALOG_UNAVAILABLE') {
     failure.title = '聊天模型尚未就绪'
     failure.hint = '先打开模型设置，选择一个已在 DSH 中启用的服务商和模型，并完成连接测试。'
     failure.retryable = false
