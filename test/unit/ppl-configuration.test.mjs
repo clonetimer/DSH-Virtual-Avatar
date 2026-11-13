@@ -34,7 +34,7 @@ test('PPL visual configuration normalizes sliders and omits values equal to the 
   }, ir)
   assert.deepEqual(normalized, {
     schema: 'dsh-virtual-avatar.ppl-config/1',
-    traits: { warmth: 0.9, playfulness: 0.74 },
+    traits: { warmth: 0.9 },
     style: { emotional_explicitness: 0.83 },
   })
   const resolved = resolvePplConfiguration(ir, normalized)
