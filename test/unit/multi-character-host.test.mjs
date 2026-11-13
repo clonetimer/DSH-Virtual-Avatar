@@ -162,3 +162,59 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+test('P5-C2 role switch during an in-flight LLM request never redirects the completed turn', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-ppl-switch-inflight-'))
+  let route
+  let cleanup
+  let releaseGeneration
+  let notifyStarted
+  const generationStarted = new Promise(resolve => { notifyStarted = resolve })
+  const generationRelease = new Promise(resolve => { releaseGeneration = resolve })
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm: {
+      stream: async function* (input) {
+        assert.match(input.system, /庄方宜/)
+        notifyStarted()
+        await generationRelease
+        yield { type: 'text-delta', text: '角色隔离测试：已完成。' }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      },
+    },
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject(names, callback) {
+      if (names.includes('agentDefaultModel')) callback({
+        agentDefaultModel: { currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }) },
+      })
+    },
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    await call(route.handler, 'character-select', { characterId: 'ppl-zhuang-fangyi' })
+    const pending = call(route.handler, 'character-chat', {
+      characterId: 'ppl-zhuang-fangyi',
+      text: '请检查切换后的角色隔离',
+      eventId: 'inflight-switch-event-1',
+    })
+    await generationStarted
+    const selection = await call(route.handler, 'character-select', { characterId: 'deepseek' })
+    assert.equal(selection.status, 200)
+    assert.equal(selection.body.active.characterId, 'deepseek')
+    releaseGeneration()
+    const response = await pending
+    assert.equal(response.status, 200, response.body?.error)
+    assert.equal(response.body.view.character.id, 'ppl-zhuang-fangyi')
+    assert.equal(response.body.view.character.chatLines.length, 2)
+    const whale = await call(route.handler, 'view')
+    assert.equal(whale.body.character.chatLines.length, 0)
+    assert.equal(whale.body.memories, 0)
+    const roles = await call(route.handler, 'character-list')
+    assert.equal(roles.body.active.characterId, 'deepseek')
+  } finally {
+    if (releaseGeneration) releaseGeneration()
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
