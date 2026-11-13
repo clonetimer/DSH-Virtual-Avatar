@@ -792,6 +792,15 @@ test('Whale model selection is isolated from the DSH default and persists locall
     assert.equal(diagnostics.body.diagnostics.model.selectionSource, 'whale-local')
     assert.equal(diagnostics.body.diagnostics.model.selected.provider, 'openai-compatible')
 
+    cleanup()
+    cleanup = null
+    route = null
+    apply(ctx, {})
+    const afterRestart = await call(route.handler, { action: 'model-catalog' })
+    assert.equal(afterRestart.status, 200)
+    assert.equal(afterRestart.body.savedSelection.provider, 'openai-compatible')
+    assert.equal(afterRestart.body.savedSelection.model, 'gpt-4o-mini')
+
     const invalidProvider = await call(route.handler, {
       action: 'model-selection-set',
       args: { provider: 'not-enabled', model: 'some-model' },
