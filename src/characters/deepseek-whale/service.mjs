@@ -141,12 +141,21 @@ export class DeepseekWhaleService {
     this.store = store
     this.memory = memoryService || new MemoryService({ store })
     this.ppl = pplRuntime || createDeepseekWhaleRuntime()
-    this.basePplIr = structuredClone(this.ppl.ir)
+    this.basePplIr = this.ppl.ir ? structuredClone(this.ppl.ir) : null
     this.pplConfigurationHash = null
     this.pplConfigurationLoadError = null
   }
 
   #syncPplConfiguration(raw = {}) {
+    if (!this.basePplIr) {
+      if (raw && Object.keys(raw).length) {
+        const error = new Error('the injected PPL runtime does not expose a mutable Persona IR')
+        error.code = 'PPL_CONFIGURATION_RUNTIME_UNAVAILABLE'
+        error.status = 503
+        throw error
+      }
+      return { overrides: { schema: PPL_CONFIGURATION_SCHEMA, traits: {}, style: {} } }
+    }
     const applied = applyPplConfiguration(this.basePplIr, raw)
     const configurationHash = hashPplValue(applied.overrides)
     if (configurationHash !== this.pplConfigurationHash) {
@@ -479,6 +488,12 @@ export class DeepseekWhaleService {
   }
 
   getPplConfiguration() {
+    if (!this.basePplIr) {
+      const error = new Error('PPL configuration requires a runtime with a Persona IR')
+      error.code = 'PPL_CONFIGURATION_RUNTIME_UNAVAILABLE'
+      error.status = 503
+      throw error
+    }
     const loaded = this.loadState()
     const resolved = resolvePplConfiguration(this.basePplIr, loaded.state.pplConfigOverrides || {})
     return {
@@ -490,6 +505,12 @@ export class DeepseekWhaleService {
   }
 
   previewPplConfiguration(raw = {}) {
+    if (!this.basePplIr) {
+      const error = new Error('PPL configuration requires a runtime with a Persona IR')
+      error.code = 'PPL_CONFIGURATION_RUNTIME_UNAVAILABLE'
+      error.status = 503
+      throw error
+    }
     const applied = applyPplConfiguration(this.basePplIr, raw)
     const candidate = createPplRuntime({
       persona: applied.persona,
@@ -536,6 +557,12 @@ export class DeepseekWhaleService {
   }
 
   updatePplConfiguration(raw = {}, { expectedRevision } = {}) {
+    if (!this.basePplIr) {
+      const error = new Error('PPL configuration requires a runtime with a Persona IR')
+      error.code = 'PPL_CONFIGURATION_RUNTIME_UNAVAILABLE'
+      error.status = 503
+      throw error
+    }
     const loaded = this.loadState()
     const applied = applyPplConfiguration(this.basePplIr, raw)
     const preview = this.previewPplConfiguration(applied.overrides)
