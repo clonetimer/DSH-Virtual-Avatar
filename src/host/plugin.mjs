@@ -647,6 +647,36 @@ export function apply(ctx, config = {}) {
           })
           return
         }
+        if (action === 'character-model-test') {
+          const model = selectModel(llm, agentDefaultModel, runtimeConfig, store, role.characterId)
+          const controller = new AbortController()
+          const timeout = setTimeout(() => controller.abort(new Error('model test timed out')), 20000)
+          let output = ''
+          try {
+            const iterable = llm.stream({
+              provider: model.provider,
+              model: model.model,
+              messages: [{ role: 'user', content: [{ type: 'text', text: 'Reply with OK.' }] }],
+              system: 'This is a connectivity test. Reply with OK only.',
+              temperature: 0, maxTokens: 8, signal: controller.signal,
+            })
+            for await (const chunk of iterable) {
+              if (chunk?.type === 'text-delta' && chunk.text) output += chunk.text
+              if (chunk?.type === 'finish' && ['error', 'aborted'].includes(String(chunk.reason?.kind || ''))) {
+                throw new Error(chunk.reason?.failure?.message || 'model stream failed')
+              }
+            }
+            if (!output.trim()) throw new Error('model returned no text')
+            json(res, 200, {
+              ok: true,
+              test: {
+                status: 'success', provider: model.provider, model: model.model,
+                at: new Date().toISOString(),
+              },
+            })
+          } finally { clearTimeout(timeout) }
+          return
+        }
         if (action === 'character-model-set' || action === 'character-model-clear') {
           if (runtimeConfig.chatProvider && runtimeConfig.chatModel) {
             const error = new Error('模型由插件配置固定，无法从角色界面更改。')
