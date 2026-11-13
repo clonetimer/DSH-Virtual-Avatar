@@ -19,8 +19,13 @@ const ROLES = Object.freeze([
     personaId: 'ZHUANG_FANGYI',
     kind: 'ppl-reference',
     label: '庄方宜 · PPL 参考角色',
-    description: '独立 PPL 人格、关系、聊天、记忆与配置；使用中性角色标识',
-    hasDedicatedArtwork: false,
+    description: '独立 PPL 人格、关系、聊天、记忆与配置；使用专属 Q 版角色形象',
+    hasDedicatedArtwork: true,
+    artwork: Object.freeze({
+      avatar: 'characters/zhuang-fangyi/portrait.webp',
+      portrait: 'characters/zhuang-fangyi/portrait.webp',
+      kind: 'ai-generated-character-concept',
+    }),
   }),
 ])
 
