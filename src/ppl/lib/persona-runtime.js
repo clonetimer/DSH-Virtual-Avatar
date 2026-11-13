@@ -50,8 +50,16 @@ export class PersonaRuntime {
     const materialized = this.materialize(input.runtime, input.context, input.scene ?? this.scene)
     const resolution = resolve(this.ir, materialized.runtime, materialized.context, input.event)
     if (!resolution.valid) {
-      const errors = resolution.diagnostics?.filter(x => x.severity === 'error').map(x => `${x.code}: ${x.message}`).join('; ')
-      throw new Error(`PPL resolution invalid: ${errors || 'unknown error'}`)
+      const diagnostics = (resolution.diagnostics || []).filter(item => item.severity === 'error')
+      const errors = diagnostics.map(item => `${item.code}: ${item.message}`).join('; ')
+      const error = new Error(`PPL resolution invalid: ${errors || 'unknown error'}`)
+      error.code = 'PPL_RESOLUTION_INVALID'
+      error.diagnostics = diagnostics.map(item => ({
+        code: item.code || null,
+        severity: item.severity || 'error',
+        message: String(item.message || '').slice(0, 240),
+      }))
+      throw error
     }
     const rendered = render(this.ir, resolution, this.profile)
     const dynamicPrompt = [

@@ -344,3 +344,41 @@ test('PPL negative interaction raises transient anger and does not commit on int
   const completed = ppl.finalize(state, negative.resolution, 'completed').runtimeState
   assert.ok(completed.state.emotion.anger > state.state.emotion.anger)
 })
+
+test('PPL resolution rejection is audited without committing character state', () => {
+  const store = createMemoryStore()
+  const failures = []
+  store.recordPplResolutionFailure = value => {
+    failures.push({
+      ...value,
+      error: {
+        code: value.error?.code,
+        diagnostics: structuredClone(value.error?.diagnostics || []),
+      },
+    })
+  }
+  const pplRuntime = {
+    binding: { id: 'DEEPSEEK_WHALE', version: '0.3.0', irSha256: 'a'.repeat(64) },
+    initialState: sessionId => runtime().initialState(sessionId),
+    resolve() {
+      const error = new Error('PPL invariant CORE_TONE failed')
+      error.code = 'PPL_RESOLUTION_INVALID'
+      error.diagnostics = [{ code: 'PPL-R601', severity: 'error', message: "Invariant 'CORE_TONE' violated." }]
+      throw error
+    },
+  }
+  const service = new DeepseekWhaleService({ store, pplRuntime })
+  assert.throws(
+    () => service.prepareTurn({
+      text: '今天也辛苦了',
+      eventId: 'ppl-rejected-turn-1',
+      sessionId: 'ppl-rejected-session',
+    }),
+    error => error.code === 'PPL_RESOLUTION_INVALID',
+  )
+  assert.equal(failures.length, 1)
+  assert.equal(failures[0].eventId, 'ppl-rejected-turn-1')
+  assert.equal(failures[0].error.code, 'PPL_RESOLUTION_INVALID')
+  assert.equal(failures[0].error.diagnostics[0].code, 'PPL-R601')
+  assert.equal(store.loadCharacterState('DEEPSEEK_WHALE'), null)
+})

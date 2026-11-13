@@ -288,7 +288,7 @@ export class SqliteAvatarStore {
       const manifest = {
         schema: BACKUP_SCHEMA,
         createdAt: new Date().toISOString(),
-        pluginVersion: '0.1.0-dev.15',
+        pluginVersion: '0.1.0-dev.16',
         database: { path: 'avatar.sqlite', byteLength: statSync(databasePath).size, sha256: sha256(readFileSync(databasePath)) },
         assets: entries.filter(item => item.path.startsWith('assets/')),
         files: entries,
@@ -474,6 +474,46 @@ export class SqliteAvatarStore {
     return row ? { eventId: row.event_id, characterId: row.character_id, eventType: row.event_type, payloadHash: row.payload_hash, payload: JSON.parse(row.payload_json) } : null
   }
 
+  recordPplResolutionFailure({ eventId, characterId = 'deepseek', persona = null, event = {}, scene = null, context = {}, error = null } = {}) {
+    this.#assertOpen()
+    const details = {
+      schema: 'ppl.execution-audit/0.1',
+      status: 'rejected',
+      persona: {
+        id: persona?.id || 'DEEPSEEK_WHALE',
+        version: persona?.version || null,
+        irSha256: persona?.irSha256 || null,
+      },
+      event: {
+        type: event?.type || null,
+        actor: event?.actor || null,
+        subject: event?.subject || null,
+        signal: event?.signal || null,
+        classification: event?.classification || null,
+      },
+      scene: scene || null,
+      context: {
+        privacy: context?.privacy || null,
+        outsiders_present: context?.outsiders_present === true,
+        danger: Number.isFinite(Number(context?.danger)) ? Number(context.danger) : null,
+      },
+      error: {
+        code: String(error?.code || 'PPL_RESOLUTION_FAILED').slice(0, 96),
+        message: String(error?.message || error || 'PPL resolution failed').slice(0, 240),
+        diagnostics: (Array.isArray(error?.diagnostics) ? error.diagnostics : []).slice(0, 32).map(item => ({
+          code: String(item?.code || '').slice(0, 96),
+          severity: String(item?.severity || 'error').slice(0, 24),
+          message: String(item?.message || '').slice(0, 240),
+        })),
+      },
+    }
+    this.transaction(() => {
+      this.#recordAudit('ppl-runtime', String(characterId), 'PPL_RESOLUTION_REJECTED',
+        eventId ? String(eventId) : null, null, null, details)
+    })
+    return { recorded: true, eventId: eventId ? String(eventId) : null }
+  }
+
   commitCharacterTurn({ eventId, characterId = 'deepseek', payload, state, expectedRevision, occurredAt = new Date().toISOString() }) {
     this.#assertOpen()
     const id = String(eventId || '')
@@ -518,6 +558,7 @@ export class SqliteAvatarStore {
         stageAfter: String(afterRelationship.stage || 'acquaintance'),
         stageChanged: String(beforeRelationship.stage || 'acquaintance') !== String(afterRelationship.stage || 'acquaintance'),
         levelChanged: Number(beforeState.level || 1) !== Number(saved.state.level || 1),
+        pplAudit: payload?.pplAudit || null,
       }
       this.#recordAudit('character',characterId,'TURN_COMPLETED',id,beforeState,saved.state,relationshipDetails)
       return { duplicate: false, state: saved.state, revision: saved.revision, updatedAt: saved.updatedAt }

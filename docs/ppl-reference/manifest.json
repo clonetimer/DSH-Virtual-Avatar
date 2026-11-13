@@ -1,0 +1,61 @@
+{
+  "schema": "dsh-virtual-avatar.ppl-integration/0.1",
+  "upstream": {
+    "repository": "clonetimer/PPL",
+    "commit": "a587e5b6ffb62fd005ac67e98eed79fac3dd66de",
+    "corePath": "components/foundation/core",
+    "coreVersion": "0.3.0",
+    "runtimePath": "components/foundation/runtime"
+  },
+  "persona": {
+    "source": "personas/deepseek-whale.ppl",
+    "compiled": "personas/deepseek-whale.pir.json",
+    "schema": "ppl.persona-ir/0.3",
+    "id": "DEEPSEEK_WHALE"
+  },
+  "runtimeMirrors": [
+    {
+      "plugin": "src/ppl/vendor/pplc/runtime.js",
+      "upstream": "components/foundation/runtime/vendor/pplc/runtime.js"
+    },
+    {
+      "plugin": "src/ppl/vendor/pplc/renderer.js",
+      "upstream": "components/foundation/runtime/vendor/pplc/renderer.js"
+    },
+    {
+      "plugin": "src/ppl/lib/host-snapshot.js",
+      "upstream": "components/foundation/runtime/lib/host-snapshot.js"
+    }
+  ],
+  "referenceCopies": [
+    {
+      "plugin": "docs/ppl-reference/SPEC_0.3_STABLE.md",
+      "upstream": "components/foundation/core/SPEC_0.3_STABLE.md"
+    },
+    {
+      "plugin": "docs/ppl-reference/grammar.ebnf",
+      "upstream": "components/foundation/core/spec/grammar.ebnf"
+    },
+    {
+      "plugin": "docs/ppl-reference/persona-ir.schema.json",
+      "upstream": "components/foundation/core/spec/persona-ir.schema.json"
+    },
+    {
+      "plugin": "docs/ppl-reference/resolution.schema.json",
+      "upstream": "components/foundation/core/spec/resolution.schema.json"
+    },
+    {
+      "plugin": "docs/ppl-reference/runtime.schema.json",
+      "upstream": "components/foundation/core/spec/runtime.schema.json"
+    },
+    {
+      "plugin": "docs/ppl-reference/host-snapshot.schema.json",
+      "upstream": "components/foundation/runtime/spec/host-snapshot.schema.json"
+    }
+  ],
+  "adapter": {
+    "plugin": "src/ppl/lib/persona-runtime.js",
+    "upstream": "components/foundation/runtime/lib/persona-runtime.js",
+    "extension": "per-turn scene override via resolveHostStep(input.scene)"
+  }
+}
