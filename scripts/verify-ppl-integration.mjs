@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 
@@ -20,10 +20,9 @@ assert.equal(corePackage.version, manifest.upstream.coreVersion, 'PPL Core versi
 
 const fsProjectUrl = pathToFileURL(resolve(coreRoot, 'dist/src/fs-project.js')).href
 const { compileFile } = await import(fsProjectUrl)
-const sourcePath = resolve(root, manifest.persona.source)
-const compiled = compileFile(sourcePath, {
-  moduleRoot: resolve(coreRoot, 'modules'),
-})
+const sourcePath = manifest.persona.source
+const moduleRoot = relative(root, resolve(coreRoot, 'modules'))
+const compiled = compileFile(sourcePath, { moduleRoot })
 const errors = (compiled.diagnostics || []).filter(item => item.severity === 'error')
 assert.equal(errors.length, 0, 'PPL source must compile without errors: ' + JSON.stringify(errors, null, 2))
 assert.ok(compiled.ir, 'PPL compiler must produce a Persona IR')
