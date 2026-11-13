@@ -664,58 +664,108 @@ export function apply(ctx, config = {}) {
           return
         }
         if (action === 'character-model-catalog') {
-          const registered = typeof llm.listProviders === 'function' ? llm.listProviders() : []
-          const providers = await Promise.all((Array.isArray(registered) ? registered : []).map(async item => {
+          let registered = []
+          let providerCatalogError = null
+          try {
+            if (typeof llm?.listProviders !== 'function') throw new Error('当前 DSH Host 未提供 llm.listProviders()')
+            registered = llm.listProviders()
+            if (!Array.isArray(registered)) throw new Error('DSH Provider 目录返回格式无效')
+          } catch (error) {
+            providerCatalogError = String(error?.message || error).slice(0, 180)
+            registered = []
+          }
+          const providers = await Promise.all(registered.map(async item => {
             const id = String(item.id || '')
             if (!id) return null
             let models = []
             let catalogError = null
-            try {
-              if (typeof llm.listModels === 'function') {
-                models = (await llm.listModels(id) || []).map(model => ({ id: String(model.id || ''), name: String(model.name || model.id || '') })).filter(model => model.id)
+            if (typeof llm.listModels !== 'function') {
+              catalogError = '该 DSH Host 未提供模型目录接口；可以手动填写模型 ID，并先测试连接。'
+            } else {
+              try {
+                models = (await llm.listModels(id) || []).map(model => ({
+                  id: String(model.id || ''),
+                  name: String(model.name || model.id || ''),
+                  description: String(model.description || ''),
+                  inputModalities: Array.isArray(model.inputModalities) ? model.inputModalities : [],
+                })).filter(model => model.id)
+                if (!models.length) catalogError = '服务商暂未公布可选模型目录；可以手动填写模型 ID，并先测试连接。'
+              } catch (error) {
+                catalogError = String(error?.message || error).slice(0, 180)
               }
-            } catch (error) { catalogError = String(error.message || error).slice(0, 180) }
-            return { id, name: String(item.name || id), models, catalogError }
+            }
+            return { id, name: String(item.name || id), models, catalogError, catalogAvailable: models.length > 0 }
           })).then(rows => rows.filter(Boolean))
           let selection = null
+          let selectionError = null
           try {
             const model = selectModel(llm, agentDefaultModel, runtimeConfig, store, role.characterId)
             selection = { provider: model.provider, model: model.model, source: model.source }
-          } catch { /* show explicit empty state in UI */ }
+          } catch (error) {
+            selectionError = { code: error?.code || 'MODEL_NOT_CONFIGURED', message: String(error?.message || error).slice(0, 180) }
+          }
+          const selectionRegistered = selection ? registered.some(item => item.id === selection.provider) : false
           json(res, 200, {
-            ok: true, providers, selection,
+            ok: true,
+            providers,
+            selection,
+            selectionError,
+            selectionRegistered,
+            providerCatalogError,
+            catalogAvailable: providers.some(item => item.models.length > 0),
             savedSelection: store.getChatModelSelection(role.characterId),
             locked: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel),
+            capabilities: {
+              listProviders: typeof llm?.listProviders === 'function',
+              listModels: typeof llm?.listModels === 'function',
+              stream: typeof llm?.stream === 'function',
+            },
           })
           return
         }
         if (action === 'character-model-test') {
-          const model = selectModel(llm, agentDefaultModel, runtimeConfig, store, role.characterId)
+          const requestedProvider = String(args.provider || '').trim()
+          const requestedModel = String(args.model || '').trim()
+          let model
+          if (requestedProvider || requestedModel) {
+            if (!requestedProvider || !requestedModel) {
+              const error = new Error('请同时选择模型服务商和模型 ID。')
+              error.code = 'MODEL_SELECTION_INCOMPLETE'; error.status = 400; throw error
+            }
+            const registered = typeof llm?.listProviders === 'function' ? llm.listProviders() : []
+            if (!Array.isArray(registered) || !registered.some(item => item.id === requestedProvider)) {
+              const error = new Error('该服务商尚未在 DSH 中启用。请先在 DSH 模型设置中启用对应服务商。')
+              error.code = 'MODEL_PROVIDER_UNAVAILABLE'; error.status = 409; throw error
+            }
+            model = { provider: requestedProvider, model: requestedModel, source: 'model-settings-draft' }
+          } else {
+            model = selectModel(llm, agentDefaultModel, runtimeConfig, store, role.characterId)
+          }
           const controller = new AbortController()
           const timeout = setTimeout(() => controller.abort(new Error('model test timed out')), 20000)
-          let output = ''
           try {
-            const iterable = llm.stream({
-              provider: model.provider,
-              model: model.model,
-              messages: [{ role: 'user', content: [{ type: 'text', text: 'Reply with OK.' }] }],
-              system: 'This is a connectivity test. Reply with OK only.',
-              temperature: 0, maxTokens: 8, signal: controller.signal,
-            })
-            for await (const chunk of iterable) {
-              if (chunk?.type === 'text-delta' && chunk.text) output += chunk.text
-              if (chunk?.type === 'finish' && ['error', 'aborted'].includes(String(chunk.reason?.kind || ''))) {
-                throw new Error(chunk.reason?.failure?.message || 'model stream failed')
-              }
-            }
-            if (!output.trim()) throw new Error('model returned no text')
+            const generated = await streamReply(
+              llm, model,
+              'This is a connectivity test. Reply with exactly OK. Do not roleplay or use tools.',
+              [], 'Reply with exactly OK.',
+              controller.signal,
+              { scenePrompt: '（这是模型连通性测试，不是角色对话；只需返回 OK。）' },
+            )
             json(res, 200, {
               ok: true,
               test: {
                 status: 'success', provider: model.provider, model: model.model,
+                response: generated.text.slice(0, 80),
+                attempts: generated.attempts,
                 at: new Date().toISOString(),
               },
             })
+          } catch (cause) {
+            const error = cause instanceof Error ? cause : new Error(String(cause))
+            error.provider = error.provider || model.provider
+            error.model = error.model || model.model
+            error.code = error.code || 'MODEL_TEST_FAILED'
+            throw error
           } finally { clearTimeout(timeout) }
           return
         }
@@ -730,9 +780,14 @@ export function apply(ctx, config = {}) {
           }
           const provider = String(args.provider || '').trim()
           const model = String(args.model || '').trim()
-          const registered = typeof llm.listProviders === 'function' ? llm.listProviders() : []
+          let registered = []
+          try { registered = typeof llm?.listProviders === 'function' ? llm.listProviders() : [] }
+          catch (cause) {
+            const error = new Error('无法读取 DSH 服务商目录：' + String(cause?.message || cause).slice(0, 120))
+            error.code = 'MODEL_CATALOG_UNAVAILABLE'; error.status = 503; throw error
+          }
           if (!provider || !model || !Array.isArray(registered) || !registered.some(item => item.id === provider)) {
-            const error = new Error('请从 DSH 已启用的模型服务商中选择，并填写模型 ID。')
+            const error = new Error('请先在 DSH 中启用该服务商，再选择或填写模型 ID。')
             error.code = 'MODEL_PROVIDER_UNAVAILABLE'; error.status = 400; throw error
           }
           json(res, 200, { ok: true, selection: store.setChatModelSelection({ characterId: role.characterId, provider, model }) })
@@ -816,6 +871,7 @@ export function apply(ctx, config = {}) {
           } finally { clearTimeout(timeout) }
           const saved = companion.finalizeTurn(prepared, {
             reply: generated.text, terminalReason: generated.terminalReason,
+            provider: model.provider, model: model.model,
           })
           json(res, 200, { ok: true, eventId, reply: generated.text, duplicate: saved.duplicate === true, view: roleView() })
           return
@@ -1319,6 +1375,8 @@ export function apply(ctx, config = {}) {
           terminalReason: generated.terminalReason,
           emotion: emotionFromText(generated.text),
           choices: [],
+          provider: model.provider,
+          model: model.model,
         })
         lastSuccessfulTurnAt = new Date().toISOString()
         json(res, 200, {
