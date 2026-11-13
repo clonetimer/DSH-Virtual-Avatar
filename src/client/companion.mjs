@@ -473,6 +473,8 @@ function Companion() {
   const [historyQuery, setHistoryQuery] = useState('')
   const [historyMatches, setHistoryMatches] = useState([])
   const [relationshipEvents, setRelationshipEvents] = useState([])
+  const [pplAuditEvents, setPplAuditEvents] = useState([])
+  const [pplAuditLoading, setPplAuditLoading] = useState(false)
   const [memoryCandidates, setMemoryCandidates] = useState([])
   const [storyMemory, setStoryMemory] = useState(null)
   const [summaryCandidate, setSummaryCandidate] = useState(null)
@@ -934,6 +936,17 @@ function Companion() {
     finally { setRelationshipLoading(false) }
   }
 
+  const loadPplAuditHistory = async () => {
+    setShowMoreMenu(false)
+    setPplAuditLoading(true)
+    try {
+      const result = await callApi('ppl-audit-history', { limit: 50 })
+      setPplAuditEvents(result.events || [])
+      setActivePanel('ppl-audit')
+    } catch (err) { setActivePanel(null); setError(err.message || String(err)) }
+    finally { setPplAuditLoading(false) }
+  }
+
   const loadSummaryCandidate = async () => {
     setShowMoreMenu(false)
     try {
@@ -1393,7 +1406,7 @@ function Companion() {
         ),
       ),
       React.createElement('div', { className: 'dva-chat' },
-        ['history', 'relationship'].includes(activePanel)
+        ['history', 'relationship', 'ppl-audit'].includes(activePanel)
           ? React.createElement('div', { className: 'dva-utility-overlay' },
               activePanel === 'history' ? React.createElement('div', { className: 'dva-memory-panel' },
                 React.createElement('strong', null, '搜索对话'),
@@ -1417,7 +1430,57 @@ function Companion() {
                   item.details?.stageChanged ? React.createElement('div', null, '关系阶段：' + item.details.stageBefore + ' → ' + item.details.stageAfter) : null,
                   React.createElement('small', null, '信任 ' + Math.round((item.details?.trustBefore || 0) * 100) + '% → ' + Math.round((item.details?.trustAfter || 0) * 100) + '% · 亲近度 ' + Math.round((item.details?.attachmentBefore || 0) * 100) + '% → ' + Math.round((item.details?.attachmentAfter || 0) * 100) + '%'),
                 )),
+                React.createElement('button', { type: 'button', onClick: () => void loadPplAuditHistory() }, '查看 PPL 规则审计'),
                 React.createElement('button', { onClick: () => setActivePanel(null) }, '关闭'),
+              ) : null,
+              activePanel === 'ppl-audit' ? React.createElement('div', { className: 'dva-memory-panel' },
+                React.createElement('strong', null, 'PPL 规则执行审计'),
+                React.createElement('p', null, '记录每次角色互动的规则命中、状态变化、关系转换和人格约束结果。失败记录不会提交角色状态。'),
+                pplAuditEvents.length === 0 ? React.createElement('p', null, '暂无 PPL 执行记录。完成一次聊天后，这里会显示规则执行轨迹。') : null,
+                ...pplAuditEvents.map(item => {
+                  const audit = item.ppl || {}
+                  const resolution = audit.resolution || {}
+                  const activeRules = resolution.activeRules || []
+                  const stateChanges = audit.state?.changes || []
+                  const invariants = resolution.invariants || []
+                  const diagnostics = resolution.diagnostics || audit.error?.diagnostics || []
+                  const effectPaths = Object.keys(resolution.effectTrace || {})
+                  return React.createElement('div', { key: item.id, className: 'dva-memory-row' },
+                    React.createElement('strong', null, item.status === 'rejected' ? '规则解析失败' : '规则执行完成'),
+                    React.createElement('small', null, new Date(item.createdAt).toLocaleString()),
+                    React.createElement('div', null, '事件：' + (audit.event?.type || '未知') + ' · 场景：' + (audit.scene || '未知')),
+                    React.createElement('small', null, '命中规则 ' + activeRules.length + ' 条 · 状态变化 ' + stateChanges.length + ' 项 · 效果轨迹 ' + effectPaths.length + ' 项'),
+                    audit.persona?.irSha256 ? React.createElement('small', null, 'Persona IR：' + (audit.persona.version || '未知版本') + ' · ' + audit.persona.irSha256.slice(0, 12)) : null,
+                    audit.error ? React.createElement('small', { className: 'dva-error' }, (audit.error.code || 'PPL_ERROR') + ' · ' + (audit.error.message || '规则解析失败')) : null,
+                    React.createElement('details', null,
+                      React.createElement('summary', null, '查看规则、状态和约束详情'),
+                      React.createElement('div', null, '规则命中'),
+                      activeRules.length
+                        ? activeRules.map(rule => React.createElement('small', { key: rule.id || String(rule) }, (rule.id || String(rule)) + (rule.priority == null ? '' : ' · priority ' + rule.priority)))
+                        : React.createElement('small', null, '没有命中规则或规则解析未完成。'),
+                      React.createElement('div', null, '状态变化'),
+                      stateChanges.length
+                        ? stateChanges.map(change => React.createElement('small', { key: change.path }, change.path + '：' + String(change.before) + ' → ' + String(change.after)))
+                        : React.createElement('small', null, '本次没有持久状态变化。'),
+                      React.createElement('div', null, '人格不变量'),
+                      invariants.length
+                        ? invariants.map(result => React.createElement('small', { key: result.id }, result.id + '：' + (result.passed ? '通过' : '未通过')))
+                        : React.createElement('small', null, '没有返回不变量检查结果。'),
+                      React.createElement('div', null, '规则诊断'),
+                      diagnostics.length
+                        ? diagnostics.map((diagnostic, index) => React.createElement('small', { key: diagnostic.code + '-' + index }, (diagnostic.code || 'PPL') + ' · ' + (diagnostic.message || '诊断信息')))
+                        : React.createElement('small', null, '没有 PPL 诊断错误。'),
+                      (resolution.pendingCommits || []).length
+                        ? React.createElement('small', null, '待提交变更：' + resolution.pendingCommits.map(change => change.path).join('、'))
+                        : null,
+                      (resolution.pendingTransitions || []).length
+                        ? React.createElement('small', null, '待转换关系：' + resolution.pendingTransitions.map(change => change.path + ' → ' + change.to).join('、'))
+                        : null,
+                    ),
+                  )
+                }),
+                React.createElement('button', { type: 'button', disabled: pplAuditLoading, onClick: () => void loadPplAuditHistory() }, pplAuditLoading ? '刷新中…' : '刷新审计记录'),
+                React.createElement('button', { type: 'button', onClick: () => setActivePanel(null) }, '关闭'),
               ) : null,
             )
           : null,
@@ -1891,6 +1954,7 @@ function Companion() {
           React.createElement('button', { disabled: diagnosticsBusy, onClick: () => void loadDiagnostics() }, diagnosticsBusy ? '检查中…' : '重新检查'),
           React.createElement('button', { disabled: modelTestBusy, onClick: () => void testModelConnection() }, modelTestBusy ? '测试中…' : '测试模型连接'),
           React.createElement('button', { disabled: !diagnostics, onClick: exportDiagnostics }, '导出诊断报告'),
+          React.createElement('button', { type: 'button', disabled: pplAuditLoading, onClick: () => void loadPplAuditHistory() }, pplAuditLoading ? '读取 PPL 记录…' : '查看 PPL 执行记录'),
           modelTestResult ? React.createElement('small', null, '最近模型测试：' + (modelTestResult.status === 'success' ? '成功' : '失败') + ' · ' + modelTestResult.at) : null,
 
           diagnostics ? React.createElement(React.Fragment, null,
