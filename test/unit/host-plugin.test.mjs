@@ -817,6 +817,25 @@ test('Whale model selection is isolated from the DSH default and persists locall
     assert.equal(catalog.body.providers.length, 2)
     assert.equal(catalog.body.providers[1].models[0].id, 'gpt-4o-mini')
 
+    // The UI must be able to test an unsaved draft before applying it.
+    const draftTest = await call(route.handler, {
+      action: 'model-test',
+      args: { provider: 'openai-compatible', model: 'gpt-4o-mini' },
+    })
+    assert.equal(draftTest.status, 200)
+    assert.equal(draftTest.body.test.provider, 'openai-compatible')
+    assert.equal(draftTest.body.test.model, 'gpt-4o-mini')
+    assert.equal(draftTest.body.test.source, 'model-settings-draft')
+    const beforeSave = await call(route.handler, { action: 'model-catalog' })
+    assert.equal(beforeSave.body.savedSelection, null, 'testing a draft must not persist or mutate the selected model')
+
+    const rejectedDraft = await call(route.handler, {
+      action: 'model-test',
+      args: { provider: 'not-enabled', model: 'some-model' },
+    })
+    assert.equal(rejectedDraft.status, 409)
+    assert.equal(rejectedDraft.body.code, 'MODEL_PROVIDER_UNAVAILABLE')
+
     const saved = await call(route.handler, {
       action: 'model-selection-set',
       args: { provider: 'openai-compatible', model: 'gpt-4o-mini' },
