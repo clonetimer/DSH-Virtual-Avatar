@@ -487,7 +487,13 @@ export function apply(ctx, config = {}) {
     const pathname = new URL(req.url || '/', 'http://dsh.local').pathname
     const assetMarker = pathname.lastIndexOf('/assets/')
     if (req.method === 'GET' && pathname.startsWith(API_PATH + '/assets/characters/')) {
-      const parts = pathname.slice((API_PATH + '/assets/characters/').length).split('/').map(decodeURIComponent)
+      let parts
+      try {
+        parts = pathname.slice((API_PATH + '/assets/characters/').length).split('/').map(decodeURIComponent)
+      } catch {
+        json(res, 400, { ok: false, error: 'invalid character artwork path' })
+        return
+      }
       if (parts.length !== 2) {
         json(res, 404, { ok: false, error: 'character artwork not found' })
         return
