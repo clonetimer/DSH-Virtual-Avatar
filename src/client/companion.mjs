@@ -796,9 +796,63 @@ function Companion() {
     finally { setMemoryLoading(false) }
   }
 
+  const runtimeCharacter = view?.character
+  const runtimeBinding = runtimeCharacter?.motionBinding || null
+  const runtimeExpression = avatarExpressionOverride || runtimeCharacter?.presentation?.expression || 'neutral'
+  const runtimeMotionActionId = resolveBoundMotionAction(runtimeBinding, {
+    avatarMotion,
+    expression: runtimeExpression,
+    fatigue: runtimeCharacter?.pplState?.fatigue,
+  })
+  const runtimeMotionAction = runtimeBinding?.catalog?.actions?.[runtimeMotionActionId] || null
+  const runtimeMotionFrameTotal = runtimeMotionAction
+    ? runtimeMotionAction.frames.length * runtimeMotionAction.repeats
+    : 0
+  const runtimeMotionFrameIndex = runtimeMotionFrameTotal
+    ? (runtimeMotionStep % runtimeMotionFrameTotal) % runtimeMotionAction.frames.length
+    : 0
+  const runtimeMotionFramePath = runtimeMotionAction?.frames?.[runtimeMotionFrameIndex] || null
+  const runtimeMotionFrameUrl = runtimeMotionFramePath && runtimeBinding?.packId
+    ? API + '/motion-packs/' + encodeURIComponent(runtimeBinding.packId) + '/' +
+      runtimeMotionFramePath.split('/').map(encodeURIComponent).join('/')
+    : null
+
+  useEffect(() => {
+    setRuntimeMotionStep(0)
+  }, [runtimeBinding?.packId, runtimeMotionActionId, avatarMotion])
+
+  useEffect(() => {
+    if (!runtimeMotionAction || !runtimeMotionFrameTotal) return
+    const loops = avatarMotion === 'idle' || avatarMotion === 'thinking' || avatarMotion === 'swaying'
+    if (!loops && runtimeMotionStep >= runtimeMotionFrameTotal - 1) return
+    const timer = window.setTimeout(() => {
+      setRuntimeMotionStep(step => loops
+        ? (step + 1) % runtimeMotionFrameTotal
+        : Math.min(step + 1, runtimeMotionFrameTotal - 1))
+    }, Math.max(30, runtimeMotionAction.frameIntervalMs))
+    return () => window.clearTimeout(timer)
+  }, [runtimeMotionActionId, runtimeMotionFrameTotal, runtimeMotionAction?.frameIntervalMs, avatarMotion, runtimeMotionStep])
+
+  useEffect(() => {
+    if (!runtimeMotionAction) return
+    const images = runtimeMotionAction.frames.map(path => {
+      const image = new Image()
+      const url = API + '/motion-packs/' + encodeURIComponent(runtimeBinding.packId) + '/' +
+        path.split('/').map(encodeURIComponent).join('/')
+      image.src = url
+      return image
+    })
+    return () => {
+      for (const image of images) {
+        image.onload = null
+        image.onerror = null
+      }
+    }
+  }, [runtimeBinding?.packId, runtimeMotionActionId])
+
   if (!open) return React.createElement('div', { className: 'dva-root' },
-    React.createElement('button', { className: 'dva-pet', title: '打开鲸鱼娘', onClick: () => { setOpen(true); void refresh() } },
-      React.createElement('img', { src: view?.character?.imageUrl || API + '/assets/maid-left.webp', alt: 'DeepSeek 鲸鱼娘' }),
+    React.createElement('button', { className: 'dva-pet' + (runtimeMotionFrameUrl ? ' has-native-motion' : ''), title: '打开鲸鱼娘', onClick: () => { setOpen(true); void refresh() } },
+      React.createElement('img', { src: runtimeMotionFrameUrl || view?.character?.imageUrl || API + '/assets/maid-left.webp', alt: 'DeepSeek 鲸鱼娘', draggable: false }),
       React.createElement('span', null, '鲸鱼娘'),
     ),
   )
@@ -897,7 +951,7 @@ function Companion() {
     React.createElement('div', { className: 'dva-main' },
       React.createElement('aside', { className: 'dva-character' },
         React.createElement('div', {
-          className: 'dva-avatar-stage is-' + avatarMotion + ' is-state-' + (character?.presentation?.motion || 'calm'),
+          className: 'dva-avatar-stage is-' + avatarMotion + ' is-state-' + (character?.presentation?.motion || 'calm') + (runtimeMotionFrameUrl ? ' has-native-motion' : ''),
           'data-expression': character?.presentation?.expression || 'neutral',
           'data-expression-source': character?.presentation?.expressionSource || 'baseline',
           'data-tempo': character?.presentation?.tempo || 'normal',
@@ -915,9 +969,9 @@ function Companion() {
         },
           React.createElement('img', {
             key: avatarExpressionOverride || character?.imageUrl || 'default-avatar',
-            src: avatarExpressionOverride
+            src: runtimeMotionFrameUrl || (avatarExpressionOverride
               ? character?.expressionUrls?.[avatarExpressionOverride] || character?.imageUrl || API + '/assets/maid-left.webp'
-              : character?.imageUrl || API + '/assets/maid-left.webp',
+              : character?.imageUrl || API + '/assets/maid-left.webp'),
             alt: character?.name || '鲸鱼娘',
             draggable: false,
           }),
