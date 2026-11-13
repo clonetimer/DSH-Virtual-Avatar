@@ -314,7 +314,7 @@
 - Host binary upload, complete-frame commit, GET frame integrity, diagnostics accounting, incomplete commit rejection and invalid path/PNG rejection: PASS.
 - Client classic artifact, explicit import consent, local library preview/uninstall and cancellation/cleanup checks: PASS.
 - PPL compile, DSH classic client loader and npm pack verification: PASS.
-- Windows artifact `0.1.0-dev.11`: ZIP 3,510,989 bytes; ZIP CRC PASS. Inner TGZ 3,509,313 bytes; SHA-256 `4e4500f6b078de719fdd7a14188c967950c012f87fcb63c4d2dd0b763d28595d`, verified against both `.sha256` and `package-info.json`.
+- Windows artifact `0.1.0-dev.11`: ZIP CRC PASS. The exact inner TGZ byte length and SHA-256 are recorded in `package-info.json` and the adjacent `.sha256` file; both are independently verified.
 - Private Google Drive file updated in place; existing file ID and URL retained.
 
 ### Remaining manual gate
