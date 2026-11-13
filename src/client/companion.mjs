@@ -387,6 +387,10 @@ function Companion() {
         frameUrls,
         blobUrls: [],
       })
+      const currentBinding = view?.character?.motionBinding
+      const existingMapping = currentBinding?.packId === pack.id ? currentBinding.mapping : null
+      setMotionBindingDraft(existingMapping || { idle: pack.catalog.defaultAction || Object.keys(pack.catalog.actions)[0] })
+      setMotionIdentityConfirmed(currentBinding?.packId === pack.id && currentBinding.identityConfirmed === true)
       setMotionActionId(pack.catalog.defaultAction || Object.keys(pack.catalog.actions)[0])
       setMotionPlaybackStep(0)
     } catch (error) {
@@ -442,6 +446,36 @@ function Companion() {
       setMotionImportBusy(false)
       setMotionImportProgress(null)
     }
+  }
+
+
+  const saveMotionBinding = async () => {
+    if (motionPreview?.source !== 'installed' || !motionPreview.packId || !motionIdentityConfirmed || !motionBindingDraft.idle || motionBindingBusy) return
+    setMotionBindingBusy(true)
+    setMotionPreviewError('')
+    try {
+      const result = await callApi('motion-pack-bind', {
+        packId: motionPreview.packId,
+        identityConfirmed: true,
+        mapping: motionBindingDraft,
+      })
+      setView(result.view)
+      setNotice('动作已绑定到鲸鱼娘。PPL 情绪和互动状态现在可以驱动这组逐帧动作。')
+    } catch (error) {
+      setMotionPreviewError(error.message || String(error))
+    } finally { setMotionBindingBusy(false) }
+  }
+
+  const clearMotionBinding = async () => {
+    if (motionBindingBusy || !window.confirm('解除动作绑定？鲸鱼娘会恢复使用原有立绘和待机动画，本地动作包不会被删除。')) return
+    setMotionBindingBusy(true)
+    try {
+      const result = await callApi('motion-pack-unbind')
+      setView(result.view)
+      setMotionIdentityConfirmed(false)
+      setNotice('已解除动作绑定，本地动作包仍保留在动作库中。')
+    } catch (error) { setMotionPreviewError(error.message || String(error)) }
+    finally { setMotionBindingBusy(false) }
   }
 
   const removeMotionPack = async pack => {
