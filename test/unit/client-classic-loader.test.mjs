@@ -114,7 +114,7 @@ test('built client preserves companion features without bundling its own React',
     assert.ok(memoryLoader.startsWith('const loadMemories = async'), 'memory loader must remain present')
     assert.doesNotMatch(memoryLoader, /setActivePanel|openUtilityPanel/, 'memory fetch completion must not reopen a closed panel')
   assert.match(artifact, /motion-preview-validate/)
-  assert.match(artifact, /动作包预览/)
+  assert.match(artifact, /动作库与动画/)
   assert.match(artifact, /webkitdirectory/)
   assert.match(artifact, /dva-motion-stage/)
   assert.match(artifact, /预览素材/)
