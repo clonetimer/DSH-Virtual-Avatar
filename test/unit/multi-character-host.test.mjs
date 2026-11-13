@@ -98,8 +98,19 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     })
     assert.equal(store.status, 200)
     const id = store.body.result.memory.id
+    const changedMemory = await call(route.handler, 'character-memory-edit', {
+      characterId: 'ppl-zhuang-fangyi', memoryId: id, text: '庄方宜的独立记忆已修改',
+    })
+    assert.equal(changedMemory.status, 200)
+    assert.equal(changedMemory.body.result.text, '庄方宜的独立记忆已修改')
+    const pinnedMemory = await call(route.handler, 'character-memory-pin', {
+      characterId: 'ppl-zhuang-fangyi', memoryId: id, pinned: true,
+    })
+    assert.equal(pinnedMemory.status, 200)
+    assert.equal(pinnedMemory.body.result.pinned, true)
     const memories = await call(route.handler, 'character-memory-list', { characterId: 'ppl-zhuang-fangyi' })
     assert.equal(memories.body.memories.length, 1)
+    assert.equal(memories.body.memories[0].text, '庄方宜的独立记忆已修改')
     const whaleMemories = await call(route.handler, 'memory-list')
     assert.equal(whaleMemories.body.memories.length, 0)
     const whaleMutation = await call(route.handler, 'memory-pin', { memoryId: id })
