@@ -40,6 +40,37 @@ const PPL_CONFIG_PRESETS = Object.freeze({
   },
 })
 const CSS = `
+.dva-generic-panel{background:linear-gradient(150deg,#09203a,#071827 70%,#11324b)}
+.dva-generic-pet{display:flex;flex-direction:column;align-items:center;gap:6px;border:1px solid #71b2d2;border-radius:15px;background:#0a2b46;color:#eaf5ff;cursor:pointer;padding:12px;max-width:160px}
+.dva-generic-avatar-mark{display:grid;place-items:center;width:66px;height:66px;border-radius:50%;background:#2c648a;color:#f4f9ff;font-size:34px}
+.dva-generic-selector{display:flex;align-items:center;gap:6px;color:#cae6f4;font-size:12px}
+.dva-generic-selector select,.dva-generic-field select,.dva-generic-field input{min-height:32px;background:#092945;color:#f1faff;border:1px solid #7eafca;border-radius:8px;padding:6px}
+.dva-generic-main{flex:1;display:grid;grid-template-columns:minmax(180px,250px) minmax(0,1fr);gap:12px;padding:16px;min-height:0}
+.dva-generic-aside{display:flex;flex-direction:column;align-items:center;gap:10px;border:1px solid #ffffff26;border-radius:14px;background:#102f49e5;padding:18px}
+.dva-generic-avatar{display:grid;place-items:center;width:112px;height:112px;border:2px solid #96cbe4;border-radius:50%;background:#215577;color:#fff;font-size:58px}
+.dva-generic-aside p{line-height:1.6;font-size:12px;color:#c3d9e6}
+.dva-generic-aside small,.dva-generic-facts{font-size:12px;color:#b8d8e9}
+.dva-generic-facts{display:flex;flex-direction:column;gap:7px;width:100%}
+.dva-generic-chat{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+.dva-generic-tabs,.dva-generic-buttons{display:flex;gap:7px;flex-wrap:wrap}
+.dva-generic-tabs button,.dva-generic-buttons button,.dva-generic-compose button,.dva-generic-section button{border:1px solid #7faeca;border-radius:8px;background:#174969;color:#edf7ff;padding:8px 11px;cursor:pointer}
+.dva-generic-tabs button.is-active{background:#247ba4;border-color:#c0e7fd}
+.dva-generic-chat button:disabled{opacity:.5;cursor:wait}
+.dva-generic-transcript{flex:1;min-height:140px;overflow:auto;border:1px solid #ffffff24;border-radius:12px;background:#09213bdc;padding:12px}
+.dva-generic-line{max-width:86%;margin:10px 0;padding:9px 12px;border-radius:12px;background:#204361}
+.dva-generic-line.is-user{margin-left:auto;background:#1f5873}
+.dva-generic-line strong{font-size:11px;color:#a8dfff}
+.dva-generic-line p{margin:4px 0 0;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.dva-generic-compose{display:flex;align-items:flex-end;gap:8px}
+.dva-generic-compose textarea,.dva-generic-section textarea{width:100%;resize:vertical;background:#09213b;color:#f4faff;border:1px solid #85bad5;border-radius:9px;padding:10px;box-sizing:border-box}
+.dva-generic-section{flex:1;overflow:auto;border:1px solid #ffffff24;border-radius:12px;background:#09213bdc;padding:14px}
+.dva-generic-section h3{margin-top:0}
+.dva-generic-section h4{margin-bottom:6px}
+.dva-generic-section p{color:#c4dbe8;font-size:12px;line-height:1.6}
+.dva-generic-field{display:flex;flex-direction:column;gap:6px;margin:13px 0;color:#f2f9ff;font-size:12px}
+.dva-generic-field small{color:#aecadb}
+.dva-generic-preview{border:1px solid #6dc4a3;border-radius:10px;padding:10px;background:#11443a9e}
+@media(max-width:720px){.dva-generic-main{grid-template-columns:1fr;overflow:auto}.dva-generic-aside{align-items:flex-start}.dva-generic-avatar{width:72px;height:72px;font-size:42px}.dva-generic-transcript{min-height:260px}.dva-generic-selector span{display:none}}
 .dva-root{position:fixed;right:18px;bottom:104px;z-index:8999;font-family:system-ui,"Microsoft YaHei",sans-serif;color:#eaf5ff}
 .dva-pet{width:112px;height:132px;border:0;border-radius:18px;background:transparent;box-shadow:none;cursor:pointer;padding:0;filter:drop-shadow(0 8px 14px #00172b88);transition:transform .18s ease}.dva-pet:hover{transform:translateY(-5px) scale(1.035)}.dva-pet img{width:100%;height:100%;object-fit:contain;animation:dva-pet-idle 5.2s ease-in-out infinite;transform-origin:50% 88%}.dva-pet span{display:block;margin-top:-4px;padding:4px 8px;border:1px solid #8bcdf288;border-radius:999px;background:#092642dd;color:#eaf5ff;font-size:11px;text-align:center}
 .dva-panel{position:fixed;inset:5vh 5vw;z-index:9000;display:flex;flex-direction:column;overflow:hidden;border:1px solid #6ea9cc;border-radius:20px;background:linear-gradient(160deg,#0b2340,#07172b 65%,#0b3152);box-shadow:0 24px 80px #000b;color:#eaf5ff}
@@ -466,8 +497,450 @@ async function readDyberPetPreviewFolder(files) {
   }
 }
 
+
+const GENERIC_PPL_LABELS = Object.freeze({
+  warmth: '温柔度', emotional_guard: '情绪克制', decisiveness: '果断程度',
+  self_sacrifice: '奉献倾向', playfulness: '活泼程度', vulnerability: '情感坦诚',
+  responsibility: '责任感', formality: '正式程度', verbosity: '表达详略',
+  emotional_explicitness: '情绪表达', action_description: '动作描写',
+})
+const GENERIC_PPL_FIELD_HELP = Object.freeze({
+  warmth: '影响关怀与支持的表达方式', emotional_guard: '控制私下和公开场合的情绪克制',
+  decisiveness: '影响表达意见的果断程度', self_sacrifice: '影响角色的价值权重',
+  playfulness: '影响活泼与调侃的程度', vulnerability: '影响承认疲惫与表达需求的开放程度',
+  responsibility: '影响责任和事务优先级', formality: '影响措辞的礼貌与正式程度',
+  verbosity: '控制回复的详细程度', emotional_explicitness: '影响直接表达情绪的倾向',
+  action_description: '影响简短动作描写的频率',
+})
+
+function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch, switching }) {
+  const roleId = role.characterId
+  const [view, setView] = useState(null)
+  const [tab, setTab] = useState('chat')
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [retry, setRetry] = useState(null)
+  const [memories, setMemories] = useState([])
+  const [memoryDraft, setMemoryDraft] = useState('')
+  const [configuration, setConfiguration] = useState(null)
+  const [configDraft, setConfigDraft] = useState(null)
+  const [configPreview, setConfigPreview] = useState(null)
+  const [modelCatalog, setModelCatalog] = useState(null)
+  const [modelProvider, setModelProvider] = useState('')
+  const [modelName, setModelName] = useState('')
+  const [modelTest, setModelTest] = useState(null)
+  const [editingMemoryId, setEditingMemoryId] = useState(null)
+  const [editingMemoryText, setEditingMemoryText] = useState('')
+  const [auditEvents, setAuditEvents] = useState([])
+  const [olderLines, setOlderLines] = useState([])
+  const [olderCursor, setOlderCursor] = useState(null)
+
+  const characterArgs = args => ({ characterId: roleId, ...args })
+  const refresh = async () => {
+    try {
+      const result = await callApi('character-view', characterArgs({}))
+      setView(result)
+      setError('')
+    } catch (cause) {
+      setError(cause.message || String(cause))
+    }
+  }
+  useEffect(() => {
+    let active = true
+    setTab('chat')
+    setView(null)
+    setError('')
+    setRetry(null)
+    setText('')
+    setMemories([])
+    setConfigDraft(null)
+    setConfiguration(null)
+    setModelCatalog(null)
+    setOlderLines([])
+    setOlderCursor(null)
+    void callApi('character-view', { characterId: roleId }).then(result => {
+      if (active) setView(result)
+    }).catch(cause => {
+      if (active) setError(cause.message || String(cause))
+    })
+    return () => { active = false }
+  }, [roleId])
+
+  const send = async (message, retryId = null) => {
+    const clean = String(message || '').trim()
+    if (!clean || busy) return
+    const eventId = retryId || roleId + ':' + createChatEventId()
+    setBusy(true)
+    setError('')
+    setNotice('')
+    setRetry(null)
+    try {
+      const result = await callApi('character-chat', characterArgs({ text: clean, eventId }))
+      setView(result.view)
+      setText(current => current === clean ? '' : current)
+      if (result.duplicate) setNotice('已找回上一条完成的回复，没有重复写入角色状态。')
+    } catch (cause) {
+      setError('本次消息未完成：' + (cause.message || String(cause)) + '。消息已保留。')
+      setRetry({ text: clean, eventId })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const openTab = async nextTab => {
+    setTab(nextTab)
+    setError('')
+    try {
+      if (nextTab === 'memories') {
+        const result = await callApi('character-memory-list', characterArgs({}))
+        setMemories(result.memories || [])
+      } else if (nextTab === 'configuration') {
+        const result = await callApi('character-config-get', characterArgs({}))
+        setConfiguration(result.configuration)
+        setConfigDraft(result.configuration.effective)
+        setConfigPreview(null)
+      } else if (nextTab === 'models') {
+        const result = await callApi('character-model-catalog', characterArgs({}))
+        setModelCatalog(result)
+        setModelProvider(result.selection?.provider || '')
+        setModelName(result.selection?.model || '')
+        setModelTest(null)
+      } else if (nextTab === 'audit') {
+        const result = await callApi('character-audit-history', characterArgs({ limit: 50 }))
+        setAuditEvents(result.events || [])
+      }
+    } catch (cause) {
+      setError(cause.message || String(cause))
+    }
+  }
+
+  const saveConfig = async () => {
+    if (!configuration || !configDraft || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await callApi('character-config-set', characterArgs({
+        configuration: configDraft, expectedRevision: configuration.revision,
+      }))
+      setConfiguration(result.configuration)
+      setConfigDraft(result.configuration.effective)
+      setConfigPreview(null)
+      setNotice(result.changed ? '当前角色的 PPL 参数已保存，新设置从下一次对话生效。' : '配置没有变化。')
+      await refresh()
+    } catch (cause) {
+      setError(cause.code === 'REVISION_CONFLICT'
+        ? '角色状态发生变化，请重新打开人格调校读取最新参数。'
+        : cause.message || String(cause))
+    } finally { setBusy(false) }
+  }
+  const previewConfig = async () => {
+    if (!configDraft || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await callApi('character-config-preview', characterArgs({ configuration: configDraft }))
+      setConfigPreview(result.preview)
+    } catch (cause) {
+      setConfigPreview(null)
+      setError(cause.message || String(cause))
+    } finally { setBusy(false) }
+  }
+  const changeScene = async scene => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const result = await callApi('character-scene-set', characterArgs({ scene, expectedRevision: view?.revision }))
+      setView(result.view)
+    } catch (cause) { setError(cause.message || String(cause)) }
+    finally { setBusy(false) }
+  }
+  const addMemory = async () => {
+    if (!memoryDraft.trim() || busy) return
+    setBusy(true)
+    try {
+      await callApi('character-memory-add', characterArgs({ text: memoryDraft.trim(), eventId: roleId + ':' + createChatEventId() }))
+      setMemoryDraft('')
+      const result = await callApi('character-memory-list', characterArgs({}))
+      setMemories(result.memories || [])
+      setNotice('已保存到当前角色的私人记忆。')
+    } catch (cause) { setError(cause.message || String(cause)) }
+    finally { setBusy(false) }
+  }
+
+  if (!open) {
+    return React.createElement('div', { className: 'dva-root' },
+      React.createElement('button', { className: 'dva-generic-pet', type: 'button', onClick: onOpen, title: '打开' + role.label },
+        React.createElement('span', { className: 'dva-generic-avatar-mark' }, '✦'),
+        React.createElement('span', null, role.label),
+      ),
+    )
+  }
+  const character = view?.character
+  const lines = [...olderLines, ...(character?.chatLines || [])]
+  const disabled = busy || switching
+  const modelChoices = modelCatalog?.providers?.find(p => p.id === modelProvider)?.models || []
+  return React.createElement('section', { className: 'dva-panel dva-generic-panel', role: 'dialog', 'aria-label': role.label },
+    React.createElement('header', { className: 'dva-head' },
+      React.createElement('div', null,
+        React.createElement('strong', { className: 'dva-title' }, character?.name || role.label),
+        React.createElement('small', { className: 'dva-sub' }, '独立 PPL 角色 · 专属人格、记忆、关系和配置'),
+      ),
+      React.createElement('div', { className: 'dva-head-tools' },
+        React.createElement('label', { className: 'dva-generic-selector' },
+          React.createElement('span', null, '当前角色'),
+          React.createElement('select', {
+            value: roleId, disabled,
+            onChange: event => void onSwitch(event.target.value),
+            'aria-label': '切换角色',
+          }, ...roles.map(item => React.createElement('option', { key: item.characterId, value: item.characterId }, item.label))),
+        ),
+        React.createElement('button', { type: 'button', className: 'dva-collapse', onClick: onCollapse }, '收起'),
+      ),
+    ),
+    React.createElement('div', { className: 'dva-generic-main' },
+      React.createElement('aside', { className: 'dva-generic-aside' },
+        React.createElement('div', { className: 'dva-generic-avatar' }, '✦'),
+        React.createElement('strong', null, role.label),
+        React.createElement('small', null, 'PPL ' + (role.binding?.version || '0.3')),
+        React.createElement('p', null, '此角色使用真实 PPL 参考人格；目前没有专用立绘，不会展示或复用鲸鱼娘素材。'),
+        React.createElement('div', { className: 'dva-generic-facts' },
+          React.createElement('span', null, '关系阶段：' + (character?.relationship?.stage || '未建立')),
+          React.createElement('span', null, '信任：' + Math.round(Number(character?.relationship?.trust || 0) * 100) + '%'),
+          React.createElement('span', null, '专属记忆：' + (view?.memories || 0) + ' 条'),
+        ),
+        React.createElement('label', { className: 'dva-generic-field' }, '互动场景',
+          React.createElement('select', {
+            disabled,
+            value: character?.interactionScene || '',
+            onChange: event => void changeScene(event.target.value),
+          }, ...(character?.scenes || []).map(scene => React.createElement('option', { key: scene.id, value: scene.id }, scene.label))),
+        ),
+      ),
+      React.createElement('div', { className: 'dva-generic-chat' },
+        React.createElement('div', { className: 'dva-generic-tabs' },
+          ...[
+            ['chat', '对话'], ['memories', '私人记忆'], ['configuration', '人格调校'],
+            ['models', '模型设置'], ['audit', 'PPL 审计'],
+          ].map(([value, label]) => React.createElement('button', {
+            key: value, type: 'button', className: tab === value ? 'is-active' : '',
+            onClick: () => void openTab(value),
+          }, label)),
+        ),
+        error ? React.createElement('div', { className: 'dva-error', role: 'alert' }, error) : null,
+        notice ? React.createElement('div', { className: 'dva-notice', role: 'status' }, notice) : null,
+        tab === 'chat' ? React.createElement(React.Fragment, null,
+          React.createElement('div', { className: 'dva-generic-transcript', 'aria-label': '独立角色对话记录' },
+            !lines.length ? React.createElement('p', null, '这个角色尚无对话记录。发送第一条消息，开始独立的 PPL 陪伴对话。') : null,
+            ...lines.map((line, index) => React.createElement('div', {
+              key: index, className: 'dva-generic-line ' + (line.who === 'user' ? 'is-user' : 'is-role'),
+            },
+              React.createElement('strong', null, line.who === 'user' ? '你' : role.label),
+              React.createElement('p', null, line.text),
+            )),
+          ),
+          character?.totalChatLines > lines.length ? React.createElement('button', {
+            type: 'button', disabled,
+            onClick: async () => {
+              try {
+                const before = olderCursor ?? character.totalChatLines - (character.chatLines || []).length
+                const result = await callApi('character-history', characterArgs({ before, limit: 40 }))
+                setOlderLines(current => [...result.lines, ...current])
+                setOlderCursor(result.nextBefore)
+              } catch (cause) { setError(cause.message || String(cause)) }
+            },
+          }, '查看更早的对话') : null,
+          React.createElement('form', {
+            className: 'dva-generic-compose',
+            onSubmit: event => { event.preventDefault(); void send(text) },
+          },
+            React.createElement('textarea', {
+              rows: 2, maxLength: 500, value: text, disabled: busy,
+              placeholder: '向' + role.label + '发送消息…',
+              onChange: event => setText(event.target.value),
+            }),
+            React.createElement('button', { type: 'submit', disabled: disabled || !text.trim() }, busy ? '回复中…' : '发送消息'),
+          ),
+          retry ? React.createElement('button', { type: 'button', disabled, onClick: () => void send(retry.text, retry.eventId) }, '重试上一条消息') : null,
+        ) : null,
+        tab === 'memories' ? React.createElement('div', { className: 'dva-generic-section' },
+          React.createElement('h3', null, '此角色的私人记忆'),
+          React.createElement('p', null, '这些记忆只属于当前角色，不会自动加入鲸鱼娘或其他角色的对话。'),
+          ...memories.map(item => React.createElement('div', { key: item.id, className: 'dva-memory-row' },
+            editingMemoryId === item.id
+              ? React.createElement('div', null,
+                  React.createElement('textarea', {
+                    rows: 2, value: editingMemoryText, maxLength: 400,
+                    onChange: event => setEditingMemoryText(event.target.value),
+                  }),
+                  React.createElement('button', { type: 'button', disabled: disabled || !editingMemoryText.trim(), onClick: async () => {
+                    try {
+                      await callApi('character-memory-edit', characterArgs({ memoryId: item.id, text: editingMemoryText }))
+                      setEditingMemoryId(null)
+                      await openTab('memories')
+                    } catch (cause) { setError(cause.message || String(cause)) }
+                  } }, '保存修改'),
+                  React.createElement('button', { type: 'button', onClick: () => setEditingMemoryId(null) }, '取消'),
+                )
+              : React.createElement('span', null, item.text),
+            React.createElement('div', null,
+              React.createElement('button', {
+                type: 'button', disabled: disabled,
+                onClick: () => { setEditingMemoryId(item.id); setEditingMemoryText(item.text) },
+              }, '编辑'),
+              React.createElement('button', { type: 'button', disabled,
+                onClick: async () => {
+                  try {
+                    await callApi('character-memory-pin', characterArgs({ memoryId: item.id, pinned: !item.pinned }))
+                    await openTab('memories')
+                  } catch (cause) { setError(cause.message || String(cause)) }
+                },
+              }, item.pinned ? '取消置顶' : '置顶'),
+              React.createElement('button', { type: 'button', disabled, onClick: async () => {
+                if (!window.confirm('确定删除这条私人记忆吗？')) return
+                try {
+                  await callApi('character-memory-delete', characterArgs({ memoryId: item.id }))
+                  await openTab('memories')
+                } catch (cause) { setError(cause.message || String(cause)) }
+              } }, '删除'),
+            ),
+          )),
+          React.createElement('textarea', {
+            rows: 2, value: memoryDraft, maxLength: 400, placeholder: '手动记录一条仅属于此角色的记忆',
+            onChange: event => setMemoryDraft(event.target.value),
+          }),
+          React.createElement('button', { type: 'button', disabled: disabled || !memoryDraft.trim(), onClick: () => void addMemory() }, '保存私人记忆'),
+        ) : null,
+        tab === 'configuration' && configuration ? React.createElement('div', { className: 'dva-generic-section' },
+          React.createElement('h3', null, '当前角色的 PPL 人格调校'),
+          React.createElement('p', null, '仅编辑本角色 IR 内经过白名单校验的参数；规则和人格不变量不可修改。'),
+          ...['traits', 'style'].map(group => React.createElement('div', { key: group },
+            React.createElement('h4', null, group === 'traits' ? '性格特征' : '表达方式'),
+            ...configuration.fields.filter(field => field.group === group).map(field => {
+              const value = Number(configDraft?.[group]?.[field.key] ?? field.defaultValue)
+              return React.createElement('label', { key: field.path, className: 'dva-generic-field' },
+                React.createElement('span', null, (GENERIC_PPL_LABELS[field.key] || field.key) + ' · ' + Math.round(value * 100) + '%'),
+                React.createElement('small', null, GENERIC_PPL_FIELD_HELP[field.key] || 'PPL 基础参数'),
+                React.createElement('input', {
+                  type: 'range', min: field.min, max: field.max, step: 0.01,
+                  value, disabled,
+                  onChange: event => {
+                    const next = Number(event.target.value)
+                    setConfigDraft(current => ({
+                      ...current, [group]: { ...current[group], [field.key]: next },
+                    }))
+                    setConfigPreview(null)
+                  },
+                }),
+              )
+            }),
+          )),
+          React.createElement('div', { className: 'dva-generic-buttons' },
+            React.createElement('button', { type: 'button', disabled, onClick: () => void previewConfig() }, '预览规则效果'),
+            React.createElement('button', { type: 'button', disabled, onClick: () => void saveConfig() }, '保存此角色配置'),
+            React.createElement('button', { type: 'button', disabled, onClick: () => {
+              setConfigDraft(configuration.defaults)
+              setConfigPreview(null)
+            } }, '恢复默认草稿'),
+          ),
+          configPreview ? React.createElement('div', { className: 'dva-generic-preview' },
+            React.createElement('strong', null, '真实 PPL 校验通过'),
+            ...configPreview.scenarios.map(scenario => React.createElement('p', { key: scenario.id },
+              scenario.label + '：' + (scenario.activeRules.join('、') || '无规则命中'),
+            )),
+          ) : null,
+          configuration.configurationError ? React.createElement('p', { className: 'dva-error' },
+            '检测到无效旧配置，已安全恢复默认参数：' + configuration.configurationError.message) : null,
+        ) : null,
+        tab === 'models' && modelCatalog ? React.createElement('div', { className: 'dva-generic-section' },
+          React.createElement('h3', null, '当前角色专用模型'),
+          React.createElement('p', null, '仅影响本角色的对话。未单独设置时使用 DSH 默认模型。'),
+          React.createElement('label', { className: 'dva-generic-field' }, '模型服务商',
+            React.createElement('select', {
+              disabled: disabled || modelCatalog.locked, value: modelProvider,
+              onChange: event => {
+                const provider = event.target.value
+                const entry = modelCatalog.providers.find(item => item.id === provider)
+                setModelProvider(provider)
+                setModelName(entry?.models?.[0]?.id || '')
+                setModelTest(null)
+              },
+            },
+              React.createElement('option', { value: '' }, '请选择'),
+              ...(modelCatalog.providers || []).map(item => React.createElement('option', { key: item.id, value: item.id }, item.name)),
+            ),
+          ),
+          React.createElement('label', { className: 'dva-generic-field' }, '模型 ID',
+            React.createElement('input', {
+              value: modelName, disabled: disabled || modelCatalog.locked,
+              onChange: event => { setModelName(event.target.value); setModelTest(null) }, placeholder: '填写模型 ID',
+            }),
+          ),
+          modelChoices.length ? React.createElement('select', {
+            value: modelChoices.some(x => x.id === modelName) ? modelName : '',
+            disabled: disabled || modelCatalog.locked,
+            onChange: event => { setModelName(event.target.value); setModelTest(null) },
+          },
+            React.createElement('option', { value: '' }, '从目录选择模型'),
+            ...modelChoices.map(item => React.createElement('option', { key: item.id, value: item.id }, item.name)),
+          ) : null,
+          modelTest ? React.createElement('p', { role: 'status' },
+            '模型连接测试通过：' + modelTest.provider + ' / ' + modelTest.model) : null,
+          React.createElement('div', { className: 'dva-generic-buttons' },
+            React.createElement('button', { type: 'button', disabled, onClick: async () => {
+              setBusy(true)
+              try {
+                const result = await callApi('character-model-test', characterArgs({}))
+                setModelTest(result.test)
+                setNotice('当前角色模型连接测试成功。')
+              } catch (cause) {
+                setModelTest(null)
+                setError('模型测试失败：' + (cause.message || String(cause)))
+              } finally { setBusy(false) }
+            } }, busy ? '测试中…' : '测试模型连接'),
+            React.createElement('button', { type: 'button', disabled: disabled || modelCatalog.locked, onClick: async () => {
+              try {
+                await callApi('character-model-set', characterArgs({ provider: modelProvider, model: modelName }))
+                setNotice('角色模型已保存。')
+                setModelTest(null)
+                await openTab('models')
+              } catch (cause) { setError(cause.message || String(cause)) }
+            } }, '保存模型'),
+            React.createElement('button', { type: 'button', disabled: disabled || modelCatalog.locked, onClick: async () => {
+              try {
+                await callApi('character-model-clear', characterArgs({}))
+                setNotice('已恢复跟随 DSH 默认模型。')
+                setModelTest(null)
+                await openTab('models')
+              } catch (cause) { setError(cause.message || String(cause)) }
+            } }, '使用 DSH 默认模型'),
+          ),
+        ) : null,
+        tab === 'audit' ? React.createElement('div', { className: 'dva-generic-section' },
+          React.createElement('h3', null, '角色专属 PPL 审计'),
+          !auditEvents.length ? React.createElement('p', null, '暂无已完成的 PPL 对话或参数修改记录。') : null,
+          ...auditEvents.map(item => React.createElement('div', { key: item.id, className: 'dva-memory-row' },
+            React.createElement('strong', null, item.type === 'PPL_CONFIGURATION_UPDATED' ? '人格配置更新' : '对话与规则提交'),
+            React.createElement('small', null, item.createdAt),
+            item.details?.pplAudit
+              ? React.createElement('small', null, '规则：' + (item.details.pplAudit.resolution?.activeRules || []).map(rule => rule.id).join('、'))
+              : null,
+            item.details?.changes
+              ? React.createElement('small', null, '调整字段：' + item.details.changes.map(change => change.label).join('、'))
+              : null,
+          )),
+        ) : null,
+      ),
+    ),
+  )
+}
+
 function Companion() {
   const [view, setView] = useState(null)
+  const [roles, setRoles] = useState([])
+  const [selectedRoleId, setSelectedRoleId] = useState('deepseek')
+  const [roleSwitchBusy, setRoleSwitchBusy] = useState(false)
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -804,6 +1277,47 @@ function Companion() {
     } catch (err) { setError(err.message || String(err)) }
   }, [])
 
+  const switchRole = async roleId => {
+    if (busy || roleSwitchBusy || roleId === selectedRoleId) return
+    setRoleSwitchBusy(true)
+    setError('')
+    try {
+      const result = await callApi('character-select', { characterId: roleId })
+      setRoles(result.roles || roles)
+      setSelectedRoleId(result.active.characterId)
+      setActivePanel(null)
+      setShowMoreMenu(false)
+      setText('')
+      setChatFailure(null)
+      setNotice('')
+      setOlderLines([])
+      setHistoryCursor(null)
+      setAvatarExpressionOverride(null)
+      setAvatarBubble('')
+      setAvatarMotion('idle')
+      if (roleId === 'deepseek') await refresh()
+    } catch (cause) {
+      setError(cause.message || String(cause))
+    } finally {
+      setRoleSwitchBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    let active = true
+    void callApi('character-list').then(result => {
+      if (!active) return
+      setRoles(result.roles || [])
+      if ((result.roles || []).some(item => item.characterId === result.active?.characterId)) {
+        setSelectedRoleId(result.active.characterId)
+      }
+    }).catch(() => {
+      // Older compatible builds have no role registry; leave the Whale usable.
+      if (active) setRoles([{ characterId: 'deepseek', label: '鲸鱼娘', kind: 'whale' }])
+    })
+    return () => { active = false }
+  }, [])
+
   useEffect(() => {
     let active = true
     const load = async () => {
@@ -812,10 +1326,12 @@ function Companion() {
         if (active) setView(result)
       } catch (err) { if (active) setError(err.message || String(err)) }
     }
-    void load()
-    const timer = setInterval(() => { if (active && open) void load() }, 5000)
+    if (selectedRoleId === 'deepseek') void load()
+    const timer = setInterval(() => {
+      if (active && open && selectedRoleId === 'deepseek') void load()
+    }, 5000)
     return () => { active = false; clearInterval(timer) }
-  }, [open])
+  }, [open, selectedRoleId])
 
   useEffect(() => {
     if (!open) return
@@ -1333,6 +1849,20 @@ function Companion() {
     }
   }, [runtimeBinding?.packId, runtimeMotionActionId])
 
+  const selectedRole = roles.find(item => item.characterId === selectedRoleId)
+  if (selectedRole && selectedRoleId !== 'deepseek') {
+    return React.createElement(GenericCompanionPanel, {
+      key: selectedRoleId,
+      role: selectedRole,
+      roles,
+      open,
+      onOpen: () => setOpen(true),
+      onCollapse: () => setOpen(false),
+      onSwitch: switchRole,
+      switching: roleSwitchBusy,
+    })
+  }
+
   if (!open) return React.createElement('div', { className: 'dva-root' },
     React.createElement('button', { className: 'dva-pet' + (runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? ' has-native-motion' : ''), title: '打开鲸鱼娘', onClick: () => { setOpen(true); void refresh() } },
       React.createElement('img', { src: runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? runtimeMotionFrameUrl : view?.character?.imageUrl || API + '/assets/maid-left.webp', alt: 'DeepSeek 鲸鱼娘', draggable: false, onError: () => { if (runtimeMotionFrameUrl) { setRuntimeMotionFrameFailed(true); setNotice('动作帧读取失败，已恢复原有鲸鱼娘立绘。') } } }),
@@ -1378,6 +1908,15 @@ function Companion() {
         ),
       ),
       React.createElement('div', { className: 'dva-head-tools' },
+        roles.length > 1 ? React.createElement('label', { className: 'dva-generic-selector' },
+          React.createElement('span', null, '切换角色'),
+          React.createElement('select', {
+            value: selectedRoleId,
+            disabled: busy || roleSwitchBusy,
+            onChange: event => void switchRole(event.target.value),
+            'aria-label': '切换 PPL 角色',
+          }, ...roles.map(item => React.createElement('option', { key: item.characterId, value: item.characterId }, item.label))),
+        ) : null,
         React.createElement('button', {
           className: 'dva-more-trigger',
           'aria-expanded': showMoreMenu,

@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import { createAvatarStore } from '../storage/sqlite-store.mjs'
 import { DeepseekWhaleService } from '../characters/deepseek-whale/service.mjs'
 import { createDefaultPersonaRegistry } from '../ppl/registry.mjs'
+import { createMultiCharacterRegistry } from '../ppl/multi-character-registry.mjs'
 import { extractMemoryCandidates } from '../memory/candidates.mjs'
 import { DEEPSEEK_WHALE_PROFILE, affectionCap, relationshipStageLabel, resolveDeepseekWhaleProfile } from '../characters/deepseek-whale/profile.mjs'
 import { resolveDeepseekWhalePresentation } from '../characters/deepseek-whale/presentation.mjs'
@@ -118,11 +119,11 @@ function emotionFromText(text) {
   return 'normal'
 }
 
-async function streamReply(llm, model, system, contextMessages, userText, signal) {
+async function streamReply(llm, model, system, contextMessages, userText, signal, { scenePrompt } = {}) {
   if (!llm || typeof llm.stream !== 'function') throw new Error('DSH LLM stream service is unavailable')
   const messages = [{
     role: 'user',
-    content: [{ type: 'text', text: '（场景：深海女仆工坊的会客厅，暖黄的灯光。只扮演 DeepSeek 鲸鱼娘；这是持续陪伴对话，不存在必须推进的剧情任务。）' }],
+    content: [{ type: 'text', text: scenePrompt || '（场景：深海女仆工坊的会客厅，暖黄的灯光。只扮演 DeepSeek 鲸鱼娘；这是持续陪伴对话，不存在必须推进的剧情任务。）' }],
     source: { kind: 'user' },
   }]
   for (const row of contextMessages || []) {
@@ -176,13 +177,13 @@ function resolveDshHomePath(ctx) {
   return (...segments) => join(root, ...segments)
 }
 
-function selectModel(llm, agentDefaultModel, config, store = null) {
+function selectModel(llm, agentDefaultModel, config, store = null, characterId = 'deepseek') {
   if (config.chatProvider && config.chatModel) {
     return { provider: String(config.chatProvider), model: String(config.chatModel), source: 'plugin-config' }
   }
-  const local = store?.getChatModelSelection?.('deepseek')
+  const local = store?.getChatModelSelection?.(characterId)
   if (local?.provider && local?.model) {
-    return { provider: String(local.provider), model: String(local.model), source: 'whale-local' }
+    return { provider: String(local.provider), model: String(local.model), source: characterId === 'deepseek' ? 'whale-local' : 'character-local' }
   }
   try {
     const current = agentDefaultModel?.currentSelection?.()
@@ -282,6 +283,39 @@ function publicView(service, memoryService, config, store = null) {
   }
 }
 
+
+function genericRoleView(role, service) {
+  const loaded = service.loadState()
+  const state = loaded.state
+  const relation = state.pplRuntime?.relationships?.admin || {}
+  return {
+    ok: true,
+    character: {
+      id: role.characterId,
+      personaId: role.personaId,
+      kind: role.kind,
+      name: service.displayName,
+      hasDedicatedArtwork: false,
+      avatarLabel: String(service.displayName || '?').slice(0, 1),
+      description: role.description,
+      relationship: {
+        stage: String(relation.stage || 'acquaintance'),
+        trust: Number(relation.trust ?? 0),
+        attachment: Number(relation.attachment ?? 0),
+      },
+      interactionScene: state.interactionScene,
+      scenes: service.scenes.map(id => ({
+        id, label: /PRIVATE/i.test(id) ? '私密场景' : /PUBLIC/i.test(id) ? '公开场合' : id,
+      })),
+      pplState: state.pplRuntime?.state || {},
+      chatLines: (state.conversation?.chatLines || []).slice(-80),
+      totalChatLines: state.conversation?.chatLines?.length || 0,
+    },
+    memories: service.listMemories().length,
+    revision: loaded.revision,
+  }
+}
+
 export function apply(ctx, config = {}) {
   const webServer = ctx.webServer
   const llm = ctx.llm
@@ -332,6 +366,7 @@ export function apply(ctx, config = {}) {
   }
   const store = createAvatarStore({ dshHomePath })
   const personaRegistry = createDefaultPersonaRegistry()
+  const multiCharacterRegistry = createMultiCharacterRegistry({ store, personaRegistry })
   const service = new DeepseekWhaleService({
     store,
     pplRuntime: personaRegistry.createRuntime('DEEPSEEK_WHALE'),
@@ -550,6 +585,201 @@ export function apply(ctx, config = {}) {
       if (runtimeConfig.enabled === false && action !== 'view') {
         json(res, 403, { ok: false, error: 'DeepSeek Whale companion is disabled' })
         return
+      }
+
+      if (action === 'character-list') {
+        json(res, 200, { ok: true, roles: multiCharacterRegistry.list(), active: multiCharacterRegistry.active() })
+        return
+      }
+
+      if (action === 'character-select') {
+        json(res, 200, { ok: true, ...multiCharacterRegistry.select(args.characterId) })
+        return
+      }
+
+      // Every generic PPL request carries an explicit characterId. Never use a mutable
+      // global active-role pointer to route chat, memories, configuration, or audit data.
+      if (action.startsWith('character-') && action !== 'character-list' && action !== 'character-select') {
+        const role = multiCharacterRegistry.resolve(args.characterId, { requireGeneric: true })
+        const companion = multiCharacterRegistry.getService(role.characterId)
+        const roleView = () => genericRoleView(role, companion)
+
+        if (action === 'character-view') {
+          json(res, 200, roleView())
+          return
+        }
+        if (action === 'character-scene-set') {
+          const result = companion.setInteractionScene(String(args.scene || ''), args.expectedRevision)
+          json(res, 200, { ok: true, ...result, view: roleView() })
+          return
+        }
+        if (action === 'character-history') {
+          const lines = companion.loadState().state.conversation?.chatLines || []
+          const before = Number.isSafeInteger(args.before) ? Math.min(lines.length, Math.max(0, args.before)) : lines.length
+          const limit = Math.max(1, Math.min(100, Number.isSafeInteger(args.limit) ? args.limit : 40))
+          const start = Math.max(0, before - limit)
+          json(res, 200, { ok: true, lines: lines.slice(start, before), total: lines.length, nextBefore: start > 0 ? start : null })
+          return
+        }
+        if (action === 'character-model-catalog') {
+          const registered = typeof llm.listProviders === 'function' ? llm.listProviders() : []
+          const providers = await Promise.all((Array.isArray(registered) ? registered : []).map(async item => {
+            const id = String(item.id || '')
+            if (!id) return null
+            let models = []
+            let catalogError = null
+            try {
+              if (typeof llm.listModels === 'function') {
+                models = (await llm.listModels(id) || []).map(model => ({ id: String(model.id || ''), name: String(model.name || model.id || '') })).filter(model => model.id)
+              }
+            } catch (error) { catalogError = String(error.message || error).slice(0, 180) }
+            return { id, name: String(item.name || id), models, catalogError }
+          })).then(rows => rows.filter(Boolean))
+          let selection = null
+          try {
+            const model = selectModel(llm, agentDefaultModel, runtimeConfig, store, role.characterId)
+            selection = { provider: model.provider, model: model.model, source: model.source }
+          } catch { /* show explicit empty state in UI */ }
+          json(res, 200, {
+            ok: true, providers, selection,
+            savedSelection: store.getChatModelSelection(role.characterId),
+            locked: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel),
+          })
+          return
+        }
+        if (action === 'character-model-test') {
+          const model = selectModel(llm, agentDefaultModel, runtimeConfig, store, role.characterId)
+          const controller = new AbortController()
+          const timeout = setTimeout(() => controller.abort(new Error('model test timed out')), 20000)
+          let output = ''
+          try {
+            const iterable = llm.stream({
+              provider: model.provider,
+              model: model.model,
+              messages: [{ role: 'user', content: [{ type: 'text', text: 'Reply with OK.' }] }],
+              system: 'This is a connectivity test. Reply with OK only.',
+              temperature: 0, maxTokens: 8, signal: controller.signal,
+            })
+            for await (const chunk of iterable) {
+              if (chunk?.type === 'text-delta' && chunk.text) output += chunk.text
+              if (chunk?.type === 'finish' && ['error', 'aborted'].includes(String(chunk.reason?.kind || ''))) {
+                throw new Error(chunk.reason?.failure?.message || 'model stream failed')
+              }
+            }
+            if (!output.trim()) throw new Error('model returned no text')
+            json(res, 200, {
+              ok: true,
+              test: {
+                status: 'success', provider: model.provider, model: model.model,
+                at: new Date().toISOString(),
+              },
+            })
+          } finally { clearTimeout(timeout) }
+          return
+        }
+        if (action === 'character-model-set' || action === 'character-model-clear') {
+          if (runtimeConfig.chatProvider && runtimeConfig.chatModel) {
+            const error = new Error('模型由插件配置固定，无法从角色界面更改。')
+            error.code = 'MODEL_SELECTION_LOCKED'; error.status = 409; throw error
+          }
+          if (action === 'character-model-clear') {
+            json(res, 200, { ok: true, ...store.clearChatModelSelection(role.characterId) })
+            return
+          }
+          const provider = String(args.provider || '').trim()
+          const model = String(args.model || '').trim()
+          const registered = typeof llm.listProviders === 'function' ? llm.listProviders() : []
+          if (!provider || !model || !Array.isArray(registered) || !registered.some(item => item.id === provider)) {
+            const error = new Error('请从 DSH 已启用的模型服务商中选择，并填写模型 ID。')
+            error.code = 'MODEL_PROVIDER_UNAVAILABLE'; error.status = 400; throw error
+          }
+          json(res, 200, { ok: true, selection: store.setChatModelSelection({ characterId: role.characterId, provider, model }) })
+          return
+        }
+        if (action === 'character-memory-list') {
+          json(res, 200, { ok: true, memories: companion.listMemories() })
+          return
+        }
+        if (action === 'character-memory-add') {
+          const result = companion.remember(String(args.text || '').trim(), { eventId: String(args.eventId || randomUUID()) })
+          json(res, 200, { ok: true, result, view: roleView() })
+          return
+        }
+        if (action === 'character-memory-pin' || action === 'character-memory-edit' || action === 'character-memory-delete') {
+          const memoryId = String(args.memoryId || '')
+          const result = action === 'character-memory-pin'
+            ? companion.pinMemory(memoryId, args.pinned !== false)
+            : action === 'character-memory-edit'
+              ? companion.editMemory(memoryId, args.text)
+              : companion.removeMemory(memoryId)
+          if (!result) {
+            json(res, 404, { ok: false, code: 'CHARACTER_MEMORY_NOT_FOUND', error: '未找到当前角色的这条记忆。' })
+            return
+          }
+          json(res, 200, { ok: true, result, view: roleView() })
+          return
+        }
+        if (action === 'character-config-get') {
+          json(res, 200, { ok: true, configuration: companion.getConfiguration() })
+          return
+        }
+        if (action === 'character-config-preview') {
+          json(res, 200, { ok: true, preview: companion.previewConfiguration(args.configuration || {}) })
+          return
+        }
+        if (action === 'character-config-set' || action === 'character-config-reset') {
+          const result = companion.saveConfiguration(
+            action === 'character-config-reset' ? {} : (args.configuration || {}),
+            { expectedRevision: args.expectedRevision },
+          )
+          json(res, 200, { ok: true, ...result })
+          return
+        }
+        if (action === 'character-audit-history') {
+          const audit = store.listAuditEvents('character', role.characterId, { limit: Math.min(100, Math.max(1, Number.isSafeInteger(args.limit) ? args.limit : 50)) })
+          json(res, 200, { ok: true, events: audit.filter(item => item.type === 'TURN_COMPLETED' || item.type === 'PPL_CONFIGURATION_UPDATED') })
+          return
+        }
+        if (action === 'character-chat') {
+          const text = typeof args.text === 'string' ? args.text.trim().slice(0, 500) : ''
+          if (!text) {
+            const error = new Error('请输入需要发送的消息。')
+            error.code = 'MESSAGE_REQUIRED'; error.status = 400; throw error
+          }
+          const eventId = typeof args.eventId === 'string' && args.eventId.trim()
+            ? args.eventId.trim().slice(0, 200)
+            : role.characterId + ':' + randomUUID()
+          const previous = store.findDomainEvent(eventId)
+          if (previous) {
+            if (previous.characterId !== role.characterId || previous.eventType !== 'TURN_COMPLETED'
+              || previous.payload?.input !== text || !previous.payload?.reply) {
+              const error = new Error('消息请求编号已经用于其他角色或其他内容。')
+              error.code = 'EVENT_ID_CONFLICT'; error.status = 409; throw error
+            }
+            json(res, 200, { ok: true, duplicate: true, reply: previous.payload.reply, eventId, view: roleView() })
+            return
+          }
+          const prepared = companion.prepareTurn({
+            text, eventId,
+            sessionId: role.characterId + '-default',
+            step: Number.isSafeInteger(args.step) ? args.step : 1,
+          })
+          const model = selectModel(llm, agentDefaultModel, runtimeConfig, store, role.characterId)
+          const controller = new AbortController()
+          const timeout = setTimeout(() => controller.abort(new Error('PPL companion model request timed out')), 110000)
+          let generated
+          try {
+            generated = await streamReply(llm, model, prepared.system, prepared.contextMessages, text,
+              controller.signal, { scenePrompt: '（独立 PPL 角色陪伴对话。只扮演「' + companion.displayName + '」，不要扮演鲸鱼娘或其他角色。）' })
+          } finally { clearTimeout(timeout) }
+          const saved = companion.finalizeTurn(prepared, {
+            reply: generated.text, terminalReason: generated.terminalReason,
+          })
+          json(res, 200, { ok: true, eventId, reply: generated.text, duplicate: saved.duplicate === true, view: roleView() })
+          return
+        }
+        const error = new Error('该角色接口不存在：' + action)
+        error.status = 404; error.code = 'CHARACTER_ACTION_UNKNOWN'; throw error
       }
 
       if (action === 'history') {
