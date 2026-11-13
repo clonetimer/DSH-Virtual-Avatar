@@ -348,7 +348,15 @@ test('PPL negative interaction raises transient anger and does not commit on int
 test('PPL resolution rejection is audited without committing character state', () => {
   const store = createMemoryStore()
   const failures = []
-  store.recordPplResolutionFailure = value => { failures.push(structuredClone(value)) }
+  store.recordPplResolutionFailure = value => {
+    failures.push({
+      ...value,
+      error: {
+        code: value.error?.code,
+        diagnostics: structuredClone(value.error?.diagnostics || []),
+      },
+    })
+  }
   const pplRuntime = {
     binding: { id: 'DEEPSEEK_WHALE', version: '0.3.0', irSha256: 'a'.repeat(64) },
     initialState: sessionId => runtime().initialState(sessionId),
