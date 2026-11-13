@@ -214,9 +214,6 @@ function publicView(service, memoryService, config, store = null) {
   const lastReplyEmotion = state.conversation?.chatLines?.filter(line => line.who === 'heroine').at(-1)?.emotion || 'normal'
   const presentation = resolveDeepseekWhalePresentation({ pplState, replyEmotion: lastReplyEmotion })
   const savedMotionBinding = store?.getMotionPackBinding('deepseek') || null
-  const motionActionIds = savedMotionBinding
-    ? [...new Set(Object.values(savedMotionBinding.mapping || {}))].filter(id => savedMotionBinding.catalog?.actions?.[id])
-    : []
   const motionBinding = savedMotionBinding ? {
     characterId: savedMotionBinding.characterId,
     packId: savedMotionBinding.packId,
@@ -225,11 +222,6 @@ function publicView(service, memoryService, config, store = null) {
     identityConfirmed: savedMotionBinding.identityConfirmed,
     mapping: savedMotionBinding.mapping,
     updatedAt: savedMotionBinding.updatedAt,
-    catalog: {
-      schema: savedMotionBinding.catalog.schema,
-      defaultAction: savedMotionBinding.catalog.defaultAction,
-      actions: Object.fromEntries(motionActionIds.map(id => [id, savedMotionBinding.catalog.actions[id]])),
-    },
   } : null
   const relationshipStage = String(pplRelationship.stage || state.relationship?.stage || 'acquaintance')
   const relationship = {
@@ -771,6 +763,26 @@ export function apply(ctx, config = {}) {
           mapping: binding.mapping,
           updatedAt: binding.updatedAt,
         } : null })
+        return
+      }
+
+      if (action === 'motion-pack-runtime') {
+        const binding = store.getMotionPackBinding('deepseek')
+        if (!binding) {
+          json(res, 200, { ok: true, binding: null })
+          return
+        }
+        const actionIds = [...new Set(Object.values(binding.mapping || {}))]
+          .filter(id => binding.catalog?.actions?.[id])
+        json(res, 200, { ok: true, binding: {
+          packId: binding.packId,
+          mapping: binding.mapping,
+          catalog: {
+            schema: binding.catalog.schema,
+            defaultAction: binding.catalog.defaultAction,
+            actions: Object.fromEntries(actionIds.map(id => [id, binding.catalog.actions[id]])),
+          },
+        } })
         return
       }
 
