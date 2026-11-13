@@ -175,7 +175,7 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     const selectedWhale = await call(route.handler, 'character-select', { characterId: 'deepseek' })
     assert.equal(selectedWhale.body.active.characterId, 'deepseek')
     const zhuangStill = await call(route.handler, 'character-view', { characterId: 'ppl-zhuang-fangyi' })
-    assert.equal(zhuangStill.body.character.chatLines.length, 2)
+    assert.equal(zhuangStill.body.character.chatLines.length, 4)
   } finally {
     if (typeof cleanup === 'function') cleanup()
     rmSync(home, { recursive: true, force: true })
