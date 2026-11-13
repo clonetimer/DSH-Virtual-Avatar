@@ -53,6 +53,22 @@ const CSS = `
 .dva-motion-pack-actions button,.dva-motion-import{border:1px solid #77b8df;border-radius:9px;background:#174b70;color:#f2f9ff;padding:7px 10px;cursor:pointer}
 .dva-motion-import{align-self:flex-start;background:#1c674f;border-color:#75c8a6}
 .dva-motion-import:disabled,.dva-motion-pack-actions button:disabled{opacity:.5;cursor:wait}
+.dva-motion-binding{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid #7cc6a477;border-radius:12px;background:#0c2d2a88}
+.dva-motion-binding-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.dva-motion-binding-field{display:flex;flex-direction:column;gap:5px;min-width:0;color:#b8d8e9;font-size:11px}
+.dva-motion-binding-field select{width:100%;min-width:0;box-sizing:border-box;border:1px solid #4d7796;border-radius:8px;background:#06172a;color:#f2f9ff;padding:8px}
+.dva-motion-binding-confirm{display:flex;align-items:flex-start;gap:8px;color:#d7eaf5;font-size:12px;line-height:1.5}
+.dva-motion-binding-confirm input{margin-top:2px;flex:0 0 auto}
+.dva-motion-binding-actions{display:flex;gap:8px;flex-wrap:wrap}
+.dva-motion-binding-actions button{border:1px solid #77b8df;border-radius:9px;background:#174b70;color:#f2f9ff;padding:8px 12px;cursor:pointer}
+.dva-motion-binding-actions button.primary{background:#1c674f;border-color:#75c8a6}
+.dva-motion-binding-actions button:disabled{opacity:.5;cursor:wait}
+.dva-motion-binding details{border-top:1px solid #ffffff22;padding-top:8px}
+.dva-motion-binding summary{cursor:pointer;color:#b8d8e9;font-size:12px}
+.dva-avatar-stage.has-native-motion img,.dva-pet.has-native-motion img{animation:none!important;transform:none!important}
+.dva-avatar-stage.has-native-motion::after{display:none}
+@media(max-width:760px){.dva-motion-binding-grid{grid-template-columns:1fr}}
+
 @media(max-width:760px){.dva-motion-pack-row{align-items:flex-start;flex-direction:column}.dva-motion-pack-actions{width:100%}.dva-motion-pack-actions button{flex:1}}
 
 .dva-motion-error{font-size:12px;color:#ffd0c9;background:#52243888;border:1px solid #ffb3a944;border-radius:9px;padding:9px}
@@ -1145,6 +1161,73 @@ function Companion() {
             ),
             React.createElement('small', { className: 'dva-motion-note' },
               motionPreview.source === 'installed' ? '这是已保存到本地动作库的素材包，目前仅供预览，尚未应用到鲸鱼娘。' : '当前是本地临时预览；只有点击“导入到本地动作库”才会持久保存。导入不会替换鲸鱼娘立绘或改变关系数据。',
+            ),
+          ) : null,
+          motionPreview?.source === 'installed' ? React.createElement('div', { className: 'dva-motion-binding' },
+            React.createElement('strong', null, '绑定到鲸鱼娘的动作'),
+            React.createElement('small', { className: 'dva-motion-note' },
+              '绑定后，鲸鱼娘的待机、思考、回复、摸摸和 PPL 情绪可以调用对应逐帧动作。原有聊天、关系和记忆不受影响。',
+            ),
+            view?.character?.motionBinding && view.character.motionBinding.packId !== motionPreview.packId
+              ? React.createElement('small', { className: 'dva-motion-note' },
+                  '当前已绑定：' + view.character.motionBinding.displayName + '。保存后会切换到当前动作包。',
+                )
+              : null,
+            React.createElement('div', { className: 'dva-motion-binding-grid' },
+              ...MOTION_BINDING_SLOTS.filter(slot => ['idle', 'thinking', 'responding', 'patting', 'resting'].includes(slot.key)).map(slot =>
+                React.createElement('label', { className: 'dva-motion-binding-field', key: slot.key },
+                  slot.label + (slot.required ? '（必选）' : ''),
+                  React.createElement('select', {
+                    value: motionBindingDraft[slot.key] || '',
+                    'aria-label': slot.label,
+                    onChange: event => setMotionBindingDraft(current => ({ ...current, [slot.key]: event.target.value || null })),
+                  },
+                    React.createElement('option', { value: '' }, slot.required ? '请选择待机动作' : '未单独指定'),
+                    ...Object.keys(motionPreview.catalog.actions).map(id =>
+                      React.createElement('option', { key: id, value: id }, id),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            React.createElement('details', null,
+              React.createElement('summary', null, '按 PPL 情绪细分动作（可选）'),
+              React.createElement('div', { className: 'dva-motion-binding-grid', style: { marginTop: '9px' } },
+                ...MOTION_BINDING_SLOTS.filter(slot => ['cheerful', 'shy', 'serious', 'confused', 'angry', 'frightened', 'exasperated', 'starry'].includes(slot.key)).map(slot =>
+                  React.createElement('label', { className: 'dva-motion-binding-field', key: slot.key },
+                    slot.label,
+                    React.createElement('select', {
+                      value: motionBindingDraft[slot.key] || '',
+                      'aria-label': slot.label,
+                      onChange: event => setMotionBindingDraft(current => ({ ...current, [slot.key]: event.target.value || null })),
+                    },
+                      React.createElement('option', { value: '' }, '使用待机动作'),
+                      ...Object.keys(motionPreview.catalog.actions).map(id =>
+                        React.createElement('option', { key: id, value: id }, id),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            React.createElement('label', { className: 'dva-motion-binding-confirm' },
+              React.createElement('input', {
+                type: 'checkbox',
+                checked: motionIdentityConfirmed,
+                onChange: event => setMotionIdentityConfirmed(event.target.checked),
+              }),
+              '我已确认：这份动作素材的角色外观与鲸鱼娘一致，并且我拥有使用这些素材的权利。',
+            ),
+            React.createElement('div', { className: 'dva-motion-binding-actions' },
+              React.createElement('button', {
+                type: 'button',
+                className: 'primary',
+                disabled: motionBindingBusy || !motionIdentityConfirmed || !motionBindingDraft.idle,
+                onClick: () => void saveMotionBinding(),
+              }, motionBindingBusy ? '正在保存…' : view?.character?.motionBinding?.packId === motionPreview.packId ? '保存动作映射' : '启用并绑定到鲸鱼娘'),
+              view?.character?.motionBinding?.packId === motionPreview.packId
+                ? React.createElement('button', { type: 'button', disabled: motionBindingBusy, onClick: () => void clearMotionBinding() }, '解除绑定')
+                : null,
             ),
           ) : null,
           motionImportBusy ? React.createElement('div', { role: 'status', className: 'dva-motion-note' },
