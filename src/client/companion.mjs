@@ -899,6 +899,9 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
 
 function Companion() {
   const [view, setView] = useState(null)
+  const [roles, setRoles] = useState([])
+  const [selectedRoleId, setSelectedRoleId] = useState('deepseek')
+  const [roleSwitchBusy, setRoleSwitchBusy] = useState(false)
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -1235,6 +1238,47 @@ function Companion() {
     } catch (err) { setError(err.message || String(err)) }
   }, [])
 
+  const switchRole = async roleId => {
+    if (busy || roleSwitchBusy || roleId === selectedRoleId) return
+    setRoleSwitchBusy(true)
+    setError('')
+    try {
+      const result = await callApi('character-select', { characterId: roleId })
+      setRoles(result.roles || roles)
+      setSelectedRoleId(result.active.characterId)
+      setActivePanel(null)
+      setShowMoreMenu(false)
+      setText('')
+      setChatFailure(null)
+      setNotice('')
+      setOlderLines([])
+      setHistoryCursor(null)
+      setAvatarExpressionOverride(null)
+      setAvatarBubble('')
+      setAvatarMotion('idle')
+      if (roleId === 'deepseek') await refresh()
+    } catch (cause) {
+      setError(cause.message || String(cause))
+    } finally {
+      setRoleSwitchBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    let active = true
+    void callApi('character-list').then(result => {
+      if (!active) return
+      setRoles(result.roles || [])
+      if ((result.roles || []).some(item => item.characterId === result.active?.characterId)) {
+        setSelectedRoleId(result.active.characterId)
+      }
+    }).catch(() => {
+      // Older compatible builds have no role registry; leave the Whale usable.
+      if (active) setRoles([{ characterId: 'deepseek', label: '鲸鱼娘', kind: 'whale' }])
+    })
+    return () => { active = false }
+  }, [])
+
   useEffect(() => {
     let active = true
     const load = async () => {
@@ -1243,10 +1287,12 @@ function Companion() {
         if (active) setView(result)
       } catch (err) { if (active) setError(err.message || String(err)) }
     }
-    void load()
-    const timer = setInterval(() => { if (active && open) void load() }, 5000)
+    if (selectedRoleId === 'deepseek') void load()
+    const timer = setInterval(() => {
+      if (active && open && selectedRoleId === 'deepseek') void load()
+    }, 5000)
     return () => { active = false; clearInterval(timer) }
-  }, [open])
+  }, [open, selectedRoleId])
 
   useEffect(() => {
     if (!open) return
@@ -1764,6 +1810,20 @@ function Companion() {
     }
   }, [runtimeBinding?.packId, runtimeMotionActionId])
 
+  const selectedRole = roles.find(item => item.characterId === selectedRoleId)
+  if (selectedRole && selectedRoleId !== 'deepseek') {
+    return React.createElement(GenericCompanionPanel, {
+      key: selectedRoleId,
+      role: selectedRole,
+      roles,
+      open,
+      onOpen: () => setOpen(true),
+      onCollapse: () => setOpen(false),
+      onSwitch: switchRole,
+      switching: roleSwitchBusy,
+    })
+  }
+
   if (!open) return React.createElement('div', { className: 'dva-root' },
     React.createElement('button', { className: 'dva-pet' + (runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? ' has-native-motion' : ''), title: '打开鲸鱼娘', onClick: () => { setOpen(true); void refresh() } },
       React.createElement('img', { src: runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? runtimeMotionFrameUrl : view?.character?.imageUrl || API + '/assets/maid-left.webp', alt: 'DeepSeek 鲸鱼娘', draggable: false, onError: () => { if (runtimeMotionFrameUrl) { setRuntimeMotionFrameFailed(true); setNotice('动作帧读取失败，已恢复原有鲸鱼娘立绘。') } } }),
@@ -1809,6 +1869,15 @@ function Companion() {
         ),
       ),
       React.createElement('div', { className: 'dva-head-tools' },
+        roles.length > 1 ? React.createElement('label', { className: 'dva-generic-selector' },
+          React.createElement('span', null, '切换角色'),
+          React.createElement('select', {
+            value: selectedRoleId,
+            disabled: busy || roleSwitchBusy,
+            onChange: event => void switchRole(event.target.value),
+            'aria-label': '切换 PPL 角色',
+          }, ...roles.map(item => React.createElement('option', { key: item.characterId, value: item.characterId }, item.label))),
+        ) : null,
         React.createElement('button', {
           className: 'dva-more-trigger',
           'aria-expanded': showMoreMenu,
