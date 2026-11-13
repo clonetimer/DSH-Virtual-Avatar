@@ -31,8 +31,9 @@ assert.equal(compiled.ir.schema, manifest.persona.schema)
 assert.equal(compiled.ir.persona?.id, manifest.persona.id)
 
 const checkedInIr = JSON.parse(readFileSync(resolve(root, manifest.persona.compiled), 'utf8'))
+const compiledArtifact = JSON.parse(JSON.stringify(compiled.ir))
 assert.ok(
-  isDeepStrictEqual(compiled.ir, checkedInIr),
+  isDeepStrictEqual(compiledArtifact, checkedInIr),
   'checked-in Persona IR is stale; regenerate it with the pinned PPL compiler and commit both source and IR',
 )
 
