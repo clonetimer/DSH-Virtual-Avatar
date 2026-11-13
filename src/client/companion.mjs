@@ -1029,6 +1029,11 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
             }, '重新读取目录'),
           ),
         ) : null,
+      ),
+    ),
+  )
+}
+
 function Companion() {
   const [view, setView] = useState(null)
   const [roles, setRoles] = useState([])
