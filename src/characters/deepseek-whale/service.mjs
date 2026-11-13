@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { createDeepseekWhaleRuntime } from '../../ppl/index.mjs'
 import { MemoryService } from '../../memory/service.mjs'
 import { buildConversationContext } from './context-window.mjs'
@@ -30,6 +31,100 @@ function mergeObjectDefaults(defaults, current = {}) {
     }
   }
   return out
+}
+
+function stableJson(value) {
+  if (value === undefined) return 'null'
+  if (Array.isArray(value)) return '[' + value.map(stableJson).join(',') + ']'
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value).filter(key => value[key] !== undefined).sort()
+      .map(key => JSON.stringify(key) + ':' + stableJson(value[key])).join(',') + '}'
+  }
+  return JSON.stringify(value)
+}
+
+function hashPplValue(value) {
+  return createHash('sha256').update(stableJson(value)).digest('hex')
+}
+
+function flattenPplState(value, prefix = '', out = {}) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [key, child] of Object.entries(value)) {
+      flattenPplState(child, prefix ? prefix + '.' + key : key, out)
+    }
+  } else if (prefix) {
+    out[prefix] = value
+  }
+  return out
+}
+
+function buildPplAudit(prepared, nextRuntimeState) {
+  const resolution = prepared.pplResolution || {}
+  const snapshot = prepared.pplSnapshot || {}
+  const beforeState = prepared.baseState?.pplRuntime || {}
+  const beforeFlat = flattenPplState(beforeState)
+  const afterFlat = flattenPplState(nextRuntimeState || {})
+  const stateChanges = [...new Set([...Object.keys(beforeFlat), ...Object.keys(afterFlat)])]
+    .filter(path => stableJson(beforeFlat[path]) !== stableJson(afterFlat[path]))
+    .sort()
+    .map(path => ({
+      path,
+      before: beforeFlat[path] === undefined ? null : beforeFlat[path],
+      after: afterFlat[path] === undefined ? null : afterFlat[path],
+    }))
+  const context = prepared.context || {}
+  const persona = snapshot.persona || this?.ppl?.binding || {}
+  const event = prepared.event || {}
+  const diagnostics = Array.isArray(resolution.diagnostics) ? resolution.diagnostics : []
+  return {
+    schema: 'ppl.execution-audit/0.1',
+    status: 'committed',
+    persona: {
+      id: persona.id || 'DEEPSEEK_WHALE',
+      version: persona.version || null,
+      irSha256: persona.irSha256 || null,
+    },
+    host: {
+      kind: snapshot.host?.kind || 'dsh-virtual-avatar/deepseek-whale',
+      turn: Number(snapshot.host?.turn ?? 0),
+      step: Number(snapshot.host?.step ?? 1),
+    },
+    snapshotSha256: hashPplValue(snapshot),
+    event: {
+      type: event.type || null,
+      actor: event.actor || null,
+      subject: event.subject || null,
+      signal: event.signal || null,
+      classification: event.classification || null,
+    },
+    scene: prepared.interactionScene || DEFAULT_INTERACTION_SCENE,
+    context: {
+      privacy: context.privacy || null,
+      outsiders_present: context.outsiders_present === true,
+      danger: Number.isFinite(Number(context.danger)) ? Number(context.danger) : null,
+    },
+    resolution: {
+      valid: resolution.valid === true,
+      activeRules: (resolution.activeRules || []).map(item => typeof item === 'string'
+        ? { id: item, priority: null }
+        : { id: item.id || null, priority: Number.isFinite(item.priority) ? item.priority : null }),
+      activeTransitions: resolution.activeTransitions || [],
+      effectTrace: resolution.trace || {},
+      pendingCommits: resolution.pendingCommits || [],
+      pendingTransitions: resolution.pendingTransitions || [],
+      invariants: resolution.invariantResults || [],
+      diagnostics: diagnostics.map(item => ({
+        code: item.code || null,
+        severity: item.severity || null,
+        message: String(item.message || '').slice(0, 240),
+      })),
+    },
+    state: {
+      beforeSha256: hashPplValue(beforeState),
+      afterSha256: hashPplValue(nextRuntimeState || {}),
+      changes: stateChanges,
+    },
+  }
 }
 
 export class DeepseekWhaleService {
@@ -99,14 +194,32 @@ export class DeepseekWhaleService {
     const loaded = this.loadState({ sessionId })
     const event = classifyDeepseekWhaleEvent({ text: input, choice, eventId })
     const interactionScene = loaded.state.interactionScene || DEFAULT_INTERACTION_SCENE
-    const resolved = this.ppl.resolve({
-      runtimeState: loaded.state.pplRuntime,
-      scene: interactionScene,
-      event,
-      context,
-      turn: turn ?? loaded.state.pplRuntime?.session?.turn ?? 0,
-      step,
-    })
+    let resolved
+    try {
+      resolved = this.ppl.resolve({
+        runtimeState: loaded.state.pplRuntime,
+        scene: interactionScene,
+        event,
+        context,
+        turn: turn ?? loaded.state.pplRuntime?.session?.turn ?? 0,
+        step,
+      })
+    } catch (error) {
+      try {
+        this.store.recordPplResolutionFailure?.({
+          eventId: String(eventId),
+          characterId: DEEPSEEK_WHALE_ID,
+          persona: this.ppl.binding || null,
+          event,
+          scene: interactionScene,
+          context,
+          error,
+        })
+      } catch (auditError) {
+        error.auditFailure = String(auditError?.message || auditError).slice(0, 180)
+      }
+      throw error
+    }
     const memoryContext = this.memory.retrieveContext({
       ownerKind: 'character',
       ownerId: DEEPSEEK_WHALE_ID,
@@ -210,6 +323,7 @@ export class DeepseekWhaleService {
       reconciled.conversation.choices = []
     }
 
+    const pplAudit = buildPplAudit(prepared, pplFinal.runtimeState)
     const payload = {
       input: prepared.input,
       choiceId: prepared.choice?.id || null,
@@ -227,7 +341,9 @@ export class DeepseekWhaleService {
       pplContext: prepared.context,
       pplActiveRules: prepared.pplResolution?.activeRules?.map(rule => rule.id) || [],
       pplPendingTransitions: prepared.pplResolution?.pendingTransitions || [],
-      pplSnapshotHash: prepared.pplSnapshot?.persona?.irSha256 || null,
+      pplSnapshotHash: pplAudit.snapshotSha256,
+      pplIrSha256: pplAudit.persona.irSha256,
+      pplAudit,
     }
     const committed = this.store.commitCharacterTurn({
       eventId: prepared.eventId,
