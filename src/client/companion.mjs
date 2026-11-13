@@ -137,6 +137,35 @@ async function callApi(action, args = {}) {
   return result
 }
 
+const MOTION_BINDING_SLOTS = Object.freeze([
+  { key: 'idle', label: '日常待机', required: true },
+  { key: 'thinking', label: '思考中' },
+  { key: 'responding', label: '回复后' },
+  { key: 'patting', label: '摸摸互动' },
+  { key: 'resting', label: '休息状态' },
+  { key: 'cheerful', label: '开心' },
+  { key: 'shy', label: '害羞' },
+  { key: 'serious', label: '认真 / 低落' },
+  { key: 'confused', label: '疑惑' },
+  { key: 'angry', label: '不开心' },
+  { key: 'frightened', label: '紧张' },
+  { key: 'exasperated', label: '无奈' },
+  { key: 'starry', label: '憧憬' },
+])
+
+function resolveBoundMotionAction(binding, { avatarMotion = 'idle', expression = 'neutral', fatigue = 0 } = {}) {
+  if (!binding?.identityConfirmed || !binding?.catalog?.actions) return null
+  const mapping = binding.mapping || {}
+  const idle = mapping.idle || binding.catalog.defaultAction || null
+  if (!idle || !binding.catalog.actions[idle]) return null
+  const choose = (...ids) => ids.find(id => typeof id === 'string' && binding.catalog.actions[id]) || idle
+  if (avatarMotion === 'thinking') return choose(mapping.thinking)
+  if (avatarMotion === 'patting') return choose(mapping.patting, mapping[expression])
+  if (avatarMotion === 'responding') return choose(mapping.responding, mapping[expression])
+  if (Number(fatigue) >= 0.75 && mapping.resting) return choose(mapping.resting)
+  return choose(mapping[expression])
+}
+
 function describeCharacterState(state = {}, presentation = {}) {
   const anxiety = Math.max(0, Math.min(1, Number(state.anxiety) || 0))
   const grief = Math.max(0, Math.min(1, Number(state.grief) || 0))
@@ -249,6 +278,10 @@ function Companion() {
   const [motionActionId, setMotionActionId] = useState('')
   const [motionPlaybackStep, setMotionPlaybackStep] = useState(0)
   const [motionPlaying, setMotionPlaying] = useState(false)
+  const [motionBindingDraft, setMotionBindingDraft] = useState({ idle: '' })
+  const [motionIdentityConfirmed, setMotionIdentityConfirmed] = useState(false)
+  const [motionBindingBusy, setMotionBindingBusy] = useState(false)
+  const [runtimeMotionStep, setRuntimeMotionStep] = useState(0)
   const motionRequestRef = React.useRef(0)
   const [motionPacks, setMotionPacks] = useState([])
   const [motionLibraryBusy, setMotionLibraryBusy] = useState(false)
