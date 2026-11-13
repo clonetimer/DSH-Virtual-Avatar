@@ -207,3 +207,13 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - PPL resolution failures retain structured diagnostic codes and are recorded without committing character state.
 - The diagnostics panel exposes a PPL execution-audit viewer.
 - Frozen PPL 0.3 language specification, EBNF grammar and JSON schemas are included under `docs/ppl-reference/`.
+
+
+## dev.17：PPL 可视化人格调校
+
+- 在「更多 → 角色与外观 → PPL 人格调校」中，通过滑块调整温柔度、活泼度、主动表达、情绪克制、坦诚程度、正式程度、表达详略、情绪表达和动作描写。
+- 提供温柔陪伴、活泼元气、稳重克制三组预设；所有参数均有明确范围，温柔度受 CORE_TONE 人格不变量保护。
+- 保存前可预览私密日常、安慰支持、赞美鼓励和公开场合四种场景，确认 PPL 规则命中与不变量检查通过。
+- 配置以版本化覆盖层保存在角色状态中，不修改上游 PPL 源文件或已发布 Persona IR；运行时从不可变基础 IR 派生独立配置 IR。
+- 参数修改、IR 哈希变化和恢复默认操作均写入 SQLite 审计历史；角色关系、对话、记忆和 PPL 规则保持独立。
+- 详见 [PPL 可视化人格配置设计与验收](docs/ppl-visual-configuration.md)。
