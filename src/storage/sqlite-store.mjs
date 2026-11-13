@@ -172,6 +172,12 @@ CREATE TABLE IF NOT EXISTS chat_model_selections (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS companion_selection (
+  singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+  character_id TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS migration_rollback_snapshots (migration_id TEXT PRIMARY KEY, character_id TEXT NOT NULL, after_revision INTEGER NOT NULL, created_asset_ids_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'available', created_at TEXT NOT NULL, rolled_back_at TEXT, FOREIGN KEY(migration_id) REFERENCES migration_runs(migration_id));
 
 CREATE TABLE IF NOT EXISTS audit_events (
@@ -444,6 +450,28 @@ export class SqliteAvatarStore {
     return this.getPersona(id)
   }
 
+  getActiveCompanionId() {
+    this.#assertOpen()
+    const row = this.#db.prepare('SELECT character_id FROM companion_selection WHERE singleton = 1').get()
+    return row?.character_id || 'deepseek'
+  }
+
+  setActiveCompanionId(characterId) {
+    this.#assertOpen()
+    const id = String(characterId || '')
+    if (!/^[a-z0-9][a-z0-9-]{2,63}$/u.test(id)) throw conflict('CHARACTER_ID_INVALID', 'invalid character selection')
+    const previous = this.getActiveCompanionId()
+    if (previous === id) return { characterId: id, changed: false }
+    this.transaction(() => {
+      this.#db.prepare(`INSERT INTO companion_selection(singleton,character_id,updated_at)
+        VALUES(1,?,?)
+        ON CONFLICT(singleton) DO UPDATE SET character_id=excluded.character_id,updated_at=excluded.updated_at`)
+        .run(id, new Date().toISOString())
+      this.#recordAudit('companion', 'selection', 'CHARACTER_SELECTED', null, { characterId: previous }, { characterId: id }, { source: 'character-switch' })
+    })
+    return { characterId: id, changed: true }
+  }
+
   loadCharacterState(characterId = 'deepseek') {
     this.#assertOpen()
     const row = this.#db.prepare('SELECT state_json, revision, updated_at FROM character_states WHERE character_id = ?').get(String(characterId))
@@ -476,6 +504,7 @@ export class SqliteAvatarStore {
     afterConfiguration = {},
     changes = [],
     irSha256 = null,
+    schema = 'dsh-virtual-avatar.ppl-config/1',
   } = {}) {
     this.#assertOpen()
     if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('character state required')
@@ -483,7 +512,7 @@ export class SqliteAvatarStore {
       const saved = this.saveCharacterState(characterId, state, expectedRevision)
       this.#recordAudit('character', String(characterId), 'PPL_CONFIGURATION_UPDATED', null,
         beforeConfiguration, afterConfiguration, {
-          schema: 'dsh-virtual-avatar.ppl-config/1',
+          schema,
           source: 'ppl-visual-editor',
           changes: Array.isArray(changes) ? changes : [],
           irSha256,
@@ -547,7 +576,9 @@ export class SqliteAvatarStore {
       const payloadHash = sha256(stableJson(payload || {}))
       const previousEvent = this.findDomainEvent(id)
       if (previousEvent) {
-        if (previousEvent.payloadHash !== payloadHash) throw conflict('EVENT_ID_CONFLICT', 'turn event id was reused with a different payload')
+        if (previousEvent.characterId !== characterId || previousEvent.eventType !== 'TURN_COMPLETED' || previousEvent.payloadHash !== payloadHash) {
+          throw conflict('EVENT_ID_CONFLICT', 'turn event id was reused across characters or with a different payload')
+        }
         return { duplicate: true, state: this.loadCharacterState(characterId) }
       }
       const before = this.loadCharacterState(characterId)
