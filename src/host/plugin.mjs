@@ -598,7 +598,13 @@ export function apply(ctx, config = {}) {
           json(res, 413, { ok: false, error: 'motion pack configuration exceeds 64 KiB', code: 'MOTION_PACK_CONFIG_TOO_LARGE' })
           return
         }
-        const catalog = compileDyberPetMotionCatalog({ petConfig, actConfig, frameFiles })
+        let catalog
+        try { catalog = compileDyberPetMotionCatalog({ petConfig, actConfig, frameFiles }) }
+        catch (error) {
+          if (String(error?.code || '').startsWith('DYBERPET_')) error.status = 400
+          throw error
+        }
+        pruneMotionUploadSessions()
         const expected = new Set(frameFiles)
         if (expected.size !== frameFiles.length) {
           json(res, 400, { ok: false, error: 'motion pack contains duplicate frame paths', code: 'MOTION_PACK_FRAME_DUPLICATE' })
