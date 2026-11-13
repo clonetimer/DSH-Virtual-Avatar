@@ -30,7 +30,9 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     stream: async function* (input) {
       assert.equal(input.provider, 'deepseek-official')
       assert.equal(input.model, 'deepseek-v4-flash')
-      if (input.system === 'This is a connectivity test. Reply with OK only.') {
+      if (input.system === 'Reply with exactly OK. Do not roleplay or use tools.') {
+        assert.ok(input.messages.every(message => message.role === 'user' && !('id' in message) && !('source' in message)),
+          'one-shot model probe must use identity-free RequestUserInput messages')
         yield { type: 'text-delta', text: 'OK' }
         yield { type: 'finish', reason: { kind: 'stop' } }
         return
@@ -39,6 +41,15 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
       assert.match(input.system, /庄方宜/)
       assert.doesNotMatch(input.system, /你正在 DeepSeek 鲸鱼娘/)
       assert.match(input.messages[0].content[0].text, /独立 PPL 角色陪伴对话/)
+      assert.ok(input.messages.filter(message => message.role === 'user').every(message => !('id' in message) && !('source' in message)),
+        'request-only user inputs must not carry durable identity or source')
+      if (invocations.length > 1) {
+        const assistantHistory = input.messages.find(message => message.role === 'assistant')
+        assert.ok(assistantHistory?.id)
+        assert.equal(assistantHistory.source?.kind, 'model')
+        assert.equal(assistantHistory.source?.provider, 'deepseek-official')
+        assert.equal(assistantHistory.source?.model, 'deepseek-v4-flash')
+      }
       yield { type: 'text-delta', text: '谢谢。我会注意休息。' }
       yield { type: 'finish', reason: { kind: 'stop' } }
     },
@@ -92,6 +103,12 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     })
     assert.equal(conflict.status, 409)
     assert.equal(conflict.body.code, 'EVENT_ID_CONFLICT')
+    const secondChat = await call(route.handler, 'character-chat', {
+      characterId: 'ppl-zhuang-fangyi', text: '今天的安排已经完成了。', eventId: 'zhuang-host-turn-2',
+    })
+    assert.equal(secondChat.status, 200, secondChat.body?.error)
+    assert.equal(secondChat.body.view.character.chatLines.length, 4)
+    assert.equal(invocations.length, 2, 'the second turn must include correctly attributed assistant history')
 
     const store = await call(route.handler, 'character-memory-add', {
       characterId: 'ppl-zhuang-fangyi', text: '庄方宜的私人记忆', eventId: 'zhuang-host-memory-1',
@@ -129,11 +146,13 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     assert.equal(modelGetAfter.body.savedSelection.characterId, 'ppl-zhuang-fangyi')
     const whaleModel = await call(route.handler, 'model-catalog')
     assert.equal(whaleModel.body.savedSelection, null)
-    const roleModelTest = await call(route.handler, 'character-model-test', { characterId: 'ppl-zhuang-fangyi' })
-    assert.equal(roleModelTest.status, 200)
+    const roleModelTest = await call(route.handler, 'character-model-test', {
+      characterId: 'ppl-zhuang-fangyi', provider: 'deepseek-official', model: 'deepseek-v4-flash-draft',
+    })
+    assert.equal(roleModelTest.status, 200, roleModelTest.body?.error)
     assert.equal(roleModelTest.body.test.status, 'success')
-    assert.equal(roleModelTest.body.test.model, 'deepseek-v4-flash')
-    assert.equal(invocations.length, 1, 'connectivity test must not create a companion chat turn')
+    assert.equal(roleModelTest.body.test.model, 'deepseek-v4-flash-draft')
+    assert.equal(invocations.length, 2, 'connectivity test must not create a companion chat turn')
 
     const beforeConfiguration = await call(route.handler, 'character-config-get', { characterId: 'ppl-zhuang-fangyi' })
     assert.equal(beforeConfiguration.status, 200)
