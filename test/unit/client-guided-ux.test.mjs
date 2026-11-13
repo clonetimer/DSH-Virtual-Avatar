@@ -48,6 +48,9 @@ test('chat failure guidance explains timeout and event-id conflicts without unsa
   assert.equal(timeout.title, '模型响应超时')
   assert.equal(timeout.retryable, true)
 
+  const streamTimeout = helpers.describeChatFailure({ code: 'LLM_STREAM_FAILED', message: 'model request timed out' })
+  assert.equal(streamTimeout.title, '模型响应超时')
+
   const conflict = helpers.describeChatFailure({ code: 'EVENT_ID_CONFLICT', message: 'event id reused' })
   assert.equal(conflict.title, '消息请求编号冲突')
   assert.equal(conflict.retryable, false)
