@@ -184,7 +184,33 @@ export class SqliteAvatarStore {
     this.assetDirectory = assetDirectory
     this.#db = new DatabaseSync(filename)
     this.#db.exec(SCHEMA)
+    this.#reconcileMotionPackDirectories()
     if (filename !== ':memory:') this.#db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
+  }
+
+  #reconcileMotionPackDirectories() {
+    if (!this.assetDirectory) return
+    const root = join(this.assetDirectory, 'motion-packs')
+    if (!existsSync(root)) return
+    const known = new Set(this.#db.prepare('SELECT pack_id FROM motion_packs').all().map(row => row.pack_id))
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.isSymbolicLink()) continue
+      const absolute = join(root, entry.name)
+      const deleting = /^\.([0-9a-f-]{36})\.deleting$/i.exec(entry.name)
+      if (deleting) {
+        const packId = deleting[1]
+        const finalDirectory = join(root, packId)
+        if (known.has(packId) && !existsSync(finalDirectory)) {
+          try { renameSync(absolute, finalDirectory) } catch { /* keep tombstone for the next startup */ }
+        } else {
+          try { rmSync(absolute, { recursive: true, force: true }) } catch { /* retry on next startup */ }
+        }
+        continue
+      }
+      if (/^\.[0-9a-f-]{36}\.tmp$/i.test(entry.name) || !known.has(entry.name)) {
+        try { rmSync(absolute, { recursive: true, force: true }) } catch { /* retry on next startup */ }
+      }
+    }
   }
 
   #assertOpen() {
