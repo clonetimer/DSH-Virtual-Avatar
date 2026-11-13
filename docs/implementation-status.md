@@ -437,6 +437,19 @@
 - SQLite tests verify failure audit redacts raw user message text and does not mutate character state.
 - Client artifact tests verify the PPL audit viewer is included in the packaged classic client.
 
+
+### dev.16 CI verification
+- Run 43400497139 completed successfully on both Node 24 and Node 24.9.0.
+- PPL Core 0.3.0 conformance: 21/21 checks passed on each matrix leg.
+- Upstream reference personas: all 3 compile and their 13 embedded source tests pass.
+- DeepSeek Whale PPL source tests: 7/7 passed.
+- Plugin suite: 113 passed / 0 failed on each matrix leg.
+- PPL source/IR/runtime/reference parity verifier: PASS on both matrix legs.
+- Installable Windows Web/Desktop ZIP: 3,556,045 bytes; SHA-256 `609f51ff9f5c9e8d1464308c6ce23e5b66be4124c2ff0b902693841d08fa761d`.
+- Inner installable TGZ: 3,554,348 bytes; SHA-256 `4036a9c93e39405af0140965019be1e0bf4607c8dfd7aa7046c0b4c9c4783198`; package-info.json and .sha256 match.
+- Private Google Drive dev.16 mirror updated in place under the existing file ID; stored size matches the verified CI ZIP.
+- Desktop interaction audit display and controlled invariant-failure acceptance remain manual gates.
+
 ### Release gate
 - Full Node 24 / Node 24.9.0 plugin test matrix.
 - PPL Core conformance and official reference-persona suites on both matrix legs.
