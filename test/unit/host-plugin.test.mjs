@@ -162,15 +162,22 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
 
     const background = await call(route.handler, {
       action: 'background-set',
-      args: { background: 'bg-deepseek-seaside-study' },
+      args: { background: 'bg-deepseek-seaside-study', overlay: 0.24 },
     })
     assert.equal(background.status, 200)
     assert.match(background.body.view.character.backgroundUrl, /bg-deepseek-seaside-study\.webp$/)
+    assert.equal(background.body.view.character.backgroundOverlay, 0.24)
     const invalidBackground = await call(route.handler, {
       action: 'background-set',
       args: { background: '../outside' },
     })
     assert.equal(invalidBackground.status, 400)
+    const invalidOverlay = await call(route.handler, {
+      action: 'background-set',
+      args: { background: 'palace-night', overlay: 0.9 },
+    })
+    assert.equal(invalidOverlay.status, 400)
+    assert.equal(invalidOverlay.body.code, 'BACKGROUND_OVERLAY_INVALID')
   } finally {
     if (typeof cleanup === 'function') cleanup()
     rmSync(home, { recursive: true, force: true })
@@ -711,6 +718,96 @@ test('DyberPet motion pack begin rejects unsafe frame paths with a client error'
     })
     assert.equal(invalid.status, 400)
     assert.match(invalid.body.code, /^DYBERPET_/)
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+
+test('Whale model selection is isolated from the DSH default and persists locally', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-model-selection-'))
+  let route
+  let cleanup
+  let globalSaves = 0
+  const calls = []
+  const defaultSelection = { provider: 'deepseek-official', model: 'deepseek-v4-flash' }
+  const llm = {
+    listProviders: () => [
+      { id: 'deepseek-official', name: 'DeepSeek Official' },
+      { id: 'openai-compatible', name: 'OpenAI Compatible' },
+    ],
+    listModels: async provider => provider === 'deepseek-official'
+      ? [{ provider, id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }]
+      : [{ provider, id: 'gpt-4o-mini', name: 'GPT-4o mini' }],
+    stream: async function* (input) {
+      calls.push({ provider: input.provider, model: input.model })
+      yield { type: 'text-delta', text: '模型选择已生效。' }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    },
+  }
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm,
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject(names, callback) {
+      if (names.includes('agentDefaultModel')) callback({
+        agentDefaultModel: {
+          currentSelection: () => ({ ...defaultSelection }),
+          saveSelection: async () => { globalSaves++ },
+        },
+      })
+    },
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    const catalog = await call(route.handler, { action: 'model-catalog' })
+    assert.equal(catalog.status, 200)
+    assert.equal(catalog.body.selection.provider, 'deepseek-official')
+    assert.equal(catalog.body.defaultSelection.model, 'deepseek-v4-flash')
+    assert.equal(catalog.body.providers.length, 2)
+    assert.equal(catalog.body.providers[1].models[0].id, 'gpt-4o-mini')
+
+    const saved = await call(route.handler, {
+      action: 'model-selection-set',
+      args: { provider: 'openai-compatible', model: 'gpt-4o-mini' },
+    })
+    assert.equal(saved.status, 200)
+    assert.equal(saved.body.selection.provider, 'openai-compatible')
+
+    const chat = await call(route.handler, {
+      action: 'chat',
+      args: { text: '请用当前选择的模型回复。', eventId: 'model-selection-chat-1' },
+    })
+    assert.equal(chat.status, 200)
+    assert.deepEqual(calls.at(-1), { provider: 'openai-compatible', model: 'gpt-4o-mini' })
+
+    const modelTest = await call(route.handler, { action: 'model-test' })
+    assert.equal(modelTest.status, 200)
+    assert.equal(modelTest.body.test.provider, 'openai-compatible')
+    assert.equal(modelTest.body.test.model, 'gpt-4o-mini')
+
+    const diagnostics = await call(route.handler, { action: 'diagnostics' })
+    assert.equal(diagnostics.body.diagnostics.model.selectionSource, 'whale-local')
+    assert.equal(diagnostics.body.diagnostics.model.selected.provider, 'openai-compatible')
+
+    const invalidProvider = await call(route.handler, {
+      action: 'model-selection-set',
+      args: { provider: 'not-enabled', model: 'some-model' },
+    })
+    assert.equal(invalidProvider.status, 400)
+    assert.equal(invalidProvider.body.code, 'MODEL_PROVIDER_UNAVAILABLE')
+
+    const cleared = await call(route.handler, { action: 'model-selection-clear' })
+    assert.equal(cleared.status, 200)
+    const afterClear = await call(route.handler, {
+      action: 'chat',
+      args: { text: '恢复默认模型后继续聊天。', eventId: 'model-selection-chat-2' },
+    })
+    assert.equal(afterClear.status, 200)
+    assert.deepEqual(calls.at(-1), defaultSelection)
+    assert.equal(globalSaves, 0, 'Whale model selection must not write the process-wide DSH default')
   } finally {
     if (typeof cleanup === 'function') cleanup()
     rmSync(home, { recursive: true, force: true })
