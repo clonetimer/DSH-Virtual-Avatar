@@ -822,3 +822,55 @@ test('Whale model selection is isolated from the DSH default and persists locall
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+
+test('retrying a completed chat event returns the original reply without a second model call', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-chat-retry-'))
+  let route
+  let cleanup
+  const calls = []
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm: {
+      stream: async function* (input) {
+        calls.push({ provider: input.provider, model: input.model })
+        yield { type: 'text-delta', text: '主人，我已经收到这条消息啦。' }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      },
+    },
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject(names, callback) {
+      if (names.includes('agentDefaultModel')) callback({
+        agentDefaultModel: { currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }) },
+      })
+    },
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    const args = { text: '刚才那条消息如果已经完成，请不要重复记录。', eventId: 'retryable-chat-event-1' }
+    const first = await call(route.handler, { action: 'chat', args })
+    assert.equal(first.status, 200)
+    assert.equal(first.body.duplicate, false)
+    assert.equal(first.body.view.character.chatLines.length, 2)
+    assert.equal(calls.length, 1)
+
+    const retry = await call(route.handler, { action: 'chat', args })
+    assert.equal(retry.status, 200)
+    assert.equal(retry.body.duplicate, true)
+    assert.equal(retry.body.reply, first.body.reply)
+    assert.equal(retry.body.view.character.chatLines.length, 2)
+    assert.equal(calls.length, 1, 'retry must not call the model again')
+
+    const conflict = await call(route.handler, {
+      action: 'chat',
+      args: { ...args, text: '这不是原来的消息。' },
+    })
+    assert.equal(conflict.status, 409)
+    assert.equal(conflict.body.code, 'EVENT_ID_CONFLICT')
+    assert.equal(calls.length, 1)
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})

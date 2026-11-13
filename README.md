@@ -38,15 +38,15 @@ node --version
 npm --version
 ```
 
-从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.14` artifact 下载以下文件：
-- `dsh-virtual-avatar-0.1.0-dev.14.tgz`
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.15` artifact 下载以下文件：
+- `dsh-virtual-avatar-0.1.0-dev.15.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
 
 先校验包文件（在下载目录执行）：
 
 ```powershell
-Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.14.tgz -Algorithm SHA256
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.15.tgz -Algorithm SHA256
 ```
 
 将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
@@ -54,14 +54,14 @@ Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.14.tgz -Algorithm SHA256
 **DSH Web（web profile）：**
 
 ```powershell
-dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.14.tgz"
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.15.tgz"
 dsh --profile web --dump-config
 ```
 
 **DSH Desktop：** 建议直接使用桌面版「插件 → 添加插件」，输入 `.tgz` 的完整绝对路径。若在 DSH 桌面版「应用 → 管理 dsh 命令…」安装了专用 CLI，可在完全退出 Desktop 后使用其保留的 `desktop` profile：
 
 ```powershell
-dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.14.tgz"
+dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.15.tgz"
 dsh --profile desktop --dump-config
 ```
 
@@ -187,3 +187,12 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - 动作入口改为“动作库与动画”，明确预览、导入、绑定三者的区别；新增功能测试指南。
 - 聊天传输失败提示保留错误细节，同时明确提示本次对话未完成、输入仍可重试。
 - 详见 [功能使用与桌面验收指南](docs/manual-test-guide.md)。
+
+
+## dev.15：聊天恢复与功能向导
+
+- 聊天请求使用客户端生成的稳定事件编号。若响应在服务端提交后丢失，重试会从持久化事件中取回原回复，不会再次调用模型，也不会重复计入关系成长。
+- 只有原消息内容和选项完全一致时才允许恢复；请求编号被其他消息占用时返回明确冲突，不覆盖已有记录。
+- 对话失败提示区分模型未配置、服务商错误、网络中断、超时和状态冲突；保留原输入，并提供安全重试或直接打开模型设置。
+- “功能使用与测试指南”增加直接跳转入口，可从指南打开模型、历史、记忆、关系、背景、动作库、备份和诊断面板。
+- 模型选择发生变化时清除旧的连接测试结果，避免把上一个模型的测试成功误认为当前模型已通过。

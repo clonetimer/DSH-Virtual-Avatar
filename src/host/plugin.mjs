@@ -194,7 +194,9 @@ function selectModel(llm, agentDefaultModel, config, store = null) {
       if (provider) return { provider: String(provider.id), model: String(config.fallbackModel || 'deepseek-v4-flash'), source: 'fallback' }
     }
   } catch { /* report missing model selection below */ }
-  throw new Error('No DSH model is configured. Select a model in Whale settings or configure the DSH default model.')
+  const error = new Error('No DSH model is configured. Select a model in Whale settings or configure the DSH default model.')
+  error.code = 'MODEL_NOT_CONFIGURED'
+  throw error
 }
 
 function safeBackgroundAsset(state) {
@@ -934,8 +936,33 @@ export function apply(ctx, config = {}) {
         const eventId = typeof args.eventId === 'string' && args.eventId.trim()
           ? args.eventId.trim().slice(0, 200)
           : sessionId + ':' + turn + ':' + randomUUID()
-        const choice = typeof args.choiceId === 'string'
-          ? (loaded.state.conversation?.choices || []).find(item => item && item.id === args.choiceId) || null
+        const requestedChoiceId = typeof args.choiceId === 'string' ? args.choiceId : null
+        const previousEvent = store.findDomainEvent(eventId)
+        if (previousEvent) {
+          const payload = previousEvent.payload || {}
+          if (previousEvent.eventType !== 'TURN_COMPLETED'
+              || payload.input !== text
+              || (payload.choiceId || null) !== (requestedChoiceId || null)
+              || typeof payload.reply !== 'string'
+              || !payload.reply.trim()) {
+            const error = new Error('该请求编号已经用于另一条消息。请重新发送当前输入。')
+            error.code = 'EVENT_ID_CONFLICT'
+            error.status = 409
+            throw error
+          }
+          json(res, 200, {
+            ok: true,
+            eventId,
+            reply: payload.reply,
+            emotion: emotionFromText(payload.reply),
+            choices: [],
+            duplicate: true,
+            view: publicView(service, memoryService, runtimeConfig, store),
+          })
+          return
+        }
+        const choice = requestedChoiceId
+          ? (loaded.state.conversation?.choices || []).find(item => item && item.id === requestedChoiceId) || null
           : null
         const prepared = service.prepareTurn({
           text,
@@ -1132,7 +1159,10 @@ export function apply(ctx, config = {}) {
       if (recentErrors.length > 10) recentErrors.length = 10
       const status = Number.isInteger(error?.status) ? error.status : error?.code === 'REVISION_CONFLICT' ? 409 : 500
       const safeMessage = String(error?.message || error).replace(/(?:sk|api)[-_ ]?key[=: ]+[^ ]+/ig, '[credential redacted]').slice(0, 240)
-      json(res, status, { ok: false, error: safeMessage, code: error?.code || 'AVATAR_ERROR' })
+      const body = { ok: false, error: safeMessage, code: error?.code || 'AVATAR_ERROR' }
+      if (typeof error?.provider === 'string') body.provider = error.provider.slice(0, 128)
+      if (typeof error?.model === 'string') body.model = error.model.slice(0, 256)
+      json(res, status, body)
     }
   }
 
