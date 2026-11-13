@@ -216,6 +216,55 @@ function Companion() {
   const [storyMemory, setStoryMemory] = useState(null)
   const [summaryCandidate, setSummaryCandidate] = useState(null)
   const [profileDraft, setProfileDraft] = useState({})
+  const [motionPreview, setMotionPreview] = useState(null)
+  const [motionPreviewBusy, setMotionPreviewBusy] = useState(false)
+  const [motionPreviewError, setMotionPreviewError] = useState('')
+  const [motionActionId, setMotionActionId] = useState('')
+  const [motionPlaybackStep, setMotionPlaybackStep] = useState(0)
+  const [motionPlaying, setMotionPlaying] = useState(false)
+
+  const loadMotionPreview = async fileList => {
+    const selected = Array.from(fileList || [])
+    if (!selected.length) return
+    setMotionPreviewBusy(true)
+    setMotionPreviewError('')
+    setMotionPlaying(false)
+    setMotionPreview(null)
+    try {
+      const folder = await readDyberPetPreviewFolder(selected)
+      const checked = await callApi('motion-preview-validate', {
+        petConfig: folder.petConfig,
+        actConfig: folder.actConfig,
+        frameFiles: folder.frameFiles,
+      })
+      if (!checked.previewOnly || !checked.catalog?.actions) throw new Error('动作预览校验返回格式异常。')
+      const filesByPath = new Map(folder.frameEntries.map(item => [item.path, item.file]))
+      const urls = {}
+      try {
+        for (const action of Object.values(checked.catalog.actions)) {
+          for (const path of action.frames || []) {
+            if (urls[path]) continue
+            const file = filesByPath.get(path)
+            if (!file) throw new Error('缺少动作帧：' + path)
+            urls[path] = URL.createObjectURL(file)
+          }
+        }
+      } catch (error) {
+        Object.values(urls).forEach(url => URL.revokeObjectURL(url))
+        throw error
+      }
+      const ids = Object.keys(checked.catalog.actions)
+      if (!ids.length) {
+        Object.values(urls).forEach(url => URL.revokeObjectURL(url))
+        throw new Error('角色配置中没有可以播放的动作。')
+      }
+      setMotionPreview({ roleName: folder.roleName, catalog: checked.catalog, frameUrls: urls })
+      setMotionActionId(checked.catalog.defaultAction || ids[0])
+      setMotionPlaybackStep(0)
+    } catch (error) {
+      setMotionPreviewError(error.message || String(error))
+    } finally { setMotionPreviewBusy(false) }
+  }
 
   const openUtilityPanel = panel => {
     setActivePanel(panel)
@@ -290,6 +339,31 @@ function Companion() {
     const timer = window.setTimeout(() => setAvatarMotion('idle'), 1400)
     return () => window.clearTimeout(timer)
   }, [avatarMotion])
+
+  useEffect(() => () => {
+    if (motionPreview?.frameUrls) {
+      Object.values(motionPreview.frameUrls).forEach(url => URL.revokeObjectURL(url))
+    }
+  }, [motionPreview])
+
+  useEffect(() => {
+    if (activePanel === 'motion') return
+    setMotionPlaying(false)
+    setMotionPreview(previous => previous ? null : previous)
+  }, [activePanel])
+
+  useEffect(() => {
+    const action = motionPreview?.catalog?.actions?.[motionActionId]
+    if (!motionPlaying || activePanel !== 'motion' || !action?.frames?.length) return
+    const totalSteps = action.frames.length * action.repeats
+    if (motionPlaybackStep >= totalSteps - 1) {
+      setMotionPlaying(false)
+      return
+    }
+    const timer = window.setTimeout(() => setMotionPlaybackStep(step => step + 1),
+      Math.max(30, action.frameIntervalMs))
+    return () => window.clearTimeout(timer)
+  }, [motionPlaying, activePanel, motionPreview, motionActionId, motionPlaybackStep])
 
   const patAvatar = () => {
     if (busy || avatarMotion === 'thinking') return
@@ -508,6 +582,9 @@ function Companion() {
   const hasConversation = lines.length > 0
   const pplState = character?.pplState || {}
   const characterState = describeCharacterState(pplState, character?.presentation || {})
+  const motionAction = motionPreview?.catalog?.actions?.[motionActionId] || null
+  const motionFrame = motionAction?.frames?.[motionPlaybackStep % (motionAction.frames.length || 1)] || null
+  const motionFrameUrl = motionFrame ? motionPreview?.frameUrls?.[motionFrame] : null
   const chatGroups = lines.reduce((groups, line, index) => {
     const timestamp = Number(line.at || 0)
     const day = timestamp > 0 ? new Date(timestamp).toLocaleDateString() : '时间未知'
