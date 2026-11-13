@@ -575,6 +575,38 @@ test('DyberPet motion pack upload persists verified PNG frames, supports preview
     const listed = await call(route.handler, { action: 'motion-pack-list' })
     assert.equal(listed.body.packs.length, 1)
     assert.equal(listed.body.packs[0].id, packId)
+    const deniedBinding = await call(route.handler, {
+      action: 'motion-pack-bind',
+      args: { packId, identityConfirmed: false, mapping: { idle: 'idle' } },
+    })
+    assert.equal(deniedBinding.status, 400)
+    assert.equal(deniedBinding.body.code, 'MOTION_IDENTITY_CONFIRMATION_REQUIRED')
+
+    const bound = await call(route.handler, {
+      action: 'motion-pack-bind',
+      args: {
+        packId,
+        identityConfirmed: true,
+        mapping: { idle: 'idle', thinking: 'pat', patting: 'pat', cheerful: 'pat' },
+      },
+    })
+    assert.equal(bound.status, 200)
+    assert.equal(bound.body.binding.packId, packId)
+    assert.equal(bound.body.view.character.motionBinding.identityConfirmed, true)
+    assert.deepEqual(bound.body.view.character.motionBinding.mapping, { idle: 'idle', thinking: 'pat', patting: 'pat', cheerful: 'pat' })
+
+    const bindingRead = await call(route.handler, { action: 'motion-pack-binding' })
+    assert.equal(bindingRead.body.binding.displayName, 'Whale Gesture Test')
+    const unbound = await call(route.handler, { action: 'motion-pack-unbind' })
+    assert.equal(unbound.status, 200)
+    assert.equal(unbound.body.cleared, true)
+    assert.equal(unbound.body.view.character.motionBinding, null)
+    const rebound = await call(route.handler, {
+      action: 'motion-pack-bind',
+      args: { packId, identityConfirmed: true, mapping: { idle: 'idle' } },
+    })
+    assert.equal(rebound.status, 200)
+
     const fetchedPack = await call(route.handler, { action: 'motion-pack-get', args: { packId } })
     assert.equal(fetchedPack.status, 200)
     assert.equal(fetchedPack.body.pack.displayName, 'Whale Gesture Test')
@@ -590,6 +622,7 @@ test('DyberPet motion pack upload persists verified PNG frames, supports preview
       '/api/dsh-virtual-avatar/motion-packs/' + packId + '/action/stand_0.png')
     assert.equal(frame.status, 200)
     assert.equal(frame.headers['Content-Type'], 'image/png')
+    assert.match(frame.headers['Cache-Control'], /immutable/)
     assert.deepEqual(frame.body, png)
 
     const after = await call(route.handler, { action: 'view' })
@@ -603,6 +636,8 @@ test('DyberPet motion pack upload persists verified PNG frames, supports preview
     assert.equal(removed.status, 200)
     assert.equal(removed.body.deleted, true)
     assert.equal(plugin.store.listMotionPacks().length, 0)
+    const noBindingAfterUninstall = await call(route.handler, { action: 'view' })
+    assert.equal(noBindingAfterUninstall.body.character.motionBinding, null)
   } finally {
     if (typeof cleanup === 'function') cleanup()
     rmSync(home, { recursive: true, force: true })
