@@ -328,12 +328,14 @@ function Companion() {
   }
 
   const loadInstalledMotionPack = async packId => {
+    const requestId = ++motionRequestRef.current
     setMotionPreviewBusy(true)
     setMotionPreviewError('')
     setMotionPlaying(false)
     setMotionPreview(null)
     try {
       const result = await callApi('motion-pack-get', { packId })
+      if (requestId !== motionRequestRef.current) return
       const pack = result.pack
       if (!pack?.catalog?.actions) throw new Error('本地动作包清单不完整。')
       const frameUrls = {}
@@ -355,8 +357,8 @@ function Companion() {
       setMotionActionId(pack.catalog.defaultAction || Object.keys(pack.catalog.actions)[0])
       setMotionPlaybackStep(0)
     } catch (error) {
-      setMotionPreviewError(error.message || String(error))
-    } finally { setMotionPreviewBusy(false) }
+      if (requestId === motionRequestRef.current) setMotionPreviewError(error.message || String(error))
+    } finally { if (requestId === motionRequestRef.current) setMotionPreviewBusy(false) }
   }
 
   const importMotionPack = async () => {
@@ -376,6 +378,7 @@ function Companion() {
       })
       sessionId = begun.sessionId
       motionImportSessionRef.current = sessionId
+      if (controller.signal.aborted) { const cancelled = new Error('动作包导入已取消。'); cancelled.name = 'AbortError'; throw cancelled }
       for (let index = 0; index < motionPreview.frameEntries.length; index++) {
         const item = motionPreview.frameEntries[index]
         const url = API + '/motion-pack-upload?session=' + encodeURIComponent(sessionId) + '&path=' + encodeURIComponent(item.path)
@@ -390,6 +393,7 @@ function Companion() {
         if (!response.ok || result.ok === false) throw new Error(result.error || '动作帧上传失败：' + item.path)
         setMotionImportProgress({ current: index + 1, total: motionPreview.frameEntries.length })
       }
+      if (controller.signal.aborted) { const cancelled = new Error('动作包导入已取消。'); cancelled.name = 'AbortError'; throw cancelled }
       const committed = await callApi('motion-pack-commit', { sessionId })
       motionImportSessionRef.current = null
       setNotice(committed.duplicate ? '这个动作包已经在本地动作库中，无需重复导入。' : '动作包已安全保存到本地动作库；尚未应用到鲸鱼娘。')
@@ -967,7 +971,7 @@ function Companion() {
               webkitdirectory: '',
               directory: '',
               multiple: true,
-              disabled: motionPreviewBusy,
+              disabled: motionPreviewBusy || motionImportBusy,
               'aria-label': '选择 DyberPet 角色文件夹',
               onChange: event => {
                 const files = Array.from(event.target.files || [])
