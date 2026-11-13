@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto'
 import { createDeepseekWhaleRuntime, createPplRuntime } from '../../ppl/index.mjs'
 import {
   applyPplConfiguration,
-  normalizePplConfiguration,
   resolvePplConfiguration,
   PPL_CONFIGURATION_SCHEMA,
   PPL_CONFIGURATION_FIELDS,
@@ -541,7 +540,7 @@ export class DeepseekWhaleService {
     const applied = applyPplConfiguration(this.basePplIr, raw)
     const preview = this.previewPplConfiguration(applied.overrides)
     const previousOverrides = loaded.state.pplConfigOverrides || {}
-    if (hashPplValue(previousOverrides) === hashPplValue(applied.overrides)) {
+    if (!this.pplConfigurationLoadError && hashPplValue(previousOverrides) === hashPplValue(applied.overrides)) {
       return {
         changed: false,
         revision: loaded.revision,
