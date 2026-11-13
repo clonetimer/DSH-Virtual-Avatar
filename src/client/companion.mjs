@@ -2295,7 +2295,7 @@ function Companion() {
           )),
         ) : null,
         ),
-        ['summary', 'profile', 'diagnostics', 'backups', 'memories', 'motion'].includes(activePanel)
+        ['summary', 'profile', 'diagnostics', 'backups', 'memories', 'motion', 'model', 'background', 'help', 'ppl-config'].includes(activePanel)
           ? React.createElement('div', { className: 'dva-utility-overlay' },
 
         activePanel === 'motion' ? React.createElement('div', { className: 'dva-memories dva-motion-panel' },
