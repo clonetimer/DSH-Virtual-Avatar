@@ -423,6 +423,7 @@ export function apply(ctx, config = {}) {
         runtime: persona ? 'loaded' : 'unavailable',
         rules: Array.isArray(persona?.rules) ? persona.rules.length : 0,
         auditSchema: 'ppl.execution-audit/0.1',
+        configuration: service.getPplConfiguration(),
         registered: personaRegistry.list(),
       },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, motionPackCount: motionPacks.length, motionPackFrames, motionPackBytes, mediaDirectory, backupDirectory },
@@ -602,12 +603,24 @@ export function apply(ctx, config = {}) {
 
       if (action === 'ppl-audit-history') {
         const limit = Number.isSafeInteger(args.limit) ? Math.max(1, Math.min(50, args.limit)) : 30
-        const completed = store.listAuditEvents('character', 'deepseek', { limit: 100 })
+        const characterAudit = store.listAuditEvents('character', 'deepseek', { limit: 100 })
+        const completed = characterAudit
           .filter(event => event.type === 'TURN_COMPLETED' && event.details?.pplAudit)
           .map(event => ({
             ...event,
             status: 'committed',
             ppl: event.details.pplAudit,
+          }))
+        const configurationChanges = characterAudit
+          .filter(event => event.type === 'PPL_CONFIGURATION_UPDATED')
+          .map(event => ({
+            ...event,
+            status: 'configuration',
+            ppl: {
+              schema: event.details.schema,
+              irSha256: event.details.irSha256,
+              configuration: { changes: event.details.changes || [] },
+            },
           }))
         const rejected = store.listAuditEvents('ppl-runtime', 'deepseek', { limit: 100 })
           .filter(event => event.type === 'PPL_RESOLUTION_REJECTED')
@@ -616,7 +629,7 @@ export function apply(ctx, config = {}) {
             status: 'rejected',
             ppl: event.details,
           }))
-        const events = [...completed, ...rejected]
+        const events = [...completed, ...configurationChanges, ...rejected]
           .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(b.id).localeCompare(String(a.id)))
           .slice(0, limit)
         json(res, 200, { ok: true, schema: 'ppl.execution-audit/0.1', events })
@@ -1177,6 +1190,32 @@ export function apply(ctx, config = {}) {
         const next = { ...loaded.state, chosenBuiltinBackground: key, backgroundOverlay: overlay }
         const saved = store.saveCharacterState('deepseek', next, loaded.revision)
         json(res, 200, { ok: true, background: key, revision: saved.revision, view: publicView(service, memoryService, runtimeConfig, store) })
+        return
+      }
+
+      if (action === 'ppl-config-get') {
+        json(res, 200, { ok: true, configuration: service.getPplConfiguration() })
+        return
+      }
+
+      if (action === 'ppl-config-preview') {
+        json(res, 200, { ok: true, preview: service.previewPplConfiguration(args.configuration || {}) })
+        return
+      }
+
+      if (action === 'ppl-config-set') {
+        const result = service.updatePplConfiguration(args.configuration || {}, {
+          expectedRevision: args.expectedRevision,
+        })
+        json(res, 200, { ok: true, ...result })
+        return
+      }
+
+      if (action === 'ppl-config-reset') {
+        const result = service.resetPplConfiguration({
+          expectedRevision: args.expectedRevision,
+        })
+        json(res, 200, { ok: true, ...result })
         return
       }
 
