@@ -84,6 +84,14 @@ const CSS = `
 .dva-help-guide section{padding:10px;border:1px solid #ffffff22;border-radius:10px;background:#ffffff08}
 .dva-help-guide h4{margin:0 0 5px;color:#eaf5ff}
 .dva-help-guide p{margin:0;color:#b8d8e9;font-size:12px}
+.dva-help-actions,.dva-chat-failure-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+.dva-help-action,.dva-chat-failure-actions button{border:1px solid #77b8df;border-radius:9px;background:#174b70;color:#f2f9ff;padding:7px 10px;font-size:11px;cursor:pointer}
+.dva-chat-failure{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #ffad8e77;border-radius:11px;background:#4b2430dd;color:#ffe2d8;font-size:12px}
+.dva-chat-failure-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.dva-chat-failure-copy p{margin:0;color:#ffd0c2;line-height:1.5}
+.dva-chat-failure-copy small{color:#e8bdb2;overflow-wrap:anywhere}
+.dva-chat-failure-actions{flex:0 0 auto;margin-top:0}
+.dva-chat-failure-actions button:disabled{opacity:.5;cursor:wait}
 
 @media(max-width:900px){.dva-memory-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dva-memory-toolbar input{grid-column:1/-1}.dva-memory-head{align-items:center}.dva-panel-back{padding:7px 10px}}
 .dva-title{font-size:18px;font-weight:700}.dva-sub{font-size:12px;color:#a9c9df;margin-top:4px}
@@ -160,9 +168,75 @@ async function callApi(action, args = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, args }),
   })
-  const result = await response.json()
-  if (!response.ok || result.ok === false) throw new Error(result.error || '请求失败')
+  let result
+  try {
+    result = await response.json()
+  } catch {
+    const error = new Error('DSH Host 返回了无法识别的响应（HTTP ' + response.status + '）。')
+    error.code = 'HOST_RESPONSE_INVALID'
+    error.status = response.status
+    throw error
+  }
+  if (!response.ok || result.ok === false) {
+    const error = new Error(result.error || '请求失败')
+    error.code = result.code || 'AVATAR_ERROR'
+    error.status = response.status
+    if (typeof result.provider === 'string') error.provider = result.provider
+    if (typeof result.model === 'string') error.model = result.model
+    throw error
+  }
   return result
+}
+
+function createChatEventId() {
+  let id = ''
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') id = crypto.randomUUID()
+  } catch { /* use the local fallback below */ }
+  if (!id) id = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+  return 'whale-chat-' + id
+}
+
+function describeChatFailure(error = {}) {
+  const code = String(error?.code || '')
+  const detail = String(error?.message || error || '未知错误').trim().slice(0, 240)
+  const failure = {
+    title: '本次对话未完成',
+    hint: '输入内容已保留。可以重试本次消息；重试会复用请求编号，避免重复写入聊天记录和关系成长。',
+    detail,
+    code,
+    provider: typeof error?.provider === 'string' ? error.provider : '',
+    model: typeof error?.model === 'string' ? error.model : '',
+    retryable: true,
+    suggestedAction: null,
+  }
+  if (code === 'MODEL_NOT_CONFIGURED' || code === 'MODEL_PROVIDER_UNAVAILABLE' || code === 'MODEL_SELECTION_LOCKED') {
+    failure.title = '聊天模型尚未就绪'
+    failure.hint = '先打开模型设置，选择一个已在 DSH 中启用的服务商和模型，并完成连接测试。'
+    failure.retryable = false
+    failure.suggestedAction = 'model'
+  } else if (code === 'LLM_STREAM_FAILED' || code === 'MODEL_TEST_FAILED' || /transport failed/i.test(detail)) {
+    failure.title = '模型服务连接中断'
+    failure.hint = '检查服务商状态、API 凭证、接口地址、调用额度和网络，然后重试本次消息。'
+  } else if (code === 'REVISION_CONFLICT') {
+    failure.title = '角色状态刚刚发生变化'
+    failure.hint = '本次回复没有提交。重试即可基于最新角色状态继续对话。'
+  } else if (code === 'EVENT_ID_CONFLICT') {
+    failure.title = '消息请求编号冲突'
+    failure.hint = '这条请求编号已被另一条消息使用。请关闭提示，再发送输入框中的当前内容。'
+    failure.retryable = false
+  } else if (code === 'HOST_RESPONSE_INVALID') {
+    failure.title = '桌宠服务返回异常'
+    failure.hint = 'DSH Host 返回的数据无法读取。可以刷新鲸鱼娘状态后重试。'
+  } else if (error?.name === 'AbortError' || /timed? ?out|timeout/i.test(detail)) {
+    failure.title = '模型响应超时'
+    failure.hint = '服务端在等待模型响应时超时。可以稍后重试，或在模型设置中选择响应更快的模型。'
+    failure.suggestedAction = 'model'
+  } else if (error?.name === 'TypeError' || /failed to fetch|network error|load failed/i.test(detail)) {
+    failure.title = '无法连接 DSH Host'
+    failure.hint = '检查 DSH Desktop 是否仍在运行，然后刷新鲸鱼娘状态并重试。'
+  }
+  return failure
 }
 
 const MOTION_BINDING_SLOTS = Object.freeze([
@@ -365,6 +439,7 @@ function Companion() {
   const [avatarExpressionOverride, setAvatarExpressionOverride] = useState(null)
   const [sceneBusy, setSceneBusy] = useState(false)
   const [error, setError] = useState('')
+  const [chatFailure, setChatFailure] = useState(null)
   const [memories, setMemories] = useState([])
   const [memoryQuery, setMemoryQuery] = useState('')
   const [memoryLevel, setMemoryLevel] = useState('all')
@@ -772,20 +847,26 @@ function Companion() {
     setAvatarBubble(view?.character?.presentation?.patReply || '嘿嘿，主人摸摸我啦～')
   }
 
-  const send = useCallback(async (message, choiceId) => {
+  const send = useCallback(async (message, choiceId, retryEventId = null) => {
     const clean = String(message || '').trim()
     if (!clean || busy) return
+    const eventId = retryEventId || createChatEventId()
     setBusy(true)
     setAvatarBubble('')
     setAvatarExpressionOverride(null)
     setAvatarMotion('thinking')
     setError('')
+    setChatFailure(null)
     setNotice('')
     try {
-      const result = await callApi('chat', { text: clean, choiceId })
+      const result = await callApi('chat', { text: clean, choiceId, eventId })
       setView(result.view)
+      setChatFailure(null)
       setAvatarMotion('responding')
       setText(current => current === clean ? '' : current)
+      if (result.duplicate) {
+        setNotice('已找回上一条已经完成的回复，没有重复写入聊天记录或关系成长。')
+      }
       if (!choiceId) {
         try {
           const suggestions = await callApi('memory-candidates', { text: clean })
@@ -798,7 +879,12 @@ function Companion() {
       setAvatarMotion('idle')
       setAvatarBubble('')
       setAvatarExpressionOverride(null)
-      setError('本次对话未完成：' + (err.message || String(err)) + '。输入内容已保留，可以重试。')
+      setChatFailure({
+        ...describeChatFailure(err),
+        text: clean,
+        choiceId: choiceId || null,
+        eventId,
+      })
     }
     finally { setBusy(false) }
   }, [busy])
@@ -919,6 +1005,7 @@ function Companion() {
       setModelCatalog(catalog)
       setModelDraftProvider(result.selection.provider)
       setModelDraftModel(result.selection.model)
+      setModelTestResult(null)
       setNotice('鲸鱼娘的模型选择已保存，不会修改 DSH 其他 Agent 的默认模型。')
     } catch (err) {
       setError(err.message || String(err))
@@ -1630,6 +1717,7 @@ function Companion() {
                 const entry = modelCatalog?.providers?.find(item => item.id === provider)
                 setModelDraftProvider(provider)
                 setModelDraftModel(entry?.models?.[0]?.id || '')
+                setModelTestResult(null)
               },
             },
               React.createElement('option', { value: '' }, '请选择已启用的服务商'),
@@ -1643,7 +1731,7 @@ function Companion() {
               maxLength: 256,
               disabled: modelCatalogBusy || modelCatalog?.locked || modelSaving || !modelDraftProvider,
               placeholder: '例如 deepseek-v4-flash',
-              onChange: event => setModelDraftModel(event.target.value),
+              onChange: event => { setModelDraftModel(event.target.value); setModelTestResult(null) },
             }),
           ),
           (() => {
@@ -1655,7 +1743,7 @@ function Companion() {
                   React.createElement('select', {
                     value: models.some(item => item.id === modelDraftModel) ? modelDraftModel : '',
                     disabled: modelCatalogBusy || modelCatalog?.locked || modelSaving,
-                    onChange: event => setModelDraftModel(event.target.value),
+                    onChange: event => { setModelDraftModel(event.target.value); setModelTestResult(null) },
                   },
                     React.createElement('option', { value: '' }, '手动填写模型 ID'),
                     ...models.map(item => React.createElement('option', { key: item.id, value: item.id }, item.name + '（' + item.id + '）')),
@@ -1746,27 +1834,54 @@ function Companion() {
           ),
           React.createElement('section', null,
             React.createElement('h4', null, '1. 模型与聊天'),
-            React.createElement('p', null, '打开“模型设置”，选择 DSH 已启用的服务商和模型，保存后测试连接，再发送一条新消息。诊断页应显示同一个 Provider / Model。'),
+            React.createElement('p', null, '选择 DSH 已启用的服务商和模型，保存后测试连接，再发送一条新消息。诊断页应显示同一个 Provider / Model。'),
+            React.createElement('div', { className: 'dva-help-actions' },
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => void loadModelSettings() }, '打开模型设置'),
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => void loadDiagnostics() }, '检查当前模型'),
+            ),
           ),
           React.createElement('section', null,
             React.createElement('h4', null, '2. 角色与场景'),
             React.createElement('p', null, '点击鲸鱼娘立绘测试摸摸反馈；切换“私密空间 / 公开场合”，分别发送一条日常消息，观察回复风格和角色状态。'),
+            React.createElement('div', { className: 'dva-help-actions' },
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: closeUtilityPanel }, '返回聊天测试场景'),
+            ),
           ),
           React.createElement('section', null,
             React.createElement('h4', null, '3. 历史、记忆与关系'),
             React.createElement('p', null, '发送几条有明确偏好的消息；在记忆建议中确认一条，再到“查看记忆”中搜索、置顶、编辑、取消置顶、删除并导出。用“搜索对话”和“关系记录”检查历史与关系事件。长期摘要需要先生成候选，再由你确认更新。'),
+            React.createElement('div', { className: 'dva-help-actions' },
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => openUtilityPanel('history') }, '搜索对话'),
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => { openUtilityPanel('memories'); void loadMemories() } }, '查看记忆'),
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => void loadRelationshipHistory() }, '关系记录'),
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => void loadSummaryCandidate() }, '整理长期摘要'),
+            ),
           ),
           React.createElement('section', null,
             React.createElement('h4', null, '4. 外观与桌面交互'),
             React.createElement('p', null, '在“背景与亮度”中切换背景和遮罩强度；测试收起 / 重新打开鲸鱼娘，以及减少动态效果设置。'),
+            React.createElement('div', { className: 'dva-help-actions' },
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: openBackgroundPanel }, '打开背景与亮度'),
+            ),
           ),
           React.createElement('section', null,
             React.createElement('h4', null, '5. 动作库与动画'),
             React.createElement('p', null, '先选择 DyberPet 文件夹并播放预览，再导入到本地动作库，重新打开已保存动作包，检查映射建议和逐项预览。只有确认素材与鲸鱼娘形象一致且有使用权时，才绑定并测试 PPL 动作切换；最后解除绑定。'),
+            React.createElement('div', { className: 'dva-help-actions' },
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => openUtilityPanel('motion') }, '打开动作库与动画'),
+            ),
           ),
           React.createElement('section', null,
             React.createElement('h4', null, '6. 备份与诊断'),
             React.createElement('p', null, '先创建备份，再进行恢复测试；恢复会覆盖当前角色数据，务必确认备份有效。运行诊断并导出报告，检查模型、PPL、SQLite、记忆、动作包和最近错误。'),
+            React.createElement('div', { className: 'dva-help-actions' },
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => void loadBackups() }, '打开备份与恢复'),
+              React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => void loadDiagnostics() }, '运行诊断'),
+            ),
+          ),
+          React.createElement('section', null,
+            React.createElement('h4', null, '7. 消息失败与重试'),
+            React.createElement('p', null, '如果模型请求中断，输入内容会保留。点击“重试本次消息”会复用同一个请求编号；如果服务端其实已经完成回复，系统会找回原回复，而不是再次计入关系成长。'),
           ),
           React.createElement('small', { className: 'dva-motion-note' }, '不要使用其他角色的素材绑定鲸鱼娘。测试删除、卸载或恢复前，先确认已备份需要保留的数据。'),
           React.createElement('button', { type: 'button', onClick: closeUtilityPanel }, '关闭指南'),
@@ -1874,6 +1989,31 @@ function Companion() {
             className: 'dva-starter',
             onClick: () => void send(prompt),
           }, prompt)),
+        ) : null,
+        chatFailure ? React.createElement('div', { className: 'dva-chat-failure', role: 'alert' },
+          React.createElement('div', { className: 'dva-chat-failure-copy' },
+            React.createElement('strong', null, chatFailure.title),
+            React.createElement('p', null, chatFailure.hint),
+            React.createElement('small', null, '保留的消息：' + chatFailure.text),
+            chatFailure.code ? React.createElement('small', null, '错误代码：' + chatFailure.code) : null,
+            chatFailure.provider || chatFailure.model
+              ? React.createElement('small', null, '模型：' + [chatFailure.provider, chatFailure.model].filter(Boolean).join(' / '))
+              : null,
+            React.createElement('small', null, chatFailure.detail),
+          ),
+          React.createElement('div', { className: 'dva-chat-failure-actions' },
+            chatFailure.suggestedAction === 'model'
+              ? React.createElement('button', { type: 'button', onClick: () => void loadModelSettings() }, '打开模型设置')
+              : null,
+            chatFailure.retryable
+              ? React.createElement('button', {
+                  type: 'button',
+                  disabled: busy,
+                  onClick: () => void send(chatFailure.text, chatFailure.choiceId, chatFailure.eventId),
+                }, busy ? '重试中…' : '重试本次消息')
+              : null,
+            React.createElement('button', { type: 'button', onClick: () => setChatFailure(null) }, '关闭'),
+          ),
         ) : null,
         error ? React.createElement('div', { className: 'dva-error', role: 'alert' }, error) : null,
         notice ? React.createElement('div', { className: 'dva-notice', role: 'status' }, notice) : null,
