@@ -19,6 +19,14 @@ const API_PATH = '/api/dsh-virtual-avatar'
 const MAX_BODY_BYTES = 256 * 1024
 const MAX_HISTORY = 12
 const ASSET_ROOT = fileURLToPath(new URL('../../assets/deepseek-whale/', import.meta.url))
+const CHARACTER_ASSET_ROOT = fileURLToPath(new URL('../../assets/characters/', import.meta.url))
+const CHARACTER_ASSETS = Object.freeze({
+  'characters/zhuang-fangyi/portrait.webp': Object.freeze({
+    root: CHARACTER_ASSET_ROOT,
+    file: 'zhuang-fangyi/portrait.webp',
+    contentType: 'image/webp',
+  }),
+})
 const PPL_SOURCE_PATH = fileURLToPath(new URL('../../personas/deepseek-whale.ppl', import.meta.url))
 const PPL_IR_PATH = fileURLToPath(new URL('../../personas/deepseek-whale.pir.json', import.meta.url))
 const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version
@@ -337,8 +345,11 @@ function genericRoleView(role, service) {
       personaId: role.personaId,
       kind: role.kind,
       name: service.displayName,
-      hasDedicatedArtwork: false,
+      hasDedicatedArtwork: Boolean(role.hasDedicatedArtwork && role.artwork?.portrait),
       avatarLabel: String(service.displayName || '?').slice(0, 1),
+      artwork: role.artwork || null,
+      avatarUrl: role.artwork?.avatar ? API_PATH + '/assets/' + role.artwork.avatar : null,
+      portraitUrl: role.artwork?.portrait ? API_PATH + '/assets/' + role.artwork.portrait : null,
       description: role.description,
       relationship: {
         stage: String(relation.stage || 'acquaintance'),
@@ -526,13 +537,16 @@ export function apply(ctx, config = {}) {
     const assetMarker = pathname.lastIndexOf('/assets/')
     if (req.method === 'GET' && assetMarker >= 0) {
       const assetName = decodeURIComponent(pathname.slice(assetMarker + '/assets/'.length))
-      const contentType = ASSET_TYPES[assetName]
-      if (!contentType || assetName.includes('/') || assetName.includes('\\\\')) {
+      const characterAsset = CHARACTER_ASSETS[assetName]
+      const contentType = characterAsset?.contentType || ASSET_TYPES[assetName]
+      if (!contentType || (!characterAsset && (assetName.includes('/') || assetName.includes('\\\\')))) {
         json(res, 404, { ok: false, error: 'asset not found' })
         return
       }
       try {
-        const bytes = readFileSync(join(ASSET_ROOT, assetName))
+        const root = characterAsset?.root || ASSET_ROOT
+        const filename = characterAsset?.file || assetName
+        const bytes = readFileSync(join(root, filename))
         res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=86400' })
         res.end(bytes)
       } catch {
