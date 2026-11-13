@@ -123,6 +123,8 @@ test('built client preserves companion features without bundling its own React',
   assert.match(artifact, /motion-pack-delete/)
   assert.match(artifact, /motion-pack-bind/)
   assert.match(artifact, /motion-pack-unbind/)
+  assert.match(artifact, /motion-pack-runtime/)
+  assert.match(artifact, /runtimeMotionCatalogPackId/)
   assert.match(artifact, /identityConfirmed/)
   assert.match(artifact, /我已确认：这份动作素材的角色外观与鲸鱼娘一致/)
   assert.match(artifact, /按 PPL 情绪细分动作/)
