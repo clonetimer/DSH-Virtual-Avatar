@@ -194,7 +194,9 @@ function selectModel(llm, agentDefaultModel, config, store = null) {
       if (provider) return { provider: String(provider.id), model: String(config.fallbackModel || 'deepseek-v4-flash'), source: 'fallback' }
     }
   } catch { /* report missing model selection below */ }
-  throw new Error('No DSH model is configured. Select a model in Whale settings or configure the DSH default model.')
+  const error = new Error('No DSH model is configured. Select a model in Whale settings or configure the DSH default model.')
+  error.code = 'MODEL_NOT_CONFIGURED'
+  throw error
 }
 
 function safeBackgroundAsset(state) {
