@@ -18,7 +18,7 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 
 **当前产品不开发 Galgame 章节、剧情分支、结局、游戏式回复选项、小剧场或 CG。** 桌面宠物动画也不作为本阶段交付门槛。上游 Whale 项目仅作为角色设定、存档和素材来源。
 
-当前目标宿主为 DSH 0.2.2-rc.1，要求 Node.js >=24.9.0；CI 采用 Node 24.9.0 / 24 双矩阵。插件通过 `engines.dsh` 声明兼容范围 `>=0.2.2-rc.1 <0.2.3-0`。请查看 [实施状态与验收证据](docs/implementation-status.md)、[PPL-2 情绪状态与互动意图](docs/ppl-emotion-state.md)、[PPL Persona Registry](docs/ppl-persona-registry.md)、[日常交互体验改进](docs/companion-everyday-ux.md) 和 [DyberPet 动作兼容与记忆面板修复](docs/dyberpet-motion-compatibility.md) 和 [PPL 表情驱动与自主待机行为](docs/ppl-driven-whale-presentation.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
+当前目标宿主为 DSH 0.2.2-rc.1，要求 Node.js >=24.9.0；CI 采用 Node 24.9.0 / 24 双矩阵。插件通过 `engines.dsh` 声明兼容范围 `>=0.2.2-rc.1 <0.2.3-0`。请查看 [实施状态与验收证据](docs/implementation-status.md)、[PPL-2 情绪状态与互动意图](docs/ppl-emotion-state.md)、[PPL Persona Registry](docs/ppl-persona-registry.md)、[日常交互体验改进](docs/companion-everyday-ux.md) 和 [DyberPet 动作兼容与记忆面板修复](docs/dyberpet-motion-compatibility.md) 和 [PPL 表情驱动与自主待机行为](docs/ppl-driven-whale-presentation.md)、[DyberPet 本地动作库与持久化导入](docs/dyberpet-motion-library.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
 
 ## DSH 插件安装与 P4 宿主验收
 
@@ -153,3 +153,13 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - 本轮 **仅预览**：PNG 文件保留在当前浏览器实例，不上传到 Host，不写入 SQLite，也不替换鲸鱼娘立绘或其他角色数据。关闭预览后释放临时文件 URL。
 - 角色包可能使用不同角色的美术形象。用户可在预览中检查形象一致性；只有具备相应鲸鱼娘授权帧图时，才能进入正式逐帧动画启用阶段。
 - 详见 [DyberPet 角色动作预览说明](docs/dyberpet-folder-preview.md)。
+
+## DyberPet 本地动作库与持久化导入（dev.11）
+
+- 在「更多 → 角色与外观 → 动作包预览」中，先选择本地 DyberPet 角色目录进行预览，再由用户明确点击「导入到本地动作库（不启用）」持久化保存。
+- 动作帧逐张以 `image/png` 二进制上传至同源 DSH Host，避免把几十 MB 图片编码成单个 JSON 请求。
+- Host 校验上传会话、文件路径、PNG 签名、单帧/总容量；完整帧到齐后才通过 SQLite 事务提交。每帧记录 SHA-256 和大小，读取时重新核验。
+- 本地动作库支持列出、再次预览、重复包去重和确认卸载；动作资源随插件私有 assets 目录自动进入备份。
+- 导入动作包只会保存素材，不会自动启用，也不会替换 Whale 立绘、PPL、关系、聊天或记忆。
+- 当前尚无形象匹配且授权明确的 Whale 多帧素材包。Kitty/ChrisKitty 等示例仅用于验证格式与播放器，不得当作鲸鱼娘动画。
+- 详见 [DyberPet 本地动作库与持久化导入说明](docs/dyberpet-motion-library.md)。
