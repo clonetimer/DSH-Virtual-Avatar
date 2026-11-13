@@ -298,6 +298,7 @@ function Companion() {
   const [motionIdentityConfirmed, setMotionIdentityConfirmed] = useState(false)
   const [motionBindingBusy, setMotionBindingBusy] = useState(false)
   const [runtimeMotionStep, setRuntimeMotionStep] = useState(0)
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
   const motionRequestRef = React.useRef(0)
   const [motionPacks, setMotionPacks] = useState([])
   const [motionLibraryBusy, setMotionLibraryBusy] = useState(false)
@@ -499,6 +500,7 @@ function Companion() {
     try {
       const result = await callApi('motion-pack-delete', { packId: pack.id, confirmed: true })
       if (result.deleted && motionPreview?.packId === pack.id) setMotionPreview(null)
+      if (result.view) setView(result.view)
       setNotice(result.deleted ? '动作包已从本地动作库卸载。' : '动作包已不存在。')
       await loadMotionPacks()
     } catch (error) { setMotionPreviewError(error.message || String(error)) }
@@ -834,10 +836,23 @@ function Companion() {
     : null
 
   useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    if (!media) return
+    const update = () => setPrefersReducedMotion(media.matches)
+    update()
+    media.addEventListener?.('change', update)
+    return () => media.removeEventListener?.('change', update)
+  }, [])
+
+  useEffect(() => {
     setRuntimeMotionStep(0)
   }, [runtimeBinding?.packId, runtimeMotionActionId, avatarMotion])
 
   useEffect(() => {
+    if (prefersReducedMotion) {
+      setRuntimeMotionStep(0)
+      return
+    }
     if (!runtimeMotionAction || !runtimeMotionFrameTotal) return
     const loops = avatarMotion === 'idle' || avatarMotion === 'thinking' || avatarMotion === 'swaying'
     if (!loops && runtimeMotionStep >= runtimeMotionFrameTotal - 1) return
@@ -847,11 +862,11 @@ function Companion() {
         : Math.min(step + 1, runtimeMotionFrameTotal - 1))
     }, Math.max(30, runtimeMotionAction.frameIntervalMs))
     return () => window.clearTimeout(timer)
-  }, [runtimeMotionActionId, runtimeMotionFrameTotal, runtimeMotionAction?.frameIntervalMs, avatarMotion, runtimeMotionStep])
+  }, [runtimeMotionActionId, runtimeMotionFrameTotal, runtimeMotionAction?.frameIntervalMs, avatarMotion, runtimeMotionStep, prefersReducedMotion])
 
   useEffect(() => {
     if (!runtimeMotionAction) return
-    const images = runtimeMotionAction.frames.map(path => {
+    const images = runtimeMotionAction.frames.slice(0, 12).map(path => {
       const image = new Image()
       const url = API + '/motion-packs/' + encodeURIComponent(runtimeBinding.packId) + '/' +
         path.split('/').map(encodeURIComponent).join('/')
