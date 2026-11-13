@@ -120,6 +120,63 @@ function describeCharacterState(state = {}, presentation = {}) {
   return { mood, shyness }
 }
 
+
+const MAX_MOTION_PREVIEW_FILES = 1200
+const MAX_MOTION_PREVIEW_BYTES = 64 * 1024 * 1024
+const PNG_MAGIC = [137, 80, 78, 71, 13, 10, 26, 10]
+
+async function readDyberPetPreviewFolder(files) {
+  const selected = Array.from(files || [])
+  if (!selected.length) throw new Error('请选择包含 pet_conf.json、act_conf.json 和 action 文件夹的角色目录。')
+  if (selected.length > MAX_MOTION_PREVIEW_FILES + 20) throw new Error('动作文件过多，请选择较小的角色包（最多 1200 帧）。')
+  const entries = selected.map(file => ({
+    file,
+    path: String(file.webkitRelativePath || file.name || '').replaceAll('\\', '/'),
+  }))
+  const configs = entries.filter(item => item.path.endsWith('/pet_conf.json') || item.path === 'pet_conf.json')
+  if (configs.length !== 1) throw new Error('请选择一个角色目录，且目录中必须只有一份 pet_conf.json。')
+  const root = configs[0].path.slice(0, -'pet_conf.json'.length)
+  const act = entries.find(item => item.path === root + 'act_conf.json')
+  if (!act) throw new Error('缺少 act_conf.json，请选择完整的 DyberPet 角色目录。')
+  if (configs[0].file.size > 64 * 1024 || act.file.size > 64 * 1024) {
+    throw new Error('动作配置文件不能超过 64 KB。')
+  }
+  const frames = entries
+    .filter(item => item.path.startsWith(root + 'action/'))
+    .map(item => ({ file: item.file, path: item.path.slice(root.length) }))
+  if (!frames.length) throw new Error('没有找到 action 文件夹中的 PNG 动作帧。')
+  if (frames.length > MAX_MOTION_PREVIEW_FILES) throw new Error('动作帧超过 1200 张，请减少帧数后重新选择。')
+  if (frames.reduce((sum, item) => sum + item.file.size, 0) > MAX_MOTION_PREVIEW_BYTES) {
+    throw new Error('预览素材超过 64 MB，请先缩减角色动画资源。')
+  }
+  for (const item of frames) {
+    if (!/^action\/[A-Za-z0-9_-]+_[0-9]+\.png$/i.test(item.path) || !item.file.size || item.file.size > 6 * 1024 * 1024) {
+      throw new Error('动作帧文件名或大小异常：' + item.path)
+    }
+  }
+  const signatures = await Promise.all(frames.map(async item => {
+    const data = new Uint8Array(await item.file.slice(0, 8).arrayBuffer())
+    return data.length === PNG_MAGIC.length && PNG_MAGIC.every((value, index) => data[index] === value)
+  }))
+  const invalid = signatures.findIndex(value => !value)
+  if (invalid >= 0) throw new Error('动作帧不是有效的 PNG 文件：' + frames[invalid].path)
+  let petConfig
+  let actConfig
+  try {
+    petConfig = JSON.parse(await configs[0].file.text())
+    actConfig = JSON.parse(await act.file.text())
+  } catch {
+    throw new Error('角色配置不是有效 JSON，请检查 pet_conf.json 与 act_conf.json。')
+  }
+  return {
+    roleName: root.split('/').filter(Boolean).at(-1) || '本地角色',
+    petConfig,
+    actConfig,
+    frameFiles: frames.map(item => item.path),
+    frameEntries: frames,
+  }
+}
+
 function Companion() {
   const [view, setView] = useState(null)
   const [open, setOpen] = useState(false)
