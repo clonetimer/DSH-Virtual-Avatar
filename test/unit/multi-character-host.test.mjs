@@ -28,9 +28,14 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     listProviders() { return [{ id: 'deepseek-official', name: 'DeepSeek' }] },
     async listModels() { return [{ id: 'deepseek-v4-flash', name: 'DeepSeek Flash' }] },
     stream: async function* (input) {
-      invocations.push(input)
       assert.equal(input.provider, 'deepseek-official')
       assert.equal(input.model, 'deepseek-v4-flash')
+      if (input.system === 'This is a connectivity test. Reply with OK only.') {
+        yield { type: 'text-delta', text: 'OK' }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+        return
+      }
+      invocations.push(input)
       assert.match(input.system, /庄方宜/)
       assert.doesNotMatch(input.system, /你正在 DeepSeek 鲸鱼娘/)
       assert.match(input.messages[0].content[0].text, /独立 PPL 角色陪伴对话/)
@@ -113,6 +118,11 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     assert.equal(modelGetAfter.body.savedSelection.characterId, 'ppl-zhuang-fangyi')
     const whaleModel = await call(route.handler, 'model-catalog')
     assert.equal(whaleModel.body.savedSelection, null)
+    const roleModelTest = await call(route.handler, 'character-model-test', { characterId: 'ppl-zhuang-fangyi' })
+    assert.equal(roleModelTest.status, 200)
+    assert.equal(roleModelTest.body.test.status, 'success')
+    assert.equal(roleModelTest.body.test.model, 'deepseek-v4-flash')
+    assert.equal(invocations.length, 1, 'connectivity test must not create a companion chat turn')
 
     const beforeConfiguration = await call(route.handler, 'character-config-get', { characterId: 'ppl-zhuang-fangyi' })
     assert.equal(beforeConfiguration.status, 200)
