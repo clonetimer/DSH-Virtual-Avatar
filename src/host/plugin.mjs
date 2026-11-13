@@ -608,6 +608,10 @@ export function apply(ctx, config = {}) {
           throw error
         }
         pruneMotionUploadSessions()
+        if (motionUploadSessions.size >= 3) {
+          json(res, 429, { ok: false, error: '已有 3 个动作包导入任务，请先完成或取消其中一个。', code: 'MOTION_UPLOAD_SESSION_LIMIT' })
+          return
+        }
         const expected = new Set(frameFiles)
         if (expected.size !== frameFiles.length) {
           json(res, 400, { ok: false, error: 'motion pack contains duplicate frame paths', code: 'MOTION_PACK_FRAME_DUPLICATE' })
