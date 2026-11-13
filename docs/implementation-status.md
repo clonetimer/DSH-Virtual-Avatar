@@ -520,3 +520,29 @@
 - Host 集成覆盖角色列表、选择、对话及安全重试、记忆、模型与审计 API。
 - PPL 官方 Core 与参考角色测试继续参与双 Node 测试矩阵。
 - Windows DSH Desktop 0.2.2-rc.1 的实际交互与长期运行需独立验收；CI 通过不替代此门禁。
+
+
+## P5-C2 补全：角色立绘与模型调用链（dev.19）
+
+### 角色形象
+- 为庄方宜增加独立原创 Q 版 SVG 立绘，资源位于 `assets/characters/zhuang-fangyi/portrait.svg`。
+- 角色注册元数据提供独立头像/立绘资源路径；Host 通过精确 allowlist 提供 `image/svg+xml`，不开放任意路径读取。
+- 角色卡、收起态和聊天消息头像均显示角色专属形象，并有轻量待机浮动效果。
+- 形象为 AI 生成概念图，不是《明日方舟：终末地》官方原始素材；后续表情和动作帧仍需单独制作。
+
+### DSH LLM 消息契约修复
+- 修复请求消息组装：`RequestUserInput` 只包含 `role='user'` 和 `content`，不带持久消息 ID 与 source。
+- 历史 assistant 消息是 durable `Message`，包含唯一 `id`、`source.kind='model'`、实际 provider/model 和内容。
+- 两种角色服务均持久化 assistant turn 的 provider/model，context-window 保留这些来源信息。
+- 连接测试和实际聊天复用同一消息构造逻辑；连接测试接受未保存的模型草稿，不再误测当前已保存模型。
+- 对瞬时 `TRANSPORT`、`TIMEOUT`、`SERVER` 错误执行一次有界重试；未获得完整回复前不提交 PPL 状态或对话。
+- 模型目录面板增加加载、错误、空目录、当前路由、手动模型 ID、测试当前选择和测试后保存门禁。
+- 客户端按错误代码区分凭证、未启用服务商、额度、传输和模型兼容问题，提供具体处理指引。
+
+### 新增验收
+- 角色立绘 allowlist 路由与 SVG MIME 类型测试。
+- DSH RequestUserInput 与 durable assistant Message 结构测试。
+- 第二轮对话检查 assistant history 带有真实模型来源。
+- 模型设置对未保存草稿执行真实测试；测试失败保留 TRANSPORT/provider/model 诊断。
+- 瞬时传输失败最多重试一次；连接测试不产生角色对话或关系状态写入。
+- 桌面手动验收：角色立绘、模型目录加载、切换服务商、测试草稿、保存模型、重启恢复和错误提示。
