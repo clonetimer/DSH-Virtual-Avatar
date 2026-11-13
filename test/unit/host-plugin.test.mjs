@@ -172,6 +172,42 @@ test('DSH host plugin serves one DeepSeek Whale companion and commits completed 
     assert.equal(resetProfile.status, 200)
     assert.equal(resetProfile.body.profile.displayName, '鲸鱼娘')
 
+    const pplConfigGet = await call(route.handler, { action: 'ppl-config-get' })
+    assert.equal(pplConfigGet.status, 200)
+    assert.equal(pplConfigGet.body.configuration.schema, 'dsh-virtual-avatar.ppl-config/1')
+    assert.equal(pplConfigGet.body.configuration.effective.traits.warmth, 0.78)
+    const pplConfigPreview = await call(route.handler, {
+      action: 'ppl-config-preview',
+      args: { configuration: { traits: { warmth: 0.9, playfulness: 0.86 }, style: { verbosity: 0.5 } } },
+    })
+    assert.equal(pplConfigPreview.status, 200)
+    assert.equal(pplConfigPreview.body.preview.valid, true)
+    assert.ok(pplConfigPreview.body.preview.scenarios.some(item => item.id === 'public-space' && item.activeRules.includes('PUBLIC_RESTRAINT')))
+    const pplConfigSet = await call(route.handler, {
+      action: 'ppl-config-set',
+      args: {
+        expectedRevision: pplConfigGet.body.configuration.revision,
+        configuration: { traits: { warmth: 0.9, playfulness: 0.86 }, style: { verbosity: 0.5 } },
+      },
+    })
+    assert.equal(pplConfigSet.status, 200)
+    assert.equal(pplConfigSet.body.configuration.effective.traits.warmth, 0.9)
+    const pplAuditAfterConfiguration = await call(route.handler, { action: 'ppl-audit-history', args: { limit: 20 } })
+    assert.equal(pplAuditAfterConfiguration.status, 200)
+    assert.ok(pplAuditAfterConfiguration.body.events.some(item => item.status === 'configuration' && item.ppl.configuration.changes.some(change => change.key === 'warmth')))
+    const invalidPplConfig = await call(route.handler, {
+      action: 'ppl-config-set',
+      args: { configuration: { traits: { warmth: 0.59 } } },
+    })
+    assert.equal(invalidPplConfig.status, 400)
+    assert.equal(invalidPplConfig.body.code, 'PPL_CONFIGURATION_VALUE_OUT_OF_RANGE')
+    const pplConfigReset = await call(route.handler, {
+      action: 'ppl-config-reset',
+      args: { expectedRevision: pplConfigSet.body.revision },
+    })
+    assert.equal(pplConfigReset.status, 200)
+    assert.equal(pplConfigReset.body.configuration.effective.traits.warmth, 0.78)
+
     const background = await call(route.handler, {
       action: 'background-set',
       args: { background: 'bg-deepseek-seaside-study', overlay: 0.24 },
