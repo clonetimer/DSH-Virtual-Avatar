@@ -477,5 +477,15 @@
 - Host API：覆盖读取、预览、保存、恢复、审计和参数越界错误。
 - 桌面端构建测试：检查 PPL 人格调校入口、预设、预览与保存操作进入 classic-script 交付包。
 
+### dev.17 CI verification
+- Node 24 and Node 24.9.0: PASS.
+- Plugin suite: 123 passed / 0 failed on each matrix leg.
+- PPL Core 0.3.0 conformance: 21/21 on each matrix leg.
+- Upstream reference personas: all 3 compile and pass 13 embedded source tests.
+- DeepSeek Whale PPL source tests: 7/7 passed.
+- PPL source/IR/runtime/reference parity verifier: PASS on both matrix legs.
+- PPL configuration tests cover whitelist/range validation, base-value normalization, immutable IR derivation, real runtime preview, persistent save/restart, audit, optimistic revisions, no-op saves and invalid-config recovery.
+- Desktop manual acceptance remains separate from automated CI.
+
 ### 手动验收
 - DSH Desktop 0.2.2-rc.1 安装 dev.17，按《功能使用与桌面验收指南》第 12 节完成滑块、预设、场景预览、保存、重启和恢复默认验收。
