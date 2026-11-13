@@ -313,7 +313,7 @@ export class DeepseekWhaleService {
     }
   }
 
-  finalizeTurn(prepared, { reply, terminalReason = 'completed', emotion = 'normal', choices = [], occurredAt = new Date().toISOString() } = {}) {
+  finalizeTurn(prepared, { reply, terminalReason = 'completed', emotion = 'normal', choices = [], provider = null, model = null, occurredAt = new Date().toISOString() } = {}) {
     if (!prepared || prepared.characterId !== DEEPSEEK_WHALE_ID) throw new TypeError('invalid prepared DeepSeek Whale turn')
     if (!TERMINAL_COMMIT_REASONS.has(String(terminalReason))) {
       return { committed: false, reason: String(terminalReason), state: prepared.baseState }
@@ -338,7 +338,11 @@ export class DeepseekWhaleService {
     reconciled.conversation = structuredClone(next.conversation || { log: [], chatLines: [], choices: [] })
     reconciled.conversation.log.push(
       { role: 'user', text: prepared.input },
-      { role: 'assistant', text: response },
+      {
+        role: 'assistant', text: response,
+        ...(typeof provider === 'string' && provider ? { provider } : {}),
+        ...(typeof model === 'string' && model ? { model } : {}),
+      },
     )
     reconciled.conversation.chatLines.push({
       who: 'user',
@@ -374,6 +378,8 @@ export class DeepseekWhaleService {
       choiceId: prepared.choice?.id || null,
       reply: response,
       terminalReason,
+      llmProvider: provider,
+      llmModel: model,
       requestedAffectionDelta,
       affectionDelta,
       pplEventType: prepared.event.type,
