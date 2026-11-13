@@ -57,5 +57,15 @@
     "plugin": "src/ppl/lib/persona-runtime.js",
     "upstream": "components/foundation/runtime/lib/persona-runtime.js",
     "extension": "per-turn scene override via resolveHostStep(input.scene)"
-  }
+  },
+  "referencePersonas": [
+    {
+      "id": "ZHUANG_FANGYI",
+      "source": "personas/reference/zhuang-fangyi.ppl",
+      "compiled": "personas/reference/zhuang-fangyi.pir.json",
+      "upstreamSource": "components/foundation/core/examples/zhuang_fangyi/persona.ppl",
+      "upstreamCompiled": "components/integrations/deepseek-harness/adapter/reference/zhuang_fangyi.pir.json",
+      "purpose": "isolated PPL reference-companion runtime; no bundled character artwork"
+    }
+  ]
 }
