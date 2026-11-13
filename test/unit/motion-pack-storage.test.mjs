@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SqliteAvatarStore } from '../../src/storage/sqlite-store.mjs'
@@ -91,5 +91,27 @@ test('motion pack deletion returns a stable not-found result for repeated uninst
   try {
     const removed = f.store.deleteMotionPack('00000000-0000-4000-8000-000000000000', { confirmed: true })
     assert.deepEqual(removed, { deleted: false, reason: 'MOTION_PACK_NOT_FOUND' })
+  } finally { f.store.close(); rmSync(f.directory, { recursive: true, force: true }) }
+})
+
+
+test('motion pack startup reconciliation restores an interrupted uninstall and removes orphan staging directories', () => {
+  const f = fixture()
+  try {
+    const imported = f.store.importMotionPack({ displayName: 'Crash recovery', petConfig, actConfig, catalog, frames })
+    const root = join(f.assetDirectory, 'motion-packs')
+    const directory = join(root, imported.pack.id)
+    const tombstone = join(root, '.' + imported.pack.id + '.deleting')
+    f.store.close()
+    renameSync(directory, tombstone)
+    mkdirSync(join(root, '.00000000-0000-4000-8000-000000000000.tmp'), { recursive: true })
+    mkdirSync(join(root, 'orphan-pack'), { recursive: true })
+
+    f.store = new SqliteAvatarStore(f.filename, { assetDirectory: f.assetDirectory })
+    assert.equal(existsSync(directory), true)
+    assert.equal(existsSync(tombstone), false)
+    assert.equal(existsSync(join(root, '.00000000-0000-4000-8000-000000000000.tmp')), false)
+    assert.equal(existsSync(join(root, 'orphan-pack')), false)
+    assert.deepEqual(f.store.readMotionPackFrame(imported.pack.id, 'action/stand_0.png').bytes, PNG)
   } finally { f.store.close(); rmSync(f.directory, { recursive: true, force: true }) }
 })
