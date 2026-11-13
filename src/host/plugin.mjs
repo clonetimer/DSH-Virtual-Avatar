@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { createAvatarStore } from '../storage/sqlite-store.mjs'
 import { DeepseekWhaleService } from '../characters/deepseek-whale/service.mjs'
 import { createDefaultPersonaRegistry } from '../ppl/registry.mjs'
@@ -86,6 +86,23 @@ async function readJsonBody(req) {
     error.status = 400
     throw error
   }
+}
+
+async function readBinaryBody(req, maxBytes) {
+  const chunks = []
+  let bytes = 0
+  for await (const chunk of req) {
+    const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
+    bytes += data.length
+    if (bytes > maxBytes) {
+      const error = new Error('motion frame upload exceeds the 6 MiB per-file limit')
+      error.status = 413
+      error.code = 'MOTION_FRAME_TOO_LARGE'
+      throw error
+    }
+    chunks.push(data)
+  }
+  return Buffer.concat(chunks)
 }
 
 function emotionFromText(text) {
@@ -257,6 +274,39 @@ export function apply(ctx, config = {}) {
   const storageRoot = dshHomePath('storages', 'dsh-virtual-avatar')
   const backupRoot = join(storageRoot, 'backups')
   mkdirSync(backupRoot, { recursive: true, mode: 0o700 })
+  const motionStagingRoot = join(storageRoot, 'motion-staging')
+  mkdirSync(motionStagingRoot, { recursive: true, mode: 0o700 })
+  for (const entry of readdirSync(motionStagingRoot, { withFileTypes: true })) {
+    if (entry.isDirectory() && !entry.isSymbolicLink()) rmSync(join(motionStagingRoot, entry.name), { recursive: true, force: true })
+  }
+  const motionUploadSessions = new Map()
+  const motionUploadTtlMs = 15 * 60 * 1000
+  const pruneMotionUploadSessions = () => {
+    const now = Date.now()
+    for (const [id, session] of motionUploadSessions) {
+      if (now - session.createdAt > motionUploadTtlMs) {
+        rmSync(session.directory, { recursive: true, force: true })
+        motionUploadSessions.delete(id)
+      }
+    }
+  }
+  const getMotionUploadSession = id => {
+    pruneMotionUploadSessions()
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ''))) {
+      const error = new Error('motion upload session id is invalid')
+      error.status = 400
+      error.code = 'MOTION_UPLOAD_SESSION_INVALID'
+      throw error
+    }
+    const session = motionUploadSessions.get(String(id))
+    if (!session) {
+      const error = new Error('motion upload session has expired or does not exist')
+      error.status = 404
+      error.code = 'MOTION_UPLOAD_SESSION_NOT_FOUND'
+      throw error
+    }
+    return session
+  }
   const store = createAvatarStore({ dshHomePath })
   const personaRegistry = createDefaultPersonaRegistry()
   const service = new DeepseekWhaleService({
@@ -371,6 +421,26 @@ export function apply(ctx, config = {}) {
       }
       return
     }
+    const motionFrameMarker = API_PATH + '/motion-packs/'
+    if (req.method === 'GET' && pathname.startsWith(motionFrameMarker)) {
+      try {
+        const parts = pathname.slice(motionFrameMarker.length).split('/').map(decodeURIComponent)
+        if (parts.length !== 3 || parts[1] !== 'action' || !/^[0-9a-f-]{36}$/i.test(parts[0])) {
+          json(res, 404, { ok: false, error: 'motion frame not found' })
+          return
+        }
+        const frame = store.readMotionPackFrame(parts[0], 'action/' + parts[2])
+        if (!frame) {
+          json(res, 404, { ok: false, error: 'motion frame not found' })
+          return
+        }
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': frame.byteLength, 'Cache-Control': 'private, max-age=0, no-store', 'X-Content-Type-Options': 'nosniff' })
+        res.end(frame.bytes)
+      } catch (error) {
+        json(res, Number.isInteger(error?.status) ? error.status : 400, { ok: false, error: String(error.message || error).slice(0, 200), code: error.code || 'MOTION_FRAME_READ_FAILED' })
+      }
+      return
+    }
     if (req.method === 'GET') {
       json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.10' })
       return
@@ -381,6 +451,45 @@ export function apply(ctx, config = {}) {
     }
     try {
       validateBrowserOrigin(req)
+      if (pathname === API_PATH + '/motion-pack-upload') {
+        action = 'motion-pack-upload'
+        if (runtimeConfig.enabled === false) {
+          json(res, 403, { ok: false, error: 'DeepSeek Whale companion is disabled' })
+          return
+        }
+        const requestUrl = new URL(req.url || '/', 'http://dsh.local')
+        const session = getMotionUploadSession(requestUrl.searchParams.get('session'))
+        const framePath = requestUrl.searchParams.get('path') || ''
+        if (!/^action\/[A-Za-z0-9_-]+_[0-9]+\.png$/i.test(framePath) || !session.expected.has(framePath)) {
+          json(res, 400, { ok: false, error: 'frame path is not part of this motion pack', code: 'MOTION_FRAME_UNEXPECTED' })
+          return
+        }
+        if (session.uploaded.has(framePath)) {
+          json(res, 409, { ok: false, error: 'frame has already been uploaded', code: 'MOTION_FRAME_DUPLICATE' })
+          return
+        }
+        const contentType = String(req.headers?.['content-type'] || '').split(';')[0].trim().toLowerCase()
+        if (contentType !== 'image/png') {
+          json(res, 415, { ok: false, error: 'motion frame upload must use image/png', code: 'MOTION_FRAME_CONTENT_TYPE_INVALID' })
+          return
+        }
+        const bytes = await readBinaryBody(req, 6 * 1024 * 1024)
+        if (bytes.length < 8 || !Buffer.from([137,80,78,71,13,10,26,10]).equals(bytes.subarray(0,8))) {
+          json(res, 400, { ok: false, error: 'uploaded frame is not a valid PNG', code: 'MOTION_FRAME_PNG_INVALID' })
+          return
+        }
+        if (session.totalBytes + bytes.length > 64 * 1024 * 1024) {
+          json(res, 413, { ok: false, error: 'motion pack exceeds the 64 MiB total limit', code: 'MOTION_PACK_TOO_LARGE' })
+          return
+        }
+        const destination = join(session.directory, ...framePath.split('/'))
+        mkdirSync(dirname(destination), { recursive: true, mode: 0o700 })
+        writeFileSync(destination, bytes, { flag: 'wx', mode: 0o600 })
+        session.uploaded.add(framePath)
+        session.totalBytes += bytes.length
+        json(res, 201, { ok: true, uploaded: session.uploaded.size, total: session.expected.size, byteLength: bytes.length })
+        return
+      }
       const body = await readJsonBody(req)
       action = typeof body.action === 'string' ? body.action : 'view'
       const args = body.args && typeof body.args === 'object' ? body.args : {}
@@ -474,6 +583,120 @@ export function apply(ctx, config = {}) {
 
       if (action === 'view') {
         json(res, 200, publicView(service, memoryService, runtimeConfig))
+        return
+      }
+
+      if (action === 'motion-pack-begin') {
+        const petConfig = args.petConfig
+        const actConfig = args.actConfig
+        const frameFiles = args.frameFiles
+        if (!Array.isArray(frameFiles) || !frameFiles.length || frameFiles.length > 1200) {
+          json(res, 400, { ok: false, error: 'motion pack must contain 1 to 1200 PNG frames', code: 'MOTION_PACK_FRAME_COUNT_INVALID' })
+          return
+        }
+        if (Buffer.byteLength(JSON.stringify(petConfig || {})) > 64 * 1024 || Buffer.byteLength(JSON.stringify(actConfig || {})) > 64 * 1024) {
+          json(res, 413, { ok: false, error: 'motion pack configuration exceeds 64 KiB', code: 'MOTION_PACK_CONFIG_TOO_LARGE' })
+          return
+        }
+        const catalog = compileDyberPetMotionCatalog({ petConfig, actConfig, frameFiles })
+        const expected = new Set(frameFiles)
+        if (expected.size !== frameFiles.length) {
+          json(res, 400, { ok: false, error: 'motion pack contains duplicate frame paths', code: 'MOTION_PACK_FRAME_DUPLICATE' })
+          return
+        }
+        const sessionId = randomUUID()
+        const directory = join(motionStagingRoot, sessionId)
+        mkdirSync(directory, { recursive: true, mode: 0o700 })
+        motionUploadSessions.set(sessionId, {
+          id: sessionId,
+          createdAt: Date.now(),
+          directory,
+          displayName: String(args.displayName || '').trim().slice(0, 64) || 'DyberPet 动作包',
+          petConfig,
+          actConfig,
+          catalog,
+          expected,
+          uploaded: new Set(),
+          totalBytes: 0,
+        })
+        json(res, 201, { ok: true, sessionId, frameCount: expected.size, actionCount: Object.keys(catalog.actions).length, expiresInSeconds: Math.floor(motionUploadTtlMs / 1000) })
+        return
+      }
+
+      if (action === 'motion-pack-commit') {
+        const session = getMotionUploadSession(args.sessionId)
+        const missing = [...session.expected].filter(path => !session.uploaded.has(path))
+        if (missing.length) {
+          json(res, 409, { ok: false, error: 'motion pack is missing ' + missing.length + ' frame uploads', code: 'MOTION_PACK_INCOMPLETE', missing: missing.slice(0, 20) })
+          return
+        }
+        const frames = [...session.expected].map(path => ({
+          path,
+          bytes: readFileSync(join(session.directory, ...path.split('/'))),
+        }))
+        const imported = store.importMotionPack({
+          characterId: 'deepseek',
+          displayName: session.displayName,
+          petConfig: session.petConfig,
+          actConfig: session.actConfig,
+          catalog: session.catalog,
+          frames,
+        })
+        rmSync(session.directory, { recursive: true, force: true })
+        motionUploadSessions.delete(session.id)
+        json(res, 200, {
+          ok: true,
+          duplicate: imported.duplicate,
+          pack: {
+            id: imported.pack.id,
+            characterId: imported.pack.characterId,
+            displayName: imported.pack.displayName,
+            sourceHash: imported.pack.sourceHash,
+            frameCount: imported.pack.frameCount,
+            byteLength: imported.pack.byteLength,
+            createdAt: imported.pack.createdAt,
+            catalog: imported.pack.catalog,
+          },
+        })
+        return
+      }
+
+      if (action === 'motion-pack-abort') {
+        const session = getMotionUploadSession(args.sessionId)
+        rmSync(session.directory, { recursive: true, force: true })
+        motionUploadSessions.delete(session.id)
+        json(res, 200, { ok: true, aborted: true })
+        return
+      }
+
+      if (action === 'motion-pack-list') {
+        const packs = store.listMotionPacks('deepseek').map(pack => ({
+          id: pack.id,
+          characterId: pack.characterId,
+          displayName: pack.displayName,
+          sourceHash: pack.sourceHash,
+          frameCount: pack.frameCount,
+          byteLength: pack.byteLength,
+          createdAt: pack.createdAt,
+          catalog: pack.catalog,
+        }))
+        json(res, 200, { ok: true, packs })
+        return
+      }
+
+      if (action === 'motion-pack-get') {
+        const pack = store.getMotionPack(args.packId)
+        if (!pack) {
+          json(res, 404, { ok: false, error: 'motion pack not found', code: 'MOTION_PACK_NOT_FOUND' })
+          return
+        }
+        json(res, 200, { ok: true, pack })
+        return
+      }
+
+      if (action === 'motion-pack-delete') {
+        const result = store.deleteMotionPack(args.packId, { confirmed: args.confirmed === true })
+        json(res, 200, { ok: true, ...result })
         return
       }
 
@@ -719,6 +942,10 @@ export function apply(ctx, config = {}) {
   if (typeof ctx.effect === 'function') {
     ctx.effect(() => () => {
       try { if (typeof dispose === 'function') dispose() } catch { /* host may already be disposing */ }
+      for (const session of motionUploadSessions.values()) {
+        try { rmSync(session.directory, { recursive: true, force: true }) } catch { /* ignore staging cleanup failures */ }
+      }
+      motionUploadSessions.clear()
       try { store.close() } catch { /* ignore shutdown close failures */ }
     })
   }
