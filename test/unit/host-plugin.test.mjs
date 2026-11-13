@@ -851,7 +851,7 @@ test('retrying a completed chat event returns the original reply without a secon
     const args = { text: '刚才那条消息如果已经完成，请不要重复记录。', eventId: 'retryable-chat-event-1' }
     const first = await call(route.handler, { action: 'chat', args })
     assert.equal(first.status, 200)
-    assert.equal(first.body.duplicate, undefined)
+    assert.equal(first.body.duplicate, false)
     assert.equal(first.body.view.character.chatLines.length, 2)
     assert.equal(calls.length, 1)
 
