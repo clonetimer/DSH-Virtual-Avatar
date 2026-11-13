@@ -349,3 +349,17 @@
 ### Remaining manual gate
 - User accepted dev.9's DSH Desktop baseline. dev.12's explicit identity confirmation, action mapping, actual PPL-driven frame switching, collapsed desktop pet playback, reduced-motion, unbind and restart persistence still require real DSH Desktop 0.2.2-rc.1 verification.
 - No matching authorized multi-frame Whale art pack has been supplied in this development thread. Kitty/ChrisKitty assets remain format/playback test material, not Whale art.
+
+
+## Guided DyberPet motion mapping UX (dev.13)
+
+### Implemented
+- Opening a saved native motion pack now proposes mappings from the pack's original default, focus and patpat references, plus conservative exact/common action-name matches for response, rest and PPL expressions.
+- Suggestions remain editable and are never activated automatically; the user must still confirm that the artwork matches the Whale and that its use is authorized.
+- Action selectors show Chinese semantic labels, original action IDs, frame counts and duration. Selecting a mapping immediately plays that action in the preview area.
+- Added an explicit “应用推荐映射” action to restore the proposed mapping without changing the identity-confirmation requirement.
+
+### Verification
+- Client unit tests cover native metadata mapping, tiered patpat selection, fallback when action references are missing, readable labels and frame/duration metadata.
+- Full CI and installable dev.13 artifact are the next verification gate.
+- Desktop acceptance must confirm the mapping suggestions, action preview, PPL switching, collapsed-pet playback, reduced-motion and unbind behavior.
