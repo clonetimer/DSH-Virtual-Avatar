@@ -401,5 +401,7 @@
 - Host regression verifies that reusing the event ID for different text returns HTTP 409 / EVENT_ID_CONFLICT.
 - Client unit tests cover event ID shape and actionable error classification.
 - Classic DSH client regression checks that retry controls and direct guide navigation remain in the built script.
-- Full Node 24 / Node 24.9.0 CI and Windows Web/Desktop dev.15 package verification are the release gate.
+- PR CI Run 43392486170 and push CI Run 43392443994: Node 24 and Node 24.9.0 both PASS; each reports 110 passed / 0 failed. PPL checks report 7 passed / 0 failed; npm package verification PASS.
+- Windows Web/Desktop dev.15 artifact: ZIP 3,543,995 bytes, SHA-256 4a887a4eb678feeb0f267e19aeba919e5096e8ba637e36a273e32234479a7ee3. Inner TGZ 3,542,304 bytes, SHA-256 962698f3c71dfbda51223a69ab54137ba0dcc3a5f8fcaaf532db69e1c1db2032; .sha256 and package-info.json match.
+- Existing private Google Drive file ID retained; readback is byte-identical to the PR CI artifact.
 - DSH Desktop manual acceptance remains required for retry after simulated transport loss and each guide shortcut.
