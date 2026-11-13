@@ -30,8 +30,12 @@ jobs:
           path: .ppl-toolchain
       - name: Build pinned PPL compiler
         run: |
-          npm install --prefix .ppl-toolchain/components/foundation/core --no-audit --no-fund
+          npm install --prefix .ppl-toolchain/components/foundation/core --no-audit --no-fund --save-exact typescript@5.8.3
           npm run build --prefix .ppl-toolchain/components/foundation/core
+      - name: Run PPL Core conformance and reference persona suites
+        run: |
+          npm test --prefix .ppl-toolchain/components/foundation/core
+          npm run test:refs --prefix .ppl-toolchain/components/foundation/core
       - name: Diagnose DeepSeek Whale PPL source
         run: |
           node --input-type=module -e "import { compileFile } from './.ppl-toolchain/components/foundation/core/dist/src/fs-project.js'; const r=compileFile('personas/deepseek-whale.ppl',{moduleRoot:'.ppl-toolchain/components/foundation/core/modules'}); console.log(JSON.stringify(r.diagnostics,null,2));"
@@ -41,9 +45,8 @@ jobs:
           node .ppl-toolchain/components/foundation/core/dist/src/cli.js test personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules
           mkdir -p .ppl-artifacts
           node .ppl-toolchain/components/foundation/core/dist/src/cli.js build personas/deepseek-whale.ppl --module-root .ppl-toolchain/components/foundation/core/modules --out .ppl-artifacts/deepseek-whale.pir.json
-          # The pinned compiler is the source of truth for the checked-in runtime IR.
-          # Regenerate it on every matrix leg; the Node 24.9.0 leg commits any change below.
-          cp .ppl-artifacts/deepseek-whale.pir.json personas/deepseek-whale.pir.json
+      - name: Verify PPL source, checked-in IR, runtime mirrors and frozen references
+        run: npm run verify:ppl -- .ppl-toolchain
       - uses: actions/checkout@v4
         with:
           repository: JAdpp/dsh-whale-galgame
@@ -60,10 +63,10 @@ jobs:
           cp .whale-upstream/THIRD_PARTY_LICENSES.md third_party/whale-galgame/THIRD_PARTY_LICENSES.md
           cp .whale-upstream/assets/default/README.md third_party/whale-galgame/ASSET_NOTICES.md
           cp -R .whale-upstream/assets/default/licenses third_party/whale-galgame/licenses
-      - name: Commit generated PPL IR and DeepSeek art pack
+      - name: Commit refreshed DeepSeek art pack
         if: matrix.node == '24.9.0'
         run: |
-          git add personas/deepseek-whale.pir.json assets/deepseek-whale third_party/whale-galgame
+          git add assets/deepseek-whale third_party/whale-galgame
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -83,7 +86,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: matrix.node == '24.9.0'
         with:
-          name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.15
+          name: dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.16
           path: |
             dist-artifact/*.tgz
             dist-artifact/*.sha256
