@@ -9,7 +9,7 @@ P5-C2 在保留鲸鱼娘原有桌宠/游戏体验的前提下，增加真实的�
 | stable character ID | Persona IR | 客户端展示 | 画面 |
 |---|---|---|---|
 | `deepseek` | `DEEPSEEK_WHALE` | 鲸鱼娘 | 保留原桌宠立绘、背景、动作包 |
-| `ppl-zhuang-fangyi` | `ZHUANG_FANGYI` | 庄方宜 · PPL 参考角色 | 中性标识；没有专属立绘/动作包 |
+| `ppl-zhuang-fangyi` | `ZHUANG_FANGYI` | 庄方宜 · PPL 参考角色 | 独立 Q 版 SVG 概念立绘；尚无专属表情/动作包 |
 
 第二角色从固定的 `clonetimer/PPL` 上游提交中引入，源文件与 DH adapter 参考 IR 分别来自上游不同目录。两者均保留准确来源与逐字节核验。参考 IR 不是现编译示例源文件的逐字节等价产物；以已发布参考 IR 为运行依据，CI 会报告差异而不自动篡改。
 
@@ -68,7 +68,16 @@ Generic PPL 参考角色不沿用鲸鱼娘的 Galgame 好感度等级、赠礼�
 ## 产品限制与后续方向
 
 - 当前两个角色是固定、受检的内置角色；尚未开放用户在 UI 中上传任意 Persona IR 进行安装。
-- 第二角色没有专属立绘、动画、Galgame 等美术资源；界面以中性标识明确说明。
+- 第二角色当前有独立 Q 版概念立绘，但还没有专属表情、动作帧或 Galgame 资源；这些功能不会借用鲸鱼娘动画。
 - 泛型 PPL 角色未复刻鲸鱼娘特有的好感度游戏、CG 与小剧场系统，避免错误赋予其他角色这些能力。
 - 角色切换与双窗口隔离必须通过 DSH Desktop 0.2.2-rc.1 实机验收；自动化测试 PASS 不能代替桌面验收。
 - 后续可在具备原生 Persona IR、素材授权和测试覆盖后增加更多正式角色，并逐步扩展角色的产品能力。
+
+
+## dev.19 模型调用契约与角色立绘补全
+
+- DSH LLM 消息类型严格区分临时 `RequestUserInput` 与持久 `Message`。用户请求输入不带 id/source；历史 assistant 必须带唯一 id 与 `source.kind='model'`。
+- 每轮历史保存实际模型来源，避免后续请求用错误 provider/model 标注 assistant 消息。
+- 模型设置先读取已启用 provider/model 目录；空目录和目录错误有明确界面状态。手动模型 ID 仍须经过真实连接测试。
+- 连接测试直接测试未保存的 provider/model 草稿；成功后才可保存。瞬时传输错误最多重试一次。
+- 庄方宜独立 SVG 立绘路径：`assets/characters/zhuang-fangyi/portrait.svg`，由 Host 精确白名单提供。
