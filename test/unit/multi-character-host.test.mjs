@@ -24,6 +24,7 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
   let route
   let cleanup
   const invocations = []
+  let brokenProbeAttempts = 0
   const llm = {
     listProviders() { return [{ id: 'deepseek-official', name: 'DeepSeek' }] },
     async listModels() { return [{ id: 'deepseek-v4-flash', name: 'DeepSeek Flash' }] },
@@ -33,6 +34,10 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
       if (input.system === 'Reply with exactly OK. Do not roleplay or use tools.') {
         assert.ok(input.messages.every(message => message.role === 'user' && !('id' in message) && !('source' in message)),
           'one-shot model probe must use identity-free RequestUserInput messages')
+        if (input.model === 'deepseek-broken') {
+          brokenProbeAttempts += 1
+          throw Object.assign(new Error('DeepSeek Messages transport failed'), { code: 'TRANSPORT' })
+        }
         yield { type: 'text-delta', text: 'OK' }
         yield { type: 'finish', reason: { kind: 'stop' } }
         return
@@ -152,7 +157,16 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     assert.equal(roleModelTest.status, 200, roleModelTest.body?.error)
     assert.equal(roleModelTest.body.test.status, 'success')
     assert.equal(roleModelTest.body.test.model, 'deepseek-v4-flash-draft')
-    assert.equal(invocations.length, 2, 'connectivity test must not create a companion chat turn')
+    assert.equal(roleModelTest.body.test.attempts, 1)
+    const brokenModelTest = await call(route.handler, 'character-model-test', {
+      characterId: 'ppl-zhuang-fangyi', provider: 'deepseek-official', model: 'deepseek-broken',
+    })
+    assert.equal(brokenModelTest.status, 500)
+    assert.equal(brokenModelTest.body.code, 'TRANSPORT')
+    assert.equal(brokenModelTest.body.provider, 'deepseek-official')
+    assert.equal(brokenModelTest.body.model, 'deepseek-broken')
+    assert.equal(brokenProbeAttempts, 2, 'transient transport failures receive one bounded retry')
+    assert.equal(invocations.length, 2, 'connectivity tests must not create companion chat turns')
 
     const beforeConfiguration = await call(route.handler, 'character-config-get', { characterId: 'ppl-zhuang-fangyi' })
     assert.equal(beforeConfiguration.status, 200)
