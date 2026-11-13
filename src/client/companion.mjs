@@ -1544,11 +1544,17 @@ function Companion() {
                   const diagnostics = resolution.diagnostics || audit.error?.diagnostics || []
                   const effectTrace = resolution.effectTrace || {}
                   const effectPaths = Object.keys(effectTrace)
+                  const configurationChanges = audit.configuration?.changes || []
+                  const isConfiguration = item.status === 'configuration'
                   return React.createElement('div', { key: item.id, className: 'dva-memory-row' },
-                    React.createElement('strong', null, item.status === 'rejected' ? '规则解析失败' : '规则执行完成'),
+                    React.createElement('strong', null, isConfiguration ? '人格参数已更新' : item.status === 'rejected' ? '规则解析失败' : '规则执行完成'),
                     React.createElement('small', null, new Date(item.createdAt).toLocaleString()),
-                    React.createElement('div', null, '事件：' + (audit.event?.type || '未知') + ' · 场景：' + (audit.scene || '未知') + (audit.event?.classification?.rule ? ' · 分类：' + audit.event.classification.rule : '')),
-                    React.createElement('small', null, '命中规则 ' + activeRules.length + ' 条 · 状态变化 ' + stateChanges.length + ' 项 · 效果轨迹 ' + effectPaths.length + ' 项'),
+                    isConfiguration
+                      ? React.createElement('div', null, 'PPL 人格基础参数 · 调整 ' + configurationChanges.length + ' 项')
+                      : React.createElement('div', null, '事件：' + (audit.event?.type || '未知') + ' · 场景：' + (audit.scene || '未知') + (audit.event?.classification?.rule ? ' · 分类：' + audit.event.classification.rule : '')),
+                    isConfiguration
+                      ? configurationChanges.map(change => React.createElement('small', { key: change.group + '.' + change.key }, change.label + '：' + Math.round(change.before * 100) + '% → ' + Math.round(change.after * 100) + '%'))
+                      : React.createElement('small', null, '命中规则 ' + activeRules.length + ' 条 · 状态变化 ' + stateChanges.length + ' 项 · 效果轨迹 ' + effectPaths.length + ' 项'),
                     audit.persona?.irSha256 ? React.createElement('small', null, 'Persona IR：' + (audit.persona.version || '未知版本') + ' · ' + audit.persona.irSha256.slice(0, 12)) : null,
                     audit.snapshotSha256 ? React.createElement('small', null, '运行快照 SHA-256：' + audit.snapshotSha256.slice(0, 12)) : null,
                     audit.error ? React.createElement('small', { className: 'dva-error' }, (audit.error.code || 'PPL_ERROR') + ' · ' + (audit.error.message || '规则解析失败')) : null,
