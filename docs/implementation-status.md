@@ -306,3 +306,22 @@
 ### Acceptance boundary
 - This is a PPL-to-existing-art presentation layer, not a new frame-art package. True frame-by-frame Whale movement still requires matching authorized Whale artwork.
 - Actual Windows DSH Desktop 0.2.2-rc.1 visual acceptance remains a manual gate.
+
+## Persistent DyberPet motion library record (2026-11-13)
+
+### Implemented in the dev.11 candidate
+- Added SQLite `motion_packs` and `motion_pack_assets` tables for persistent native role configuration, action catalog and frame metadata.
+- Added staged binary frame upload: a 15-minute session, one raw PNG per request, server-side signature/path/size checks, complete-frame commit and staging cleanup on abort/shutdown.
+- Persisted frames atomically under the plugin private `assets/motion-packs/<pack UUID>/action/` directory. Each frame records SHA-256 and byte length; reads verify both.
+- Added local action library UI: explicit import, list, preview saved pack, display source hash/size/frame count, and confirmed uninstall.
+- Duplicate imports are detected by source hash; backup copies include the entire assets directory and therefore include motion packs.
+- Importing stores an asset pack only; it does not activate the pack or change Whale art, PPL, affection, relationship, chat or memories.
+
+### Verification added
+- SQLite persistence/reopen, duplicate import, hash tamper detection, backup inclusion, explicit uninstall and invalid path/PNG tests.
+- Host staged-upload, incomplete commit, frame GET, character-state isolation, invalid PNG and unsafe path integration tests.
+- Client classic artifact checks for explicit import consent, local library, installed preview and abort/cleanup.
+
+### Acceptance boundary
+- No matching authorized multi-frame Whale pack has been supplied. Kitty/ChrisKitty or other unrelated artwork must not be activated as Whale animation.
+- Real Desktop verification of dev.11 persistent import, app restart persistence, backup/restore and uninstall is required before marking the motion library release-ready.
