@@ -42,11 +42,17 @@ const PPL_CONFIG_PRESETS = Object.freeze({
 const CSS = `
 .dva-generic-panel{background:linear-gradient(150deg,#09203a,#071827 70%,#11324b)}
 .dva-generic-pet{display:flex;flex-direction:column;align-items:center;gap:6px;border:1px solid #71b2d2;border-radius:15px;background:#0a2b46;color:#eaf5ff;cursor:pointer;padding:12px;max-width:160px}
+.dva-generic-pet img{width:82px;height:112px;object-fit:cover;object-position:center 22%;border-radius:12px;border:1px solid #91c5df55}
 .dva-generic-avatar-mark{display:grid;place-items:center;width:66px;height:66px;border-radius:50%;background:#2c648a;color:#f4f9ff;font-size:34px}
 .dva-generic-selector{display:flex;align-items:center;gap:6px;color:#cae6f4;font-size:12px}
 .dva-generic-selector select,.dva-generic-field select,.dva-generic-field input{min-height:32px;background:#092945;color:#f1faff;border:1px solid #7eafca;border-radius:8px;padding:6px}
 .dva-generic-main{flex:1;display:grid;grid-template-columns:minmax(180px,250px) minmax(0,1fr);gap:12px;padding:16px;min-height:0}
 .dva-generic-aside{display:flex;flex-direction:column;align-items:center;gap:10px;border:1px solid #ffffff26;border-radius:14px;background:#102f49e5;padding:18px}
+.dva-generic-avatar{display:flex;justify-content:center;align-items:center;width:100%;max-width:210px;min-height:180px;max-height:360px;border:0;border-radius:14px;background:linear-gradient(180deg,#0a2741,#0a2037);overflow:hidden}
+.dva-generic-avatar img{display:block;width:100%;height:100%;max-height:360px;object-fit:contain;animation:dva-generic-breathe 5.2s ease-in-out infinite;filter:drop-shadow(0 8px 14px #00101f88)}
+.dva-generic-line-head{display:flex;align-items:center;gap:7px}
+.dva-generic-line-head img{width:28px;height:28px;object-fit:cover;object-position:center 22%;border-radius:50%;border:1px solid #8bcde9}
+@keyframes dva-generic-breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 .dva-generic-avatar{display:grid;place-items:center;width:112px;height:112px;border:2px solid #96cbe4;border-radius:50%;background:#215577;color:#fff;font-size:58px}
 .dva-generic-aside p{line-height:1.6;font-size:12px;color:#c3d9e6}
 .dva-generic-aside small,.dva-generic-facts{font-size:12px;color:#b8d8e9}
@@ -718,7 +724,14 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
   if (!open) {
     return React.createElement('div', { className: 'dva-root' },
       React.createElement('button', { className: 'dva-generic-pet', type: 'button', onClick: onOpen, title: '打开' + role.label },
-        React.createElement('span', { className: 'dva-generic-avatar-mark' }, '✦'),
+        role.artwork?.avatar
+          ? React.createElement('img', {
+              src: API + '/assets/' + role.artwork.avatar,
+              alt: role.label,
+              loading: 'lazy',
+              onError: event => { event.currentTarget.style.display = 'none' },
+            })
+          : React.createElement('span', { className: 'dva-generic-avatar-mark' }, '✦'),
         React.createElement('span', null, role.label),
       ),
     )
@@ -747,10 +760,21 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
     ),
     React.createElement('div', { className: 'dva-generic-main' },
       React.createElement('aside', { className: 'dva-generic-aside' },
-        React.createElement('div', { className: 'dva-generic-avatar' }, '✦'),
+        React.createElement('div', { className: 'dva-generic-avatar' },
+          character?.portraitUrl
+            ? React.createElement('img', {
+                src: character.portraitUrl,
+                alt: role.label + '角色立绘',
+                loading: 'lazy',
+                onError: event => { event.currentTarget.style.display = 'none' },
+              })
+            : React.createElement('span', { className: 'dva-generic-avatar-mark' }, '✦'),
+        ),
         React.createElement('strong', null, role.label),
         React.createElement('small', null, 'PPL ' + (role.binding?.version || '0.3')),
-        React.createElement('p', null, '此角色使用真实 PPL 参考人格；目前没有专用立绘，不会展示或复用鲸鱼娘素材。'),
+        React.createElement('p', null, character?.hasDedicatedArtwork
+          ? '已接入独立角色立绘与头像。该形象为 AI 生成的 Q 版概念图，不是游戏官方原始素材；后续可继续补充表情与动作帧。'
+          : '此角色使用真实 PPL 参考人格；当前使用中性标识，不会复用鲸鱼娘素材。'),
         React.createElement('div', { className: 'dva-generic-facts' },
           React.createElement('span', null, '关系阶段：' + (character?.relationship?.stage || '未建立')),
           React.createElement('span', null, '信任：' + Math.round(Number(character?.relationship?.trust || 0) * 100) + '%'),
@@ -782,7 +806,15 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
             ...lines.map((line, index) => React.createElement('div', {
               key: index, className: 'dva-generic-line ' + (line.who === 'user' ? 'is-user' : 'is-role'),
             },
-              React.createElement('strong', null, line.who === 'user' ? '你' : role.label),
+              React.createElement('div', { className: 'dva-generic-line-head' },
+                line.who !== 'user' && character?.avatarUrl
+                  ? React.createElement('img', {
+                      src: character.avatarUrl, alt: role.label, loading: 'lazy',
+                      onError: event => { event.currentTarget.style.display = 'none' },
+                    })
+                  : null,
+                React.createElement('strong', null, line.who === 'user' ? '你' : role.label),
+              ),
               React.createElement('p', null, line.text),
             )),
           ),
