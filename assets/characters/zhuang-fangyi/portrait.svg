@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 560" role="img" aria-labelledby="title desc">
+<title id="title">庄方宜 Q版角色立绘</title>
+<desc id="desc">原创 Q 版概念形象：深色长发、金色角饰、黑白礼装与金色细节，透明背景。</desc>
+<defs>
+  <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#28364e"/><stop offset=".48" stop-color="#111c32"/><stop offset="1" stop-color="#52617a"/></linearGradient>
+  <linearGradient id="hairHi" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#8ea5c0"/><stop offset=".5" stop-color="#293d5d"/><stop offset="1" stop-color="#a5b7c9"/></linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1b1"/><stop offset=".45" stop-color="#d6a84e"/><stop offset="1" stop-color="#8b5a20"/></linearGradient>
+  <linearGradient id="robe" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffef8"/><stop offset=".55" stop-color="#d9e0e8"/><stop offset="1" stop-color="#8f9aaa"/></linearGradient>
+  <linearGradient id="coat" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#28354c"/><stop offset="1" stop-color="#090f20"/></linearGradient>
+  <radialGradient id="skin"><stop stop-color="#ffe8dc"/><stop offset="1" stop-color="#e8bfb2"/></radialGradient>
+  <filter id="shadow" x="-30%" y="-20%" width="160%" height="160%"><feGaussianBlur stdDeviation="7"/></filter>
+</defs>
+<ellipse cx="184" cy="531" rx="92" ry="15" fill="#08162a" opacity=".18" filter="url(#shadow)"/>
+<!-- Long hair silhouette -->
+<path d="M102 171 C56 208 53 288 29 343 C13 381 31 418 18 452 C54 442 78 406 88 365 C88 423 67 465 48 492 C91 484 123 439 131 388 L245 389 C260 451 281 480 321 493 C301 451 292 411 303 370 C333 408 344 425 349 449 C361 394 328 343 311 297 C293 248 303 194 258 160Z" fill="url(#hair)" stroke="#0b1427" stroke-width="5"/>
+<path d="M73 280 C58 354 55 407 33 446 C74 417 96 366 100 309 M279 262 C304 336 316 392 342 430 C329 367 325 315 304 270" fill="none" stroke="url(#hairHi)" stroke-width="7" stroke-linecap="round" opacity=".75"/>
+<!-- Horns and gold ornaments -->
+<path d="M112 106 C77 72 75 36 97 20 C123 47 128 73 129 106Z" fill="#18233a" stroke="url(#gold)" stroke-width="5"/>
+<path d="M221 102 C238 60 265 37 286 45 C284 79 263 105 235 120Z" fill="#18233a" stroke="url(#gold)" stroke-width="5"/>
+<path d="M96 24 Q111 40 117 72 M280 49 Q263 69 248 94" fill="none" stroke="#d8b56a" stroke-width="4" stroke-linecap="round"/>
+<path d="M108 99 Q165 65 231 100 L245 125 Q177 98 98 127Z" fill="url(#gold)" stroke="#81551e" stroke-width="3"/>
+<circle cx="171" cy="100" r="10" fill="#f9e8b4" stroke="#986b2e" stroke-width="3"/>
+<path d="M171 90 L176 100 L171 110 L166 100Z" fill="#fff9df"/>
+<!-- Face -->
+<path d="M105 135 C109 87 239 84 247 142 L240 220 C232 267 207 289 176 290 C141 286 116 257 108 218Z" fill="url(#skin)" stroke="#a87972" stroke-width="3"/>
+<path d="M102 161 C101 116 131 91 172 91 C216 91 250 117 252 164 C233 143 217 137 198 134 C170 153 134 157 102 161Z" fill="url(#hair)" stroke="#10192b" stroke-width="4"/>
+<path d="M111 151 C128 170 139 177 151 177 C165 173 176 153 182 136 C194 161 207 174 225 175 C238 170 246 158 250 148 L243 205 C227 191 211 187 195 194 C179 200 166 203 151 194 C136 186 124 190 111 205Z" fill="#18243a" stroke="#0c1425" stroke-width="3"/>
+<path d="M116 211 C121 244 141 266 174 271 C207 266 229 243 239 210" fill="none" stroke="#d5a69c" stroke-width="2"/>
+<!-- Eyes -->
+<path d="M128 211 Q146 193 163 211 Q146 235 128 211Z" fill="#f9fbff" stroke="#26354b" stroke-width="3"/>
+<path d="M190 211 Q210 193 227 211 Q210 235 190 211Z" fill="#f9fbff" stroke="#26354b" stroke-width="3"/>
+<ellipse cx="148" cy="213" rx="7" ry="12" fill="#253a5c"/><ellipse cx="210" cy="213" rx="7" ry="12" fill="#253a5c"/>
+<circle cx="150" cy="208" r="3" fill="#fff"/><circle cx="212" cy="208" r="3" fill="#fff"/>
+<path d="M129 195 Q146 184 162 196 M191 196 Q210 184 227 197" fill="none" stroke="#1b2435" stroke-width="4" stroke-linecap="round"/>
+<path d="M164 247 Q176 255 188 247" fill="none" stroke="#a65f64" stroke-width="3" stroke-linecap="round"/>
+<ellipse cx="121" cy="238" rx="13" ry="6" fill="#e9959a" opacity=".35"/><ellipse cx="234" cy="238" rx="13" ry="6" fill="#e9959a" opacity=".35"/>
+<!-- Side hair locks -->
+<path d="M107 148 C77 171 76 236 89 290 C99 332 80 365 55 392 C105 380 127 340 123 292 L131 205Z" fill="url(#hair)" stroke="#0b1427" stroke-width="4"/>
+<path d="M242 145 C278 180 276 236 266 286 C258 327 275 361 304 389 C258 378 236 342 238 295 L225 205Z" fill="url(#hair)" stroke="#0b1427" stroke-width="4"/>
+<!-- Neck and collar -->
+<path d="M153 279 L151 315 L201 315 L198 277Z" fill="url(#skin)" stroke="#b98277" stroke-width="3"/>
+<path d="M139 299 L178 332 L216 298 L235 341 L178 390 L119 342Z" fill="#f5f4ef" stroke="#8f9aa8" stroke-width="3"/>
+<path d="M178 326 L194 350 L178 371 L161 350Z" fill="url(#gold)" stroke="#8c5e27" stroke-width="3"/>
+<!-- Body and sleeves -->
+<path d="M135 310 C113 313 91 335 81 374 L105 408 L135 387 L126 455 L232 455 L219 387 L249 409 L275 373 C264 337 241 314 216 309 L178 344Z" fill="url(#coat)" stroke="#0b1425" stroke-width="4"/>
+<path d="M136 315 C116 322 105 345 99 372 L124 387 L144 358 M218 315 C239 325 252 345 258 373 L233 389 L213 357" fill="none" stroke="url(#gold)" stroke-width="5" stroke-linecap="round"/>
+<path d="M142 321 L178 355 L213 321 L224 433 L178 459 L132 433Z" fill="url(#robe)" stroke="#7c8798" stroke-width="3"/>
+<path d="M154 332 L178 356 L202 332 L192 391 L178 408 L164 391Z" fill="#17243b" stroke="url(#gold)" stroke-width="3"/>
+<path d="M178 354 L185 370 L178 386 L171 370Z" fill="url(#gold)"/>
+<!-- Hands -->
+<path d="M96 372 C82 376 79 392 92 402 C105 410 119 397 119 386Z" fill="url(#skin)" stroke="#b98277" stroke-width="2"/>
+<path d="M260 371 C275 378 278 393 264 403 C250 410 237 398 239 386Z" fill="url(#skin)" stroke="#b98277" stroke-width="2"/>
+<!-- Skirt / coat tails -->
+<path d="M130 430 C112 456 91 498 91 527 C124 548 149 552 178 552 C210 552 244 544 267 526 C261 487 242 455 225 430 L178 461Z" fill="url(#robe)" stroke="#8d98a7" stroke-width="4"/>
+<path d="M130 438 L151 476 L126 525 M226 438 L205 476 L231 525" fill="none" stroke="#b68b43" stroke-width="5"/>
+<path d="M178 460 L178 548 M148 474 L159 543 M208 474 L197 543" fill="none" stroke="#24334b" stroke-width="4"/>
+<path d="M100 519 Q178 552 258 519" fill="none" stroke="url(#gold)" stroke-width="6"/>
+<!-- Belt and ornament -->
+<path d="M130 424 Q178 441 226 424 L230 440 Q178 461 126 440Z" fill="#1c2a43" stroke="url(#gold)" stroke-width="3"/>
+<circle cx="178" cy="442" r="13" fill="url(#gold)" stroke="#7e5424" stroke-width="3"/>
+<path d="M178 432 L184 442 L178 452 L172 442Z" fill="#fff0bf"/>
+<!-- Legs and boots -->
+<path d="M145 540 L144 566 L165 566 L169 545 M191 545 L195 566 L215 566 L211 537" fill="url(#skin)" stroke="#ad7d73" stroke-width="3"/>
+<path d="M136 558 Q151 551 170 563 L174 581 Q154 592 132 579Z M190 563 Q207 551 224 559 L229 579 Q207 592 186 581Z" fill="#17243b" stroke="url(#gold)" stroke-width="4"/>
+<path d="M138 579 Q154 587 174 580 M187 580 Q207 587 226 578" fill="none" stroke="#f4e3bf" stroke-width="4"/>
+<!-- Floating gold accents -->
+<path d="M67 196 L74 207 L67 218 L60 207Z M286 204 L293 215 L286 226 L279 215Z" fill="url(#gold)"/>
+<circle cx="76" cy="256" r="4" fill="#e8c77c"/><circle cx="287" cy="275" r="4" fill="#e8c77c"/>
+</svg>
