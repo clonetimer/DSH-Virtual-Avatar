@@ -30,7 +30,6 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     async listModels() { return [{ id: 'deepseek-v4-flash', name: 'DeepSeek Flash' }] },
     stream: async function* (input) {
       assert.equal(input.provider, 'deepseek-official')
-      assert.equal(input.model, 'deepseek-v4-flash')
       if (input.system === 'Reply with exactly OK. Do not roleplay or use tools.') {
         assert.ok(input.messages.every(message => message.role === 'user' && !('id' in message) && !('source' in message)),
           'one-shot model probe must use identity-free RequestUserInput messages')
@@ -38,11 +37,13 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
           brokenProbeAttempts += 1
           throw Object.assign(new Error('DeepSeek Messages transport failed'), { code: 'TRANSPORT' })
         }
+        assert.ok(['deepseek-v4-flash', 'deepseek-v4-flash-draft'].includes(input.model))
         yield { type: 'text-delta', text: 'OK' }
         yield { type: 'finish', reason: { kind: 'stop' } }
         return
       }
       invocations.push(input)
+      assert.equal(input.model, 'deepseek-v4-flash')
       assert.match(input.system, /庄方宜/)
       assert.doesNotMatch(input.system, /你正在 DeepSeek 鲸鱼娘/)
       assert.match(input.messages[0].content[0].text, /独立 PPL 角色陪伴对话/)
