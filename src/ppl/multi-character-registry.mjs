@@ -22,8 +22,8 @@ const ROLES = Object.freeze([
     description: '独立 PPL 人格、关系、聊天、记忆与配置；使用专属 Q 版角色形象',
     hasDedicatedArtwork: true,
     artwork: Object.freeze({
-      avatar: 'characters/zhuang-fangyi/portrait.webp',
-      portrait: 'characters/zhuang-fangyi/portrait.webp',
+      avatar: 'characters/zhuang-fangyi/portrait.svg',
+      portrait: 'characters/zhuang-fangyi/portrait.svg',
       kind: 'ai-generated-character-concept',
     }),
   }),
