@@ -33,12 +33,12 @@ test('chat failure guidance distinguishes model setup, network and provider fail
   assert.equal(network.retryable, true)
 
   const provider = helpers.describeChatFailure({
-    code: 'LLM_STREAM_FAILED',
-    message: 'provider rejected the request',
+    code: 'TRANSPORT',
+    message: 'DeepSeek Messages transport failed',
     provider: 'openai-compatible',
     model: 'gpt-4o-mini',
   })
-  assert.equal(provider.title, '模型服务连接中断')
+  assert.equal(provider.title, '模型传输失败')
   assert.equal(provider.provider, 'openai-compatible')
   assert.equal(provider.model, 'gpt-4o-mini')
 })
