@@ -365,3 +365,21 @@
 - Windows Web/Desktop dev.13 artifact generated. The inner TGZ digest is recorded in both the accompanying .sha256 file and package-info.json; ZIP CRC and package digest were verified during delivery.
 - Private Google Drive mirror retains the existing file ID and URL; the stored archive was downloaded back and verified byte-identical to its corresponding PR merge-run artifact.
 - Desktop acceptance must confirm the mapping suggestions, action preview, PPL switching, collapsed-pet playback, reduced-motion and unbind behavior.
+
+
+## Model selection, appearance and guided acceptance UX (dev.14)
+
+### Implemented
+- Added a Whale-local model selection record in SQLite. The selected provider/model is used for Whale chat and model connection tests, takes precedence over the DSH process default, and does not call or mutate agentDefaultModel.saveSelection().
+- Added model catalog and selection routes. Registered DSH providers are listed through llm.listProviders(); model catalogs are read through llm.listModels() when the host exposes that method. Providers without a catalog can use a manually entered model ID and validate it through the real connection test.
+- Added a Whale model settings panel with provider/model selection, save, connection test and reset-to-DSH-default actions. Explicit plugin configuration remains locked and visible.
+- Reduced the background overlay from 0.88/0.94 to a configurable range; background choice and overlay strength are persisted in character state and included in backup data.
+- Renamed the motion entry to “动作库与动画” and clarified that preview is temporary, import persists locally, and binding is what drives the Whale. Empty-library guidance now explains the required artwork and authorization boundary.
+- Added an in-app functional test guide and a repository manual acceptance guide. Chat transport errors now retain provider failure codes and tell users that the current turn did not complete while keeping the draft.
+
+### Verification
+- Host route tests cover model catalog discovery, Whale-local selection, chat routing, connection test routing, reset to the DSH default, and rejection of unavailable providers.
+- Background route tests cover persistence and rejection of out-of-range overlay values.
+- Classic-client tests assert the new model, background and help panels are present in the built DSH script.
+- Full CI and the installable dev.14 artifact are the verification gate.
+- Real DSH Desktop 0.2.2-rc.1 acceptance remains required for provider/model switching, background readability, chat failure feedback and the complete functional test guide.
