@@ -24,3 +24,16 @@ test('context window reserves budget for continuity and relevant memories before
   assert.equal(result.messages.at(-1).content, 'message-19')
   assert.ok(result.estimatedChars <= 300)
 })
+
+test('context window preserves the provider and model used for each assistant reply', () => {
+  const result = buildConversationContext({
+    history: [
+      { role: 'user', text: 'hello' },
+      { role: 'assistant', text: 'hi', provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+    ],
+  })
+  assert.deepEqual(result.messages, [
+    { role: 'user', content: 'hello' },
+    { role: 'assistant', content: 'hi', provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+  ])
+})
