@@ -405,3 +405,40 @@
 - Windows Web/Desktop dev.15 artifact generated and verified: the archive contains the installable TGZ, its SHA-256 file and package-info.json; the TGZ digest, byte length and package version agree across all three.
 - The existing private Google Drive file ID is retained and updated from the final PR CI artifact; a subsequent readback is byte-identical.
 - DSH Desktop manual acceptance remains required for retry after simulated transport loss and each guide shortcut.
+
+
+## P5-B：PPL 语言一致性、规范交付与执行审计（dev.16）
+
+### B1 — PPL Core conformance
+- CI builds the pinned `clonetimer/PPL` Core 0.3.0 compiler with TypeScript 5.8.3 pinned.
+- Both Node 24 and Node 24.9.0 run the upstream Core conformance suite (`npm test`) and official reference-persona suite (`npm run test:refs`).
+- The plugin's seven embedded DeepSeek Whale PPL source tests remain a separate persona-specific gate.
+
+### B2 — frozen language reference
+- Added pinned PPL 0.3 Stable semantics, EBNF grammar, Persona IR, Resolution, Runtime and Host Snapshot schemas under `docs/ppl-reference/`.
+- `docs/ppl-reference/manifest.json` records the canonical upstream repository, commit, component version, runtime mirrors and reference-copy paths.
+
+### B3 — source / IR / runtime parity
+- Added `scripts/verify-ppl-integration.mjs` and `npm run verify:ppl -- .ppl-toolchain`.
+- The verifier checks the pinned upstream commit and Core version, compiles `personas/deepseek-whale.ppl`, compares the serialized compiler output with the checked-in IR, and byte-compares vendored runtime/renderer/host-snapshot files and frozen reference copies with upstream.
+- CI no longer silently overwrites the checked-in Persona IR. Stale IR is a deterministic build failure and must be regenerated from the pinned compiler in the same change as the source.
+
+### B4 — execution audit and diagnostics
+- Completed turns now persist a versioned `ppl.execution-audit/0.1` record containing persona/IR identity, host turn/step, snapshot hash, event classification, scene/context, active rules/transitions, effect trace, pending commits/transitions, invariant results, diagnostics, before/after runtime hashes and field-level state changes.
+- The legacy `pplSnapshotHash` field now contains the actual host-snapshot hash for new events; `pplIrSha256` separately identifies the compiled IR. Historical events retain their original values.
+- PPL resolution errors now expose `PPL_RESOLUTION_INVALID` and machine-readable diagnostics. Failed resolutions are recorded in the audit log without committing character state.
+- Added `ppl-audit-history` API and a desktop audit viewer reachable from Diagnostics and Relationship History.
+- Diagnostic plugin version now comes from package.json rather than a stale hard-coded version.
+
+### Tests added
+- Host integration checks a completed COMFORT turn records the expected active PPL rule, invariant result, snapshot/IR hashes and relationship state diff.
+- PPL adapter tests verify invariant failures expose stable error codes and diagnostics.
+- Service tests verify failed PPL resolution is audited without committing character state.
+- SQLite tests verify failure audit redacts raw user message text and does not mutate character state.
+- Client artifact tests verify the PPL audit viewer is included in the packaged classic client.
+
+### Release gate
+- Full Node 24 / Node 24.9.0 plugin test matrix.
+- PPL Core conformance and official reference-persona suites on both matrix legs.
+- PPL source/IR/runtime/reference parity verification.
+- DSH Desktop manual acceptance of PPL audit display and a controlled resolution-failure scenario.
