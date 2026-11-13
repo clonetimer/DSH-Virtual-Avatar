@@ -786,7 +786,7 @@ export function apply(ctx, config = {}) {
 
       if (action === 'motion-pack-delete') {
         const result = store.deleteMotionPack(args.packId, { confirmed: args.confirmed === true })
-        json(res, 200, { ok: true, ...result })
+        json(res, 200, { ok: true, ...result, view: publicView(service, memoryService, runtimeConfig, store) })
         return
       }
 
