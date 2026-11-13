@@ -30,6 +30,20 @@ const CSS = `
 .dva-memory-toolbar button:disabled{opacity:.5;cursor:wait}
 .dva-memory-count{display:block;margin:8px 0;color:#9abbd2}
 .dva-memory-empty{padding:14px;border:1px dashed #ffffff2e;border-radius:10px;color:#a9c9df;background:#ffffff08}
+.dva-motion-panel{display:flex;flex-direction:column;gap:12px}
+.dva-motion-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.dva-motion-help{color:#a9c9df;line-height:1.6}
+.dva-motion-picker{display:block;padding:11px;border:1px dashed #85bcdd88;border-radius:12px;background:#0d3454}
+.dva-motion-picker input{display:block;width:100%;margin-top:8px;color:#d3e9f8;font-size:12px}
+.dva-motion-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.dva-motion-row select,.dva-motion-row button{border:1px solid #77b8df;border-radius:9px;background:#174b70;color:#f2f9ff;padding:7px 10px;min-height:34px}
+.dva-motion-row button{cursor:pointer}
+.dva-motion-row button:disabled{opacity:.5;cursor:wait}
+.dva-motion-stage{display:flex;align-items:center;justify-content:center;min-height:160px;height:min(43vh,400px);border:1px solid #ffffff22;border-radius:14px;background:radial-gradient(ellipse at center,#16466b,#091b30 70%);overflow:hidden}
+.dva-motion-stage img{display:block;max-width:100%;max-height:100%;object-fit:contain}
+.dva-motion-note{font-size:11px;color:#9abbd2;line-height:1.5}
+.dva-motion-error{font-size:12px;color:#ffd0c9;background:#52243888;border:1px solid #ffb3a944;border-radius:9px;padding:9px}
+
 @media(max-width:900px){.dva-memory-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dva-memory-toolbar input{grid-column:1/-1}.dva-memory-head{align-items:center}.dva-panel-back{padding:7px 10px}}
 .dva-title{font-size:18px;font-weight:700}.dva-sub{font-size:12px;color:#a9c9df;margin-top:4px}
 .dva-main{display:grid;grid-template-columns:minmax(180px,28%) minmax(0,1fr);grid-template-rows:minmax(0,1fr);min-height:0;flex:1;overflow:hidden}
@@ -651,6 +665,7 @@ function Companion() {
                   setNotice('背景已切换。')
                 } catch (err) { setError(err.message || String(err)) }
               } }, '切换背景'),
+              React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: () => openUtilityPanel('motion') }, '动作包预览'),
             ),
           ),
           React.createElement('div', { className: 'dva-menu-group' },
@@ -790,8 +805,80 @@ function Companion() {
           )),
         ) : null,
         ),
-        ['summary', 'profile', 'diagnostics', 'backups', 'memories'].includes(activePanel)
+        ['summary', 'profile', 'diagnostics', 'backups', 'memories', 'motion'].includes(activePanel)
           ? React.createElement('div', { className: 'dva-utility-overlay' },
+
+        activePanel === 'motion' ? React.createElement('div', { className: 'dva-memories dva-motion-panel' },
+          React.createElement('div', { className: 'dva-motion-head' },
+            React.createElement('strong', null, '本地动作包预览'),
+            React.createElement('button', { type: 'button', className: 'dva-panel-back', onClick: closeUtilityPanel }, '← 返回聊天'),
+          ),
+          React.createElement('small', { className: 'dva-motion-help' },
+            '选择 DyberPet 角色文件夹（包含 pet_conf.json、act_conf.json 和 action 子目录）。先查看动作是否完整、形象是否匹配，再决定是否制作正式安装包。',
+          ),
+          React.createElement('label', { className: 'dva-motion-picker' },
+            '选择本地角色文件夹',
+            React.createElement('input', {
+              type: 'file',
+              webkitdirectory: '',
+              directory: '',
+              multiple: true,
+              disabled: motionPreviewBusy,
+              'aria-label': '选择 DyberPet 角色文件夹',
+              onChange: event => {
+                const files = Array.from(event.target.files || [])
+                event.target.value = ''
+                void loadMotionPreview(files)
+              },
+            }),
+          ),
+          React.createElement('small', { className: 'dva-motion-note' },
+            '仅发送配置和帧文件名到本地 DSH 插件进行校验；PNG 留在当前浏览器中预览，不上传、不保存、不替换鲸鱼娘。',
+          ),
+          motionPreviewBusy ? React.createElement('div', { role: 'status' }, '正在验证角色配置与 PNG 帧…') : null,
+          motionPreviewError ? React.createElement('div', { role: 'alert', className: 'dva-motion-error' }, motionPreviewError) : null,
+          motionPreview ? React.createElement(React.Fragment, null,
+            React.createElement('strong', null, '已识别：' + motionPreview.roleName),
+            React.createElement('small', null,
+              '动作 ' + Object.keys(motionPreview.catalog.actions).length +
+              ' 种 · 可用 PNG 帧 ' + Object.keys(motionPreview.frameUrls).length + ' 张',
+            ),
+            React.createElement('div', { className: 'dva-motion-row' },
+              React.createElement('label', null, '选择动作 '),
+              React.createElement('select', {
+                value: motionActionId,
+                'aria-label': '选择要预览的动作',
+                onChange: event => { setMotionActionId(event.target.value); setMotionPlaybackStep(0); setMotionPlaying(false) },
+              },
+                ...Object.keys(motionPreview.catalog.actions).map(id =>
+                  React.createElement('option', { key: id, value: id }, id),
+                ),
+              ),
+              React.createElement('button', {
+                type: 'button',
+                disabled: !motionAction,
+                onClick: () => {
+                  if (motionPlaying) setMotionPlaying(false)
+                  else { if (motionAction && motionPlaybackStep >= motionAction.frameCount * motionAction.repeats - 1) setMotionPlaybackStep(0); setMotionPlaying(true) }
+                },
+              }, motionPlaying ? '暂停' : '播放动作'),
+              React.createElement('button', { type: 'button', onClick: () => { setMotionPlaying(false); setMotionPlaybackStep(0) } }, '从头预览'),
+            ),
+            motionAction ? React.createElement('small', { className: 'dva-motion-note' },
+              '每轮 ' + motionAction.frameCount + ' 帧 · 重复 ' + motionAction.repeats +
+              ' 次 · 每帧 ' + motionAction.frameIntervalMs + ' 毫秒 · 总时长 ' +
+              (motionAction.durationMs / 1000).toFixed(1) + ' 秒',
+            ) : null,
+            React.createElement('div', { className: 'dva-motion-stage', 'aria-label': '动作帧预览' },
+              motionFrameUrl
+                ? React.createElement('img', { src: motionFrameUrl, alt: motionPreview.roleName + ' 动作预览', draggable: false })
+                : React.createElement('small', null, '选择动作后显示对应帧'),
+            ),
+            React.createElement('small', { className: 'dva-motion-note' },
+              '动作包目前仅供本地预览。退出此界面后自动释放预览资源，不会安装角色或改变现有聊天与记忆。',
+            ),
+          ) : null,
+        ) : null,
         activePanel === 'summary' ? React.createElement('div', { className: 'dva-memories' },
           React.createElement('strong', null, '长期相处摘要'),
           summaryCandidate?.summary
