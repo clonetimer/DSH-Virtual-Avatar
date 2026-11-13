@@ -1444,13 +1444,15 @@ function Companion() {
                   const stateChanges = audit.state?.changes || []
                   const invariants = resolution.invariants || []
                   const diagnostics = resolution.diagnostics || audit.error?.diagnostics || []
-                  const effectPaths = Object.keys(resolution.effectTrace || {})
+                  const effectTrace = resolution.effectTrace || {}
+                  const effectPaths = Object.keys(effectTrace)
                   return React.createElement('div', { key: item.id, className: 'dva-memory-row' },
                     React.createElement('strong', null, item.status === 'rejected' ? '规则解析失败' : '规则执行完成'),
                     React.createElement('small', null, new Date(item.createdAt).toLocaleString()),
-                    React.createElement('div', null, '事件：' + (audit.event?.type || '未知') + ' · 场景：' + (audit.scene || '未知')),
+                    React.createElement('div', null, '事件：' + (audit.event?.type || '未知') + ' · 场景：' + (audit.scene || '未知') + (audit.event?.classification?.rule ? ' · 分类：' + audit.event.classification.rule : '')),
                     React.createElement('small', null, '命中规则 ' + activeRules.length + ' 条 · 状态变化 ' + stateChanges.length + ' 项 · 效果轨迹 ' + effectPaths.length + ' 项'),
                     audit.persona?.irSha256 ? React.createElement('small', null, 'Persona IR：' + (audit.persona.version || '未知版本') + ' · ' + audit.persona.irSha256.slice(0, 12)) : null,
+                    audit.snapshotSha256 ? React.createElement('small', null, '运行快照 SHA-256：' + audit.snapshotSha256.slice(0, 12)) : null,
                     audit.error ? React.createElement('small', { className: 'dva-error' }, (audit.error.code || 'PPL_ERROR') + ' · ' + (audit.error.message || '规则解析失败')) : null,
                     React.createElement('details', null,
                       React.createElement('summary', null, '查看规则、状态和约束详情'),
@@ -1462,10 +1464,21 @@ function Companion() {
                       stateChanges.length
                         ? stateChanges.map(change => React.createElement('small', { key: change.path }, change.path + '：' + String(change.before) + ' → ' + String(change.after)))
                         : React.createElement('small', null, '本次没有持久状态变化。'),
+                      React.createElement('div', null, '效果执行轨迹'),
+                      effectPaths.length
+                        ? Object.entries(effectTrace).map(([path, trace]) => {
+                            const steps = trace.steps || []
+                            const stepText = steps.map(step => [step.rule, step.op, String(step.value), '(' + String(step.before) + '→' + String(step.after) + ')'].filter(Boolean).join(' ')).join('；')
+                            return React.createElement('small', { key: path }, path + '：' + (stepText || '无逐步变更') + (trace.final === undefined ? '' : ' · 最终值 ' + String(trace.final)))
+                          })
+                        : React.createElement('small', null, '本次没有效果轨迹。'),
                       React.createElement('div', null, '人格不变量'),
                       invariants.length
                         ? invariants.map(result => React.createElement('small', { key: result.id }, result.id + '：' + (result.passed ? '通过' : '未通过')))
                         : React.createElement('small', null, '没有返回不变量检查结果。'),
+                      (resolution.activeTransitions || []).length
+                        ? React.createElement('small', null, '已激活转换：' + resolution.activeTransitions.map(item => item.id || item.name || String(item)).join('、'))
+                        : null,
                       React.createElement('div', null, '规则诊断'),
                       diagnostics.length
                         ? diagnostics.map((diagnostic, index) => React.createElement('small', { key: diagnostic.code + '-' + index }, (diagnostic.code || 'PPL') + ' · ' + (diagnostic.message || '诊断信息')))
