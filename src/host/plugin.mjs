@@ -730,12 +730,18 @@ export function apply(ctx, config = {}) {
       }
 
       if (action === 'motion-pack-bind') {
-        const binding = store.setMotionPackBinding({
-          characterId: 'deepseek',
-          packId: args.packId,
-          identityConfirmed: args.identityConfirmed === true,
-          mapping: args.mapping,
-        })
+        let binding
+        try {
+          binding = store.setMotionPackBinding({
+            characterId: 'deepseek',
+            packId: args.packId,
+            identityConfirmed: args.identityConfirmed === true,
+            mapping: args.mapping,
+          })
+        } catch (error) {
+          if (String(error?.code || '').startsWith('MOTION_')) error.status = 400
+          throw error
+        }
         json(res, 200, { ok: true, binding: {
           characterId: binding.characterId,
           packId: binding.packId,
