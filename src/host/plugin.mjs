@@ -21,10 +21,10 @@ const MAX_HISTORY = 12
 const ASSET_ROOT = fileURLToPath(new URL('../../assets/deepseek-whale/', import.meta.url))
 const CHARACTER_ASSET_ROOT = fileURLToPath(new URL('../../assets/characters/', import.meta.url))
 const CHARACTER_ASSETS = Object.freeze({
-  'characters/zhuang-fangyi/portrait.webp': Object.freeze({
+  'characters/zhuang-fangyi/portrait.svg': Object.freeze({
     root: CHARACTER_ASSET_ROOT,
     file: 'zhuang-fangyi/portrait.webp',
-    contentType: 'image/webp',
+    contentType: 'image/svg+xml',
   }),
 })
 const PPL_SOURCE_PATH = fileURLToPath(new URL('../../personas/deepseek-whale.ppl', import.meta.url))
