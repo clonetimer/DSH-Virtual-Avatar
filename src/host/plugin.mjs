@@ -1065,7 +1065,34 @@ export function apply(ctx, config = {}) {
       }
 
       if (action === 'model-test') {
-        const model = selectModel(llm, agentDefaultModel, runtimeConfig, store)
+        const requestedProvider = String(args.provider || '').trim()
+        const requestedModel = String(args.model || '').trim()
+        let model
+        if (requestedProvider || requestedModel) {
+          if (!requestedProvider || !requestedModel) {
+            const error = new Error('请同时选择模型服务商和模型 ID。')
+            error.code = 'MODEL_SELECTION_INCOMPLETE'
+            error.status = 400
+            throw error
+          }
+          let registered = []
+          try { registered = typeof llm.listProviders === 'function' ? llm.listProviders() : [] }
+          catch (cause) {
+            const error = new Error('无法读取 DSH 服务商目录：' + String(cause?.message || cause).slice(0, 120))
+            error.code = 'MODEL_CATALOG_UNAVAILABLE'
+            error.status = 503
+            throw error
+          }
+          if (!Array.isArray(registered) || !registered.some(item => item.id === requestedProvider)) {
+            const error = new Error('该服务商尚未在 DSH 中启用。请先启用服务商，再测试模型。')
+            error.code = 'MODEL_PROVIDER_UNAVAILABLE'
+            error.status = 409
+            throw error
+          }
+          model = { provider: requestedProvider, model: requestedModel, source: 'model-settings-draft' }
+        } else {
+          model = selectModel(llm, agentDefaultModel, runtimeConfig, store)
+        }
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(new Error('model test timed out')), 20000)
         let output = ''
@@ -1081,13 +1108,22 @@ export function apply(ctx, config = {}) {
           })
           for await (const chunk of iterable) {
             if (chunk?.type === 'text-delta' && chunk.text) output += chunk.text
-            if (chunk?.type === 'finish' && ['error','aborted'].includes(String(chunk.reason?.kind || ''))) throw new Error(chunk.reason?.failure?.message || 'model stream failed')
+            if (chunk?.type === 'finish' && ['error','aborted'].includes(String(chunk.reason?.kind || ''))) {
+              const failure = chunk.reason?.failure || {}
+              const error = new Error(failure.message || 'model stream failed')
+              error.code = failure.code || 'MODEL_TEST_FAILED'
+              throw error
+            }
           }
           if (!output.trim()) throw new Error('model returned no text')
-          lastModelTest = { at: new Date().toISOString(), status: 'success', provider: model.provider, model: model.model }
-          json(res, 200, { ok: true, test: lastModelTest })
-        } catch (error) {
-          lastModelTest = { at: new Date().toISOString(), status: 'failed', provider: model.provider, model: model.model, code: error.code || 'MODEL_TEST_FAILED', message: String(error.message || error).slice(0, 200) }
+          lastModelTest = { at: new Date().toISOString(), status: 'success', provider: model.provider, model: model.model, source: model.source }
+          json(res, 200, { ok: true, test: { ...lastModelTest, response: output.trim().slice(0, 80) } })
+        } catch (cause) {
+          const error = cause instanceof Error ? cause : new Error(String(cause))
+          error.provider = error.provider || model.provider
+          error.model = error.model || model.model
+          error.code = error.code || 'MODEL_TEST_FAILED'
+          lastModelTest = { at: new Date().toISOString(), status: 'failed', provider: model.provider, model: model.model, code: error.code, message: String(error.message || error).slice(0, 200) }
           throw error
         } finally { clearTimeout(timeout) }
         return
