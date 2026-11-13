@@ -439,14 +439,14 @@
 
 
 ### dev.16 CI verification
-- Latest PR CI Run 43401068828 and push CI Run 43401061966 completed successfully on both Node 24 and Node 24.9.0.
+- Node 24 and Node 24.9.0 CI matrix: PASS.
 - PPL Core 0.3.0 conformance: 21/21 checks passed on each matrix leg.
 - Upstream reference personas: all 3 compile and their 13 embedded source tests pass.
 - DeepSeek Whale PPL source tests: 7/7 passed.
 - Plugin suite: 113 passed / 0 failed on each matrix leg.
 - PPL source/IR/runtime/reference parity verifier: PASS on both matrix legs.
-- Windows Web/Desktop dev.16 installable archive, inner TGZ, package-info.json and SHA-256 manifest generated and validated by CI.
-- Private Google Drive dev.16 mirror updated in place under the existing file ID; stored archive size matches the verified CI artifact.
+- Windows Web/Desktop dev.16 installable archive, inner TGZ, package-info.json and SHA-256 manifest are generated and validated by CI.
+- Private Google Drive dev.16 mirror is updated in place under the existing file ID.
 - Desktop interaction audit display and controlled invariant-failure acceptance remain manual gates.
 
 ### Release gate
