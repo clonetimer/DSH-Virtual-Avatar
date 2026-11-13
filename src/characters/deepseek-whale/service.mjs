@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { createDeepseekWhaleRuntime, createPplRuntime } from '../../ppl/index.mjs'
 import {
   applyPplConfiguration,
+  normalizePplConfiguration,
   resolvePplConfiguration,
   PPL_CONFIGURATION_SCHEMA,
   PPL_CONFIGURATION_FIELDS,
