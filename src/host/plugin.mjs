@@ -362,6 +362,9 @@ export function apply(ctx, config = {}) {
     const memories = service.listMemories()
     const mediaAssets = store.listMediaAssets('deepseek')
     const mediaBytes = mediaAssets.reduce((sum, item) => sum + (Number(item.byteLength) || 0), 0)
+    const motionPacks = store.listMotionPacks('deepseek')
+    const motionPackBytes = motionPacks.reduce((sum, item) => sum + (Number(item.byteLength) || 0), 0)
+    const motionPackFrames = motionPacks.reduce((sum, item) => sum + (Number(item.frameCount) || 0), 0)
     let database = { status: 'unavailable', fileBytes: null }
     try {
       const dbPath = join(storageRoot, 'avatar.sqlite')
@@ -384,7 +387,7 @@ export function apply(ctx, config = {}) {
       plugin: { id: name, version: '0.1.0-dev.10', enabled: runtimeConfig.enabled },
       model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
       persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0, registered: personaRegistry.list() },
-      storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, mediaDirectory, backupDirectory },
+      storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, motionPackCount: motionPacks.length, motionPackFrames, motionPackBytes, mediaDirectory, backupDirectory },
       companion: {
         level: loaded.state.level,
         affection: loaded.state.affection,
