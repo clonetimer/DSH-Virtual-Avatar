@@ -319,3 +319,21 @@
 
 ### Remaining manual gate
 - dev.9's DSH Desktop baseline was accepted by the user. dev.11's new persistent import, restart persistence, saved-pack preview, backup/restore and uninstall still require real DSH Desktop 0.2.2-rc.1 acceptance.
+
+## Whale native motion binding and PPL runtime integration (dev.12)
+
+### Implemented
+- Added a persistent one-active-pack-per-character `motion_pack_bindings` record with explicit identity confirmation, validated action mapping and audit events.
+- Added user controls for idle, thinking, responding, patting and resting actions, plus optional mappings for PPL expression states.
+- Bound motion actions now drive both the expanded Whale portrait and the collapsed desktop pet. PPL expression, fatigue and local interaction state resolve to an imported native action; missing mappings safely fall back to idle.
+- Frame URLs use immutable private caching; the client preloads at most 12 frames for the active action and reads remaining frames on demand.
+- Native frame playback honors `prefers-reduced-motion`; unbinding restores the original static Whale expression art. Uninstalling the bound pack cascades the binding removal.
+
+### Verification added
+- Storage: confirmation, mapping validation, persistence/reopen, unbind and cascade removal.
+- Host: bind/read/unbind, public view mapping, immutable frame reads and cleanup after uninstall.
+- Client: PPL/action resolver, fallback rules, interaction action selection, reduced-motion and classic DSH script artifact.
+
+### Acceptance boundary
+- Identity confirmation is explicit user attestation, not automatic image recognition. No unrelated character artwork should be bound as the Whale.
+- User accepted dev.9 desktop baseline. dev.12 native-frame binding and PPL switching require a fresh DSH Desktop 0.2.2-rc.1 visual test.
