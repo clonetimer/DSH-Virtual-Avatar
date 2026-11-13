@@ -22,7 +22,12 @@ export function buildConversationContext({ history = [], continuity = '', memori
     const text = contentOf(item)
     const cost = text.length + 16
     if (used + cost > maxChars) break
-    selected.unshift({ role: item.role === 'assistant' || item.who === 'heroine' ? 'assistant' : 'user', content: text })
+    const message = { role: item.role === 'assistant' || item.who === 'heroine' ? 'assistant' : 'user', content: text }
+    if (message.role === 'assistant') {
+      if (typeof item.provider === 'string' && item.provider) message.provider = item.provider
+      if (typeof item.model === 'string' && item.model) message.model = item.model
+    }
+    selected.unshift(message)
     used += cost
   }
   return {
