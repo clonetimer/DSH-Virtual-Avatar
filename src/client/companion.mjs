@@ -298,6 +298,8 @@ function Companion() {
   const [motionIdentityConfirmed, setMotionIdentityConfirmed] = useState(false)
   const [motionBindingBusy, setMotionBindingBusy] = useState(false)
   const [runtimeMotionStep, setRuntimeMotionStep] = useState(0)
+  const [runtimeMotionCatalog, setRuntimeMotionCatalog] = useState(null)
+  const [runtimeMotionCatalogPackId, setRuntimeMotionCatalogPackId] = useState(null)
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
   const motionRequestRef = React.useRef(0)
   const [motionPacks, setMotionPacks] = useState([])
@@ -816,13 +818,16 @@ function Companion() {
 
   const runtimeCharacter = view?.character
   const runtimeBinding = runtimeCharacter?.motionBinding || null
+  const runtimeBindingForPlayback = runtimeBinding && runtimeMotionCatalogPackId === runtimeBinding.packId
+    ? { ...runtimeBinding, catalog: runtimeMotionCatalog }
+    : null
   const runtimeExpression = avatarExpressionOverride || runtimeCharacter?.presentation?.expression || 'neutral'
-  const runtimeMotionActionId = resolveBoundMotionAction(runtimeBinding, {
+  const runtimeMotionActionId = resolveBoundMotionAction(runtimeBindingForPlayback, {
     avatarMotion,
     expression: runtimeExpression,
     fatigue: runtimeCharacter?.pplState?.fatigue,
   })
-  const runtimeMotionAction = runtimeBinding?.catalog?.actions?.[runtimeMotionActionId] || null
+  const runtimeMotionAction = runtimeBindingForPlayback?.catalog?.actions?.[runtimeMotionActionId] || null
   const runtimeMotionFrameTotal = runtimeMotionAction
     ? runtimeMotionAction.frames.length * runtimeMotionAction.repeats
     : 0
@@ -834,6 +839,30 @@ function Companion() {
     ? API + '/motion-packs/' + encodeURIComponent(runtimeBinding.packId) + '/' +
       runtimeMotionFramePath.split('/').map(encodeURIComponent).join('/')
     : null
+
+  useEffect(() => {
+    let active = true
+    const packId = runtimeBinding?.packId
+    if (!packId) {
+      setRuntimeMotionCatalog(null)
+      setRuntimeMotionCatalogPackId(null)
+      return () => { active = false }
+    }
+    setRuntimeMotionCatalog(null)
+    setRuntimeMotionCatalogPackId(null)
+    void callApi('motion-pack-runtime').then(result => {
+      if (!active) return
+      if (!result.binding || result.binding.packId !== packId || !result.binding.catalog?.actions) {
+        setNotice('动作包绑定状态已变化，鲸鱼娘暂时恢复使用原有立绘。')
+        return
+      }
+      setRuntimeMotionCatalog(result.binding.catalog)
+      setRuntimeMotionCatalogPackId(packId)
+    }).catch(() => {
+      if (active) setNotice('暂时无法读取原生动作资源，鲸鱼娘已回退到原有立绘。')
+    })
+    return () => { active = false }
+  }, [runtimeBinding?.packId, runtimeBinding?.updatedAt])
 
   useEffect(() => {
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
