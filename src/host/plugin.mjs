@@ -9,6 +9,7 @@ import { createDefaultPersonaRegistry } from '../ppl/registry.mjs'
 import { extractMemoryCandidates } from '../memory/candidates.mjs'
 import { DEEPSEEK_WHALE_PROFILE, affectionCap, relationshipStageLabel, resolveDeepseekWhaleProfile } from '../characters/deepseek-whale/profile.mjs'
 import { resolveDeepseekWhalePresentation } from '../characters/deepseek-whale/presentation.mjs'
+import { compileDyberPetMotionCatalog } from '../characters/deepseek-whale/dyberpet-motion.mjs'
 
 export const name = 'dsh-virtual-avatar'
 export const inject = ['webServer', 'llm']
@@ -473,6 +474,24 @@ export function apply(ctx, config = {}) {
 
       if (action === 'view') {
         json(res, 200, publicView(service, memoryService, runtimeConfig))
+        return
+      }
+
+      if (action === 'motion-preview-validate') {
+        // Preview-only: only role configuration and filenames reach the host.
+        // PNG bytes stay in the user's browser; no state or artwork is written.
+        let catalog
+        try {
+          catalog = compileDyberPetMotionCatalog({
+            petConfig: args.petConfig,
+            actConfig: args.actConfig,
+            frameFiles: args.frameFiles,
+          })
+        } catch (error) {
+          if (String(error?.code || '').startsWith('DYBERPET_')) error.status = 400
+          throw error
+        }
+        json(res, 200, { ok: true, catalog, persistent: false, previewOnly: true })
         return
       }
 
