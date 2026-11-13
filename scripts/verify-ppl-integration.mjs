@@ -36,6 +36,25 @@ assert.ok(
   'checked-in Persona IR is stale; regenerate it with the pinned PPL compiler and commit both source and IR',
 )
 
+const referencePersonaResults = []
+for (const item of manifest.referencePersonas || []) {
+  const sourceBytes = readFileSync(resolve(root, item.source))
+  const upstreamSourceBytes = readFileSync(resolve(toolchainRoot, item.upstreamSource))
+  assert.ok(sourceBytes.equals(upstreamSourceBytes), 'reference PPL source differs from pinned upstream: ' + item.id)
+  const irBytes = readFileSync(resolve(root, item.compiled))
+  const upstreamIrBytes = readFileSync(resolve(toolchainRoot, item.upstreamCompiled))
+  assert.ok(irBytes.equals(upstreamIrBytes), 'reference Persona IR differs from pinned upstream: ' + item.id)
+  const result = compileFile(item.source, { moduleRoot })
+  const errors = (result.diagnostics || []).filter(d => d.severity === 'error')
+  assert.equal(errors.length, 0, 'reference Persona source did not compile: ' + item.id + ' ' + JSON.stringify(errors))
+  assert.ok(result.ir, 'reference Persona source has no IR: ' + item.id)
+  assert.equal(result.ir.persona.id, item.id)
+  const generated = JSON.parse(JSON.stringify(result.ir))
+  const checked = JSON.parse(irBytes.toString('utf8'))
+  assert.ok(isDeepStrictEqual(generated, checked), 'reference Persona IR differs from compiler output: ' + item.id)
+  referencePersonaResults.push({ id: item.id, rules: checked.rules.length, scenes: Object.keys(checked.scenes || {}).length })
+}
+
 const runtimeResults = []
 for (const item of manifest.runtimeMirrors) {
   const pluginBytes = readFileSync(resolve(root, item.plugin))
@@ -73,6 +92,7 @@ console.log(JSON.stringify({
   irSchema: checkedInIr.schema,
   rules: checkedInIr.rules.length,
   transitions: checkedInIr.transitions.length,
+  referencePersonas: referencePersonaResults,
   runtimeMirrors: runtimeResults,
   referenceCopies: referenceResults,
   adapterExtension: manifest.adapter.extension,
