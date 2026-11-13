@@ -215,6 +215,10 @@ function describeChatFailure(error = {}) {
     failure.hint = '先打开模型设置，选择一个已在 DSH 中启用的服务商和模型，并完成连接测试。'
     failure.retryable = false
     failure.suggestedAction = 'model'
+  } else if (error?.name === 'AbortError' || /timed? ?out|timeout/i.test(detail)) {
+    failure.title = '模型响应超时'
+    failure.hint = '服务端在等待模型响应时超时。可以稍后重试，或在模型设置中选择响应更快的模型。'
+    failure.suggestedAction = 'model'
   } else if (code === 'LLM_STREAM_FAILED' || code === 'MODEL_TEST_FAILED' || /transport failed/i.test(detail)) {
     failure.title = '模型服务连接中断'
     failure.hint = '检查服务商状态、API 凭证、接口地址、调用额度和网络，然后重试本次消息。'
@@ -228,10 +232,6 @@ function describeChatFailure(error = {}) {
   } else if (code === 'HOST_RESPONSE_INVALID') {
     failure.title = '桌宠服务返回异常'
     failure.hint = 'DSH Host 返回的数据无法读取。可以刷新鲸鱼娘状态后重试。'
-  } else if (error?.name === 'AbortError' || /timed? ?out|timeout/i.test(detail)) {
-    failure.title = '模型响应超时'
-    failure.hint = '服务端在等待模型响应时超时。可以稍后重试，或在模型设置中选择响应更快的模型。'
-    failure.suggestedAction = 'model'
   } else if (error?.name === 'TypeError' || /failed to fetch|network error|load failed/i.test(detail)) {
     failure.title = '无法连接 DSH Host'
     failure.hint = '检查 DSH Desktop 是否仍在运行，然后刷新鲸鱼娘状态并重试。'
