@@ -112,7 +112,7 @@ test('built client preserves companion features without bundling its own React',
   assert.match(artifact, /webkitdirectory/)
   assert.match(artifact, /dva-motion-stage/)
   assert.match(artifact, /预览素材/)
-  assert.match(artifact, /不会安装角色或改变现有聊天与记忆/)
+  assert.match(artifact, /只有明确点击“导入到本地动作库”后，才逐帧传输到本机 DSH Host 持久保存/)
   assert.match(artifact, /URL\.revokeObjectURL/)
   assert.match(artifact, /motion-pack-begin/)
   assert.match(artifact, /motion-pack-upload/)
