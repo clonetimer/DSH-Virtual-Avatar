@@ -656,7 +656,7 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
         setAuditEvents(result.events || [])
       }
     } catch (cause) {
-      setError(formatChatFailure(cause))
+      setError(nextTab === 'models' ? formatChatFailure(cause) : (cause.message || String(cause)))
     } finally {
       if (nextTab === 'models') setModelCatalogLoading(false)
     }
