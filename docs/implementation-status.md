@@ -520,3 +520,14 @@
 - Host 集成覆盖角色列表、选择、对话及安全重试、记忆、模型与审计 API。
 - PPL 官方 Core 与参考角色测试继续参与双 Node 测试矩阵。
 - Windows DSH Desktop 0.2.2-rc.1 的实际交互与长期运行需独立验收；CI 通过不替代此门禁。
+
+
+## P5-C2 角色形象资源支持（artwork follow-up）
+
+- 新增 `dsh-virtual-avatar.character-artwork/1` manifest 和安全的本地角色美术 Registry。
+- 每个角色独立声明 portrait、expressions、motion 元数据和 attribution；Host 只提供 manifest 白名单中的本地图片。
+- 路径限制包含角色 ID、文件名、扩展名、目录穿越、符号链接、文件大小和 URL 编码检查。
+- Generic PPL 角色中心已改为读取自己的 `artwork.portraitUrl`；没有资源时明确显示「角色立绘待导入」，不再用通用星形图标冒充角色形象，也不借用鲸鱼娘立绘。
+- 庄方宜 manifest 当前为 `awaiting-approved-artwork`。公开仓库未提交官方商品图、游戏立绘或第三方美术。
+- Node 24 / 24.9.0 最新 CI：插件测试 133/133、PPL Core 21/21、参考人格测试 13/13、鲸鱼娘 PPL 7/7；全部通过。
+- 真实角色立绘、表情和动作资源仍需完成视觉来源确认；三视图通过确认后才进入桌宠显示和动画集成。
