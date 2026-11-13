@@ -119,30 +119,43 @@ function emotionFromText(text) {
   return 'normal'
 }
 
-async function streamReply(llm, model, system, contextMessages, userText, signal, { scenePrompt } = {}) {
-  if (!llm || typeof llm.stream !== 'function') throw new Error('DSH LLM stream service is unavailable')
-  const messages = [{
-    role: 'user',
-    content: [{ type: 'text', text: scenePrompt || '（场景：深海女仆工坊的会客厅，暖黄的灯光。只扮演 DeepSeek 鲸鱼娘；这是持续陪伴对话，不存在必须推进的剧情任务。）' }],
-    source: { kind: 'user' },
-  }]
-  for (const row of contextMessages || []) {
-    messages.push({
-      role: row.role === 'assistant' ? 'assistant' : 'user',
-      content: [{ type: 'text', text: String(row.content || '') }],
-      source: row.role === 'assistant'
-        ? { kind: 'model', provider: model.provider, model: model.model }
-        : { kind: 'user' },
-    })
+function requestTextMessage(text) {
+  // DSH RequestUserInput is deliberately identity-free: no id and no source.
+  return { role: 'user', content: [{ type: 'text', text: String(text || '') }] }
+}
+
+function historicalAssistantMessage(text, provider, model) {
+  // Assistant history is a durable Message and therefore needs both id and model source.
+  return {
+    id: randomUUID(),
+    role: 'assistant',
+    source: { kind: 'model', provider, model },
+    content: [{ type: 'text', text: String(text || '') }],
   }
-  messages.push({
-    role: 'user',
-    content: [{ type: 'text', text: String(userText || '') }],
-    source: { kind: 'user' },
-  })
-  let output = ''
-  let terminalReason = 'completed'
-  const iterable = llm.stream({
+}
+
+function transientLlmFailure(code) {
+  return ['TRANSPORT', 'TIMEOUT', 'SERVER'].includes(String(code || '').toUpperCase())
+}
+
+async function streamReply(llm, model, system, contextMessages, userText, signal, { scenePrompt } = {}) {
+  if (!llm || typeof llm.stream !== 'function') {
+    const error = new Error('DSH LLM stream service is unavailable')
+    error.code = 'LLM_SERVICE_UNAVAILABLE'
+    throw error
+  }
+  const messages = [requestTextMessage(scenePrompt || '（场景：深海女仆工坊的会客厅，暖黄的灯光。只扮演 DeepSeek 鲸鱼娘；这是持续陪伴对话，不存在必须推进的剧情任务。）')]
+  for (const row of contextMessages || []) {
+    const content = String(row.content || '')
+    if (row.role === 'assistant') {
+      messages.push(historicalAssistantMessage(content, row.provider || model.provider, row.model || model.model))
+    } else {
+      messages.push(requestTextMessage(content))
+    }
+  }
+  messages.push(requestTextMessage(userText))
+
+  const request = {
     provider: model.provider,
     model: model.model,
     messages,
@@ -150,25 +163,54 @@ async function streamReply(llm, model, system, contextMessages, userText, signal
     temperature: 0.9,
     maxTokens: 1200,
     signal,
-  })
-  for await (const chunk of iterable) {
-    if (!chunk) continue
-    if (chunk.type === 'text-delta' && chunk.text) output += chunk.text
-    if (chunk.type === 'finish' && chunk.reason) {
-      const kind = String(chunk.reason.kind || '')
-      if (kind === 'error' || kind === 'aborted') {
-        const failure = chunk.reason.failure
-        const error = new Error(failure?.message || failure?.code || kind)
-        error.code = failure?.code || 'LLM_STREAM_FAILED'
+  }
+  let lastError
+  // Direct llm.stream calls are one provider attempt in DSH. The companion owns
+  // one bounded retry for transient transport failures; it never commits state
+  // until a complete response has been assembled.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let output = ''
+    let terminalReason = 'completed'
+    try {
+      const iterable = llm.stream(request)
+      for await (const chunk of iterable) {
+        if (!chunk) continue
+        if (chunk.type === 'text-delta' && chunk.text) output += chunk.text
+        if (chunk.type === 'finish' && chunk.reason) {
+          const kind = String(chunk.reason.kind || '')
+          if (kind === 'error' || kind === 'aborted') {
+            const failure = chunk.reason.failure || {}
+            const error = new Error(failure.message || failure.code || kind)
+            error.code = failure.code || (kind === 'aborted' ? 'ABORTED' : 'LLM_STREAM_FAILED')
+            error.provider = model.provider
+            error.model = model.model
+            throw error
+          }
+          if (kind === 'max-tokens' || kind === 'length') terminalReason = 'max-tokens'
+        }
+      }
+      if (!output.trim()) {
+        const error = new Error('模型返回了空响应。请检查模型路由和服务商状态。')
+        error.code = 'EMPTY_RESPONSE'
         error.provider = model.provider
         error.model = model.model
         throw error
       }
-      if (kind === 'max-tokens' || kind === 'length') terminalReason = 'max-tokens'
+      return { text: output.trim(), terminalReason, attempts: attempt + 1 }
+    } catch (cause) {
+      const error = cause instanceof Error ? cause : new Error(String(cause))
+      error.code = error.code || cause?.failure?.code || 'LLM_STREAM_FAILED'
+      error.provider = error.provider || model.provider
+      error.model = error.model || model.model
+      lastError = error
+      if (attempt === 0 && transientLlmFailure(error.code) && !signal?.aborted) {
+        await new Promise(resolve => setTimeout(resolve, 650))
+        continue
+      }
+      throw error
     }
   }
-  if (!output.trim()) throw new Error('model stream produced no text')
-  return { text: output.trim(), terminalReason }
+  throw lastError || new Error('模型请求失败')
 }
 
 function resolveDshHomePath(ctx) {
