@@ -187,7 +187,7 @@ export class PplCompanionService {
     }
   }
 
-  finalizeTurn(prepared, { reply, terminalReason = 'completed', occurredAt = new Date().toISOString() } = {}) {
+  finalizeTurn(prepared, { reply, terminalReason = 'completed', provider = null, model = null, occurredAt = new Date().toISOString() } = {}) {
     if (prepared?.characterId !== this.characterId) throw invalid('CHARACTER_TURN_MISMATCH', '角色请求不匹配')
     if (!COMMIT_REASONS.has(terminalReason)) return { committed: false, reason: terminalReason, state: prepared.baseState }
     const response = String(reply || '').trim()
@@ -196,7 +196,14 @@ export class PplCompanionService {
     if (!final.committed) throw invalid('PPL_COMMIT_REFUSED', 'PPL 运行时拒绝提交')
     const next = deepClone(prepared.baseState)
     next.pplRuntime = final.runtimeState
-    next.conversation.log.push({ role: 'user', text: prepared.input }, { role: 'assistant', text: response })
+    next.conversation.log.push(
+      { role: 'user', text: prepared.input },
+      {
+        role: 'assistant', text: response,
+        ...(typeof provider === 'string' && provider ? { provider } : {}),
+        ...(typeof model === 'string' && model ? { model } : {}),
+      },
+    )
     next.conversation.chatLines.push(
       { who: 'user', text: prepared.input, at: Date.now() },
       { who: 'heroine', text: response, emotion: 'normal', at: Date.now() },
@@ -227,6 +234,7 @@ export class PplCompanionService {
       eventId: prepared.eventId, characterId: this.characterId,
       payload: {
         input: prepared.input, choiceId: null, reply: response, terminalReason,
+        llmProvider: provider, llmModel: model,
         pplEventType: prepared.event.type, pplAudit: audit,
         pplSnapshotHash: audit.snapshotSha256, pplIrSha256: prepared.runtime.binding.irSha256,
       },
