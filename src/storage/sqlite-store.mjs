@@ -468,6 +468,30 @@ export class SqliteAvatarStore {
     return { state: structuredClone(state), revision, updatedAt: now }
   }
 
+  savePplConfiguration({
+    characterId = 'deepseek',
+    state,
+    expectedRevision,
+    beforeConfiguration = {},
+    afterConfiguration = {},
+    changes = [],
+    irSha256 = null,
+  } = {}) {
+    this.#assertOpen()
+    if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('character state required')
+    return this.transaction(() => {
+      const saved = this.saveCharacterState(characterId, state, expectedRevision)
+      this.#recordAudit('character', String(characterId), 'PPL_CONFIGURATION_UPDATED', null,
+        beforeConfiguration, afterConfiguration, {
+          schema: 'dsh-virtual-avatar.ppl-config/1',
+          source: 'ppl-visual-editor',
+          changes: Array.isArray(changes) ? changes : [],
+          irSha256,
+        })
+      return saved
+    })
+  }
+
   findDomainEvent(eventId) {
     this.#assertOpen()
     const row = this.#db.prepare('SELECT event_id, character_id, event_type, payload_hash, payload_json FROM domain_events WHERE event_id = ?').get(String(eventId))
