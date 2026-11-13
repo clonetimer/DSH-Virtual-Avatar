@@ -575,6 +575,16 @@ test('DyberPet motion pack upload persists verified PNG frames, supports preview
     const listed = await call(route.handler, { action: 'motion-pack-list' })
     assert.equal(listed.body.packs.length, 1)
     assert.equal(listed.body.packs[0].id, packId)
+    const fetchedPack = await call(route.handler, { action: 'motion-pack-get', args: { packId } })
+    assert.equal(fetchedPack.status, 200)
+    assert.equal(fetchedPack.body.pack.displayName, 'Whale Gesture Test')
+    assert.equal(fetchedPack.body.pack.catalog.defaultAction, 'idle')
+
+    const diagnostics = await call(route.handler, { action: 'diagnostics' })
+    assert.equal(diagnostics.status, 200)
+    assert.equal(diagnostics.body.diagnostics.storage.motionPackCount, 1)
+    assert.equal(diagnostics.body.diagnostics.storage.motionPackFrames, 2)
+    assert.equal(diagnostics.body.diagnostics.storage.motionPackBytes, png.length * 2)
 
     const frame = await callGet(route.handler,
       '/api/dsh-virtual-avatar/motion-packs/' + packId + '/action/stand_0.png')
