@@ -72,3 +72,32 @@ Generic PPL 参考角色不沿用鲸鱼娘的 Galgame 好感度等级、赠礼�
 - 泛型 PPL 角色未复刻鲸鱼娘特有的好感度游戏、CG 与小剧场系统，避免错误赋予其他角色这些能力。
 - 角色切换与双窗口隔离必须通过 DSH Desktop 0.2.2-rc.1 实机验收；自动化测试 PASS 不能代替桌面验收。
 - 后续可在具备原生 Persona IR、素材授权和测试覆盖后增加更多正式角色，并逐步扩展角色的产品能力。
+
+
+## 角色形象资源（P5-C2 artwork follow-up）
+
+庄方宜的角色中心现已支持 manifest 驱动的本地立绘和表情资源，不再把通用星形图案当作角色形象。
+
+- 资源目录：`assets/characters/<characterId>/`。
+- Manifest：`dsh-virtual-avatar.character-artwork/1`。
+- 可配置资源：独立 portrait、具名 expressions、后续 motion pack 元数据及 attribution。
+- Host 只提供 manifest 明确列出的图片文件；限制文件名、扩展名、文件大小，拒绝目录穿越、符号链接、未登记文件和畸形编码路径。
+- 客户端按角色读取自己的 portrait URL；素材缺失时明确显示「角色立绘待导入」，不会借用鲸鱼娘或其他角色的素材。
+- 庄方宜 manifest 当前状态为 `awaiting-approved-artwork`，没有将官方商品图、游戏立绘或第三方素材复制到公开仓库。
+
+### 已查到的视觉参考
+
+- GRYPHLINE 官方商店有「Chibi Acrylic Stand Set - Springwake Pavilion - Zhuang Fangyi」商品图，可作为 Q 版正面造型参考。
+- 该商品图目前只提供单一正面构图，不能直接视为完整的正/侧/背三视图。
+- 另有游戏角色多角度模型展示图，可用于核对发型、角饰、服装轮廓，但不是官方 Q 版三视图。
+- 在三视图确认前，不制作表情拼图、不把单张正面图拆成多帧动画，也不启用错误的角色动作包。
+
+### 视觉验收门禁
+
+1. 确认角色身份、Q 版比例、头发和角饰轮廓、服装配色及配件位置。
+2. 形成正面、侧面、背面一致的全身角色设定图，确认隐藏部位的推断细节。
+3. 用户确认设定后，再制作透明背景桌宠立绘和独立表情素材。
+4. 静态形象通过后，再绑定动作包、idle、thinking、responding 和 reduced-motion 行为。
+5. 角色素材按个人使用授权/来源存放；未经授权的官方或第三方美术文件不提交到公开源码仓库。
+
+当前自动化验证覆盖 manifest 白名单、图片路径安全、无素材状态、Host 路由和桌面 Classic bundle。真实立绘文件及动画尚未进入发布包。

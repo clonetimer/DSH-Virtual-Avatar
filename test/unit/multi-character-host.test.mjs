@@ -19,6 +19,21 @@ async function call(handler, action, args = {}) {
   return { status, body: JSON.parse(response) }
 }
 
+async function callGet(handler, url) {
+  const req = Readable.from([])
+  req.method = 'GET'
+  req.url = url
+  req.headers = {}
+  let status = 0
+  let response = Buffer.alloc(0)
+  let headers = {}
+  await handler(req, {
+    writeHead(code, valueHeaders = {}) { status = code; headers = valueHeaders },
+    end(value) { response = Buffer.isBuffer(value) ? value : Buffer.from(value || '') },
+  })
+  return { status, body: response, headers }
+}
+
 test('P5-C2 DSH Host supports role selection and isolated PPL-native chat without Whale artwork', async () => {
   const home = mkdtempSync(join(tmpdir(), 'dsh-ppl-multirole-'))
   let route
@@ -70,7 +85,11 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     assert.equal(alt.status, 200)
     assert.equal(alt.body.character.kind, 'ppl-reference')
     assert.equal(alt.body.character.hasDedicatedArtwork, false)
+    assert.equal(alt.body.character.artwork.status, 'awaiting-approved-artwork')
+    assert.equal(alt.body.character.artwork.portraitUrl, null)
     assert.equal(alt.body.character.name, '庄方宜 · PPL 参考角色')
+    const missingArt = await callGet(route.handler, '/api/dsh-virtual-avatar/assets/characters/ppl-zhuang-fangyi/portrait.webp')
+    assert.equal(missingArt.status, 404)
     assert.equal(alt.body.character.chatLines.length, 0)
     assert.equal(alt.body.character.interactionScene, 'PRIVATE_NIGHT')
 

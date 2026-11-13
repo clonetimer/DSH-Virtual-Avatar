@@ -229,3 +229,11 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - 新增角色中心轻量界面：独立对话、私人记忆、人格调校、模型设置及 PPL 审计。与鲸鱼娘完整桌宠界面相互独立。
 - 参照固定 PPL 上游版本引入 `ZHUANG_FANGYI` Persona IR，不内嵌该角色专属美术资源。其上游参考 IR 与现场编译示例源文件存在差异；运行时使用上游已发布 IR，CI 分别验证两份文件的来源一致性与源文件可编译性。
 - 本批为产品开发候选，仍需 DSH Desktop 0.2.2-rc.1 上的角色切换、重启恢复与隔离实测。
+
+
+## P5-C2 artwork follow-up
+
+- Added manifest-driven local character artwork support for the generic PPL companion center.
+- Portrait and expressions are resolved per character; the Host serves only manifest-approved local image files with path and symlink protections.
+- Missing approved artwork is shown explicitly as `角色立绘待导入`; no other character's art is borrowed.
+- Zhuang Fangyi artwork is intentionally not bundled yet. Its source and Q-style turnaround must be approved before a private art pack is produced.

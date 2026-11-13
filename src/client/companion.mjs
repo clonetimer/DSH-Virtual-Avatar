@@ -47,7 +47,10 @@ const CSS = `
 .dva-generic-selector select,.dva-generic-field select,.dva-generic-field input{min-height:32px;background:#092945;color:#f1faff;border:1px solid #7eafca;border-radius:8px;padding:6px}
 .dva-generic-main{flex:1;display:grid;grid-template-columns:minmax(180px,250px) minmax(0,1fr);gap:12px;padding:16px;min-height:0}
 .dva-generic-aside{display:flex;flex-direction:column;align-items:center;gap:10px;border:1px solid #ffffff26;border-radius:14px;background:#102f49e5;padding:18px}
-.dva-generic-avatar{display:grid;place-items:center;width:112px;height:112px;border:2px solid #96cbe4;border-radius:50%;background:#215577;color:#fff;font-size:58px}
+.dva-generic-avatar{display:grid;place-items:center;width:180px;height:240px;max-width:100%;overflow:hidden;border:1px solid #96cbe4;border-radius:14px;background:linear-gradient(160deg,#1a4562,#0b2238);color:#b8d8e9;font-size:13px;text-align:center;padding:8px;box-sizing:border-box}
+.dva-generic-avatar img{display:block;width:100%;height:100%;object-fit:contain}
+.dva-generic-avatar.is-pending{border-style:dashed;background:#0b2238;color:#b8d8e9}
+.dva-generic-avatar.is-pending span{line-height:1.7}
 .dva-generic-aside p{line-height:1.6;font-size:12px;color:#c3d9e6}
 .dva-generic-aside small,.dva-generic-facts{font-size:12px;color:#b8d8e9}
 .dva-generic-facts{display:flex;flex-direction:column;gap:7px;width:100%}
@@ -70,7 +73,7 @@ const CSS = `
 .dva-generic-field{display:flex;flex-direction:column;gap:6px;margin:13px 0;color:#f2f9ff;font-size:12px}
 .dva-generic-field small{color:#aecadb}
 .dva-generic-preview{border:1px solid #6dc4a3;border-radius:10px;padding:10px;background:#11443a9e}
-@media(max-width:720px){.dva-generic-main{grid-template-columns:1fr;overflow:auto}.dva-generic-aside{align-items:flex-start}.dva-generic-avatar{width:72px;height:72px;font-size:42px}.dva-generic-transcript{min-height:260px}.dva-generic-selector span{display:none}}
+@media(max-width:720px){.dva-generic-main{grid-template-columns:1fr;overflow:auto}.dva-generic-aside{align-items:flex-start}.dva-generic-avatar{width:132px;height:176px;font-size:12px}.dva-generic-transcript{min-height:260px}.dva-generic-selector span{display:none}}
 .dva-root{position:fixed;right:18px;bottom:104px;z-index:8999;font-family:system-ui,"Microsoft YaHei",sans-serif;color:#eaf5ff}
 .dva-pet{width:112px;height:132px;border:0;border-radius:18px;background:transparent;box-shadow:none;cursor:pointer;padding:0;filter:drop-shadow(0 8px 14px #00172b88);transition:transform .18s ease}.dva-pet:hover{transform:translateY(-5px) scale(1.035)}.dva-pet img{width:100%;height:100%;object-fit:contain;animation:dva-pet-idle 5.2s ease-in-out infinite;transform-origin:50% 88%}.dva-pet span{display:block;margin-top:-4px;padding:4px 8px;border:1px solid #8bcdf288;border-radius:999px;background:#092642dd;color:#eaf5ff;font-size:11px;text-align:center}
 .dva-panel{position:fixed;inset:5vh 5vw;z-index:9000;display:flex;flex-direction:column;overflow:hidden;border:1px solid #6ea9cc;border-radius:20px;background:linear-gradient(160deg,#0b2340,#07172b 65%,#0b3152);box-shadow:0 24px 80px #000b;color:#eaf5ff}
@@ -516,6 +519,7 @@ const GENERIC_PPL_FIELD_HELP = Object.freeze({
 function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch, switching }) {
   const roleId = role.characterId
   const [view, setView] = useState(null)
+  const [artworkFailed, setArtworkFailed] = useState(false)
   const [tab, setTab] = useState('chat')
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -551,6 +555,7 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
     let active = true
     setTab('chat')
     setView(null)
+    setArtworkFailed(false)
     setError('')
     setRetry(null)
     setText('')
@@ -701,10 +706,23 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
     ),
     React.createElement('div', { className: 'dva-generic-main' },
       React.createElement('aside', { className: 'dva-generic-aside' },
-        React.createElement('div', { className: 'dva-generic-avatar' }, '✦'),
+        React.createElement('div', {
+          className: 'dva-generic-avatar' + (character?.artwork?.portraitUrl && !artworkFailed ? ' has-artwork' : ' is-pending'),
+        },
+          character?.artwork?.portraitUrl && !artworkFailed
+            ? React.createElement('img', {
+                src: character.artwork.portraitUrl,
+                alt: role.label,
+                draggable: false,
+                onError: () => setArtworkFailed(true),
+              })
+            : React.createElement('span', null, '角色立绘待导入'),
+        ),
         React.createElement('strong', null, role.label),
         React.createElement('small', null, 'PPL ' + (role.binding?.version || '0.3')),
-        React.createElement('p', null, '此角色使用真实 PPL 参考人格；目前没有专用立绘，不会展示或复用鲸鱼娘素材。'),
+        React.createElement('p', null, character?.artwork?.status === 'ready'
+          ? '已加载本角色专属立绘，不与其他角色共用美术素材。'
+          : '角色形象正在进行素材确认；立绘和动作资源就绪后会单独接入，不会借用鲸鱼娘素材。'),
         React.createElement('div', { className: 'dva-generic-facts' },
           React.createElement('span', null, '关系阶段：' + (character?.relationship?.stage || '未建立')),
           React.createElement('span', null, '信任：' + Math.round(Number(character?.relationship?.trust || 0) * 100) + '%'),
