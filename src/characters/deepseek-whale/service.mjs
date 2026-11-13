@@ -73,7 +73,7 @@ function buildPplAudit(prepared, nextRuntimeState) {
       after: afterFlat[path] === undefined ? null : afterFlat[path],
     }))
   const context = prepared.context || {}
-  const persona = snapshot.persona || this?.ppl?.binding || {}
+  const persona = snapshot.persona || {}
   const event = prepared.event || {}
   const diagnostics = Array.isArray(resolution.diagnostics) ? resolution.diagnostics : []
   return {
