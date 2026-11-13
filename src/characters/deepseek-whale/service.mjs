@@ -157,6 +157,7 @@ export class DeepseekWhaleService {
       })
       this.pplConfigurationHash = configurationHash
     }
+    this.pplConfigurationOverrides = applied.overrides
     return applied
   }
 
@@ -170,11 +171,12 @@ export class DeepseekWhaleService {
 
   loadState({ sessionId = 'deepseek-whale' } = {}) {
     const loaded = this.store.loadCharacterState(DEEPSEEK_WHALE_ID)
+    let appliedConfiguration
     try {
-      this.#syncPplConfiguration(loaded?.state?.pplConfigOverrides || {})
+      appliedConfiguration = this.#syncPplConfiguration(loaded?.state?.pplConfigOverrides || {})
       this.pplConfigurationLoadError = null
     } catch (error) {
-      this.#syncPplConfiguration({})
+      appliedConfiguration = this.#syncPplConfiguration({})
       this.pplConfigurationLoadError = {
         code: error.code || 'PPL_CONFIGURATION_INVALID',
         message: String(error.message || error).slice(0, 180),
@@ -182,6 +184,7 @@ export class DeepseekWhaleService {
     }
     if (!loaded) return { state: this.#initialState(sessionId), revision: 0, persisted: false }
     const state = structuredClone(loaded.state)
+    state.pplConfigOverrides = appliedConfiguration.overrides
     state.pplRuntime = mergeObjectDefaults(this.ppl.initialState(sessionId), state.pplRuntime || {})
     if (!state.conversation) state.conversation = { log: [], chatLines: [], choices: [] }
     if (!state.storyMemory) state.storyMemory = createStoryMemory()
