@@ -1617,6 +1617,7 @@ function Companion() {
             React.createElement('button', { type: 'button', className: 'dva-panel-back', onClick: closeUtilityPanel }, '← 返回聊天'),
           ),
           modelCatalogBusy ? React.createElement('small', { role: 'status' }, '正在读取 DSH 已启用的模型服务商…') : null,
+          modelCatalog && !(modelCatalog.providers || []).length ? React.createElement('div', { className: 'dva-memory-empty' }, 'DSH 当前没有已启用的模型服务商。请先在 DSH 主界面的模型设置中添加并启用 Provider，然后返回这里选择鲸鱼娘使用的模型。') : null,
           modelCatalog?.locked ? React.createElement('div', { className: 'dva-memory-empty' }, '当前模型由插件配置固定。若要修改，请调整插件配置；此处不会覆盖管理员指定的模型。') : null,
           modelCatalog?.selectionError ? React.createElement('div', { className: 'dva-error' }, modelCatalog.selectionError) : null,
           React.createElement('label', { className: 'dva-model-field' },
