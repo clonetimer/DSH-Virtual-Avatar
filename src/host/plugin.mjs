@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
@@ -20,6 +20,7 @@ const MAX_HISTORY = 12
 const ASSET_ROOT = fileURLToPath(new URL('../../assets/deepseek-whale/', import.meta.url))
 const PPL_SOURCE_PATH = fileURLToPath(new URL('../../personas/deepseek-whale.ppl', import.meta.url))
 const PPL_IR_PATH = fileURLToPath(new URL('../../personas/deepseek-whale.pir.json', import.meta.url))
+const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version
 const ASSET_TYPES = Object.freeze({
   'maid-left.webp': 'image/webp',
   'whale-cheerful.webp': 'image/webp',
@@ -402,13 +403,28 @@ export function apply(ctx, config = {}) {
     try {
       const raw = readFileSync(PPL_IR_PATH, 'utf8')
       const parsed = JSON.parse(raw)
-      ir = { status: parsed.schema === 'ppl.persona-ir/0.3' && parsed.persona?.id === 'DEEPSEEK_WHALE' ? 'valid' : 'incompatible', schema: parsed.schema || null, personaId: parsed.persona?.id || null, version: parsed.persona?.version || null, bytes: Buffer.byteLength(raw) }
+      ir = {
+        status: parsed.schema === 'ppl.persona-ir/0.3' && parsed.persona?.id === 'DEEPSEEK_WHALE' ? 'valid' : 'incompatible',
+        schema: parsed.schema || null,
+        personaId: parsed.persona?.id || null,
+        version: parsed.persona?.version || null,
+        sha256: createHash('sha256').update(raw).digest('hex'),
+        semanticTypeCount: Object.keys(parsed.semanticClosure?.types || {}).length,
+        bytes: Buffer.byteLength(raw),
+      }
     } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
     return {
       checkedAt,
-      plugin: { id: name, version: '0.1.0-dev.14', enabled: runtimeConfig.enabled },
+      plugin: { id: name, version: PLUGIN_VERSION, enabled: runtimeConfig.enabled },
       model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, selectionSource: model?.source || null, hasWhaleOverride: Boolean(store.getChatModelSelection('deepseek')), configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
-      persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0, registered: personaRegistry.list() },
+      persona: {
+        source,
+        ir,
+        runtime: persona ? 'loaded' : 'unavailable',
+        rules: Array.isArray(persona?.rules) ? persona.rules.length : 0,
+        auditSchema: 'ppl.execution-audit/0.1',
+        registered: personaRegistry.list(),
+      },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, motionPackCount: motionPacks.length, motionPackFrames, motionPackBytes, mediaDirectory, backupDirectory },
       companion: {
         level: loaded.state.level,
@@ -581,6 +597,29 @@ export function apply(ctx, config = {}) {
             },
           }))
         json(res, 200, { ok: true, events })
+        return
+      }
+
+      if (action === 'ppl-audit-history') {
+        const limit = Number.isSafeInteger(args.limit) ? Math.max(1, Math.min(50, args.limit)) : 30
+        const completed = store.listAuditEvents('character', 'deepseek', { limit: 100 })
+          .filter(event => event.type === 'TURN_COMPLETED' && event.details?.pplAudit)
+          .map(event => ({
+            ...event,
+            status: 'committed',
+            ppl: event.details.pplAudit,
+          }))
+        const rejected = store.listAuditEvents('ppl-runtime', 'deepseek', { limit: 100 })
+          .filter(event => event.type === 'PPL_RESOLUTION_REJECTED')
+          .map(event => ({
+            ...event,
+            status: 'rejected',
+            ppl: event.details,
+          }))
+        const events = [...completed, ...rejected]
+          .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(b.id).localeCompare(String(a.id)))
+          .slice(0, limit)
+        json(res, 200, { ok: true, schema: 'ppl.execution-audit/0.1', events })
         return
       }
 
