@@ -237,6 +237,12 @@ function Companion() {
   const [motionPlaybackStep, setMotionPlaybackStep] = useState(0)
   const [motionPlaying, setMotionPlaying] = useState(false)
   const motionRequestRef = React.useRef(0)
+  const [motionPacks, setMotionPacks] = useState([])
+  const [motionLibraryBusy, setMotionLibraryBusy] = useState(false)
+  const [motionImportBusy, setMotionImportBusy] = useState(false)
+  const [motionImportProgress, setMotionImportProgress] = useState(null)
+  const motionImportSessionRef = React.useRef(null)
+  const motionUploadControllerRef = React.useRef(null)
 
   const loadMotionPreview = async fileList => {
     const selected = Array.from(fileList || [])
@@ -280,7 +286,16 @@ function Companion() {
         Object.values(urls).forEach(url => URL.revokeObjectURL(url))
         return
       }
-      setMotionPreview({ roleName: folder.roleName, catalog: checked.catalog, frameUrls: urls })
+      setMotionPreview({
+        source: 'local',
+        roleName: folder.roleName,
+        catalog: checked.catalog,
+        frameUrls: urls,
+        blobUrls: Object.values(urls),
+        petConfig: folder.petConfig,
+        actConfig: folder.actConfig,
+        frameEntries: folder.frameEntries,
+      })
       setMotionActionId(checked.catalog.defaultAction || ids[0])
       setMotionPlaybackStep(0)
     } catch (error) {
@@ -288,8 +303,110 @@ function Companion() {
     } finally { if (requestId === motionRequestRef.current) setMotionPreviewBusy(false) }
   }
 
+
+  const loadMotionPacks = async () => {
+    setMotionLibraryBusy(true)
+    try {
+      const result = await callApi('motion-pack-list')
+      setMotionPacks(result.packs || [])
+    } catch (error) {
+      setMotionPreviewError(error.message || String(error))
+    } finally { setMotionLibraryBusy(false) }
+  }
+
+  const loadInstalledMotionPack = async packId => {
+    setMotionPreviewBusy(true)
+    setMotionPreviewError('')
+    setMotionPlaying(false)
+    setMotionPreview(null)
+    try {
+      const result = await callApi('motion-pack-get', { packId })
+      const pack = result.pack
+      if (!pack?.catalog?.actions) throw new Error('本地动作包清单不完整。')
+      const frameUrls = {}
+      for (const action of Object.values(pack.catalog.actions)) {
+        for (const path of action.frames || []) {
+          if (frameUrls[path]) continue
+          const encodedPath = path.split('/').map(encodeURIComponent).join('/')
+          frameUrls[path] = API + '/motion-packs/' + encodeURIComponent(pack.id) + '/' + encodedPath
+        }
+      }
+      setMotionPreview({
+        source: 'installed',
+        packId: pack.id,
+        roleName: pack.displayName,
+        catalog: pack.catalog,
+        frameUrls,
+        blobUrls: [],
+      })
+      setMotionActionId(pack.catalog.defaultAction || Object.keys(pack.catalog.actions)[0])
+      setMotionPlaybackStep(0)
+    } catch (error) {
+      setMotionPreviewError(error.message || String(error))
+    } finally { setMotionPreviewBusy(false) }
+  }
+
+  const importMotionPack = async () => {
+    if (!motionPreview || motionPreview.source !== 'local' || !motionPreview.frameEntries?.length || motionImportBusy) return
+    setMotionImportBusy(true)
+    setMotionPreviewError('')
+    setMotionImportProgress({ current: 0, total: motionPreview.frameEntries.length })
+    const controller = new AbortController()
+    motionUploadControllerRef.current = controller
+    let sessionId = null
+    try {
+      const begun = await callApi('motion-pack-begin', {
+        displayName: motionPreview.roleName,
+        petConfig: motionPreview.petConfig,
+        actConfig: motionPreview.actConfig,
+        frameFiles: motionPreview.frameEntries.map(item => item.path),
+      })
+      sessionId = begun.sessionId
+      motionImportSessionRef.current = sessionId
+      for (let index = 0; index < motionPreview.frameEntries.length; index++) {
+        const item = motionPreview.frameEntries[index]
+        const url = API + '/motion-pack-upload?session=' + encodeURIComponent(sessionId) + '&path=' + encodeURIComponent(item.path)
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'image/png' },
+          body: item.file,
+          signal: controller.signal,
+        })
+        let result
+        try { result = await response.json() } catch { throw new Error('动作帧上传响应无法解析。') }
+        if (!response.ok || result.ok === false) throw new Error(result.error || '动作帧上传失败：' + item.path)
+        setMotionImportProgress({ current: index + 1, total: motionPreview.frameEntries.length })
+      }
+      const committed = await callApi('motion-pack-commit', { sessionId })
+      motionImportSessionRef.current = null
+      setNotice(committed.duplicate ? '这个动作包已经在本地动作库中，无需重复导入。' : '动作包已安全保存到本地动作库；尚未应用到鲸鱼娘。')
+      await loadMotionPacks()
+    } catch (error) {
+      if (sessionId) {
+        try { await callApi('motion-pack-abort', { sessionId }) } catch { /* session may already be expired */ }
+      }
+      motionImportSessionRef.current = null
+      if (error.name !== 'AbortError') setMotionPreviewError(error.message || String(error))
+    } finally {
+      motionUploadControllerRef.current = null
+      setMotionImportBusy(false)
+      setMotionImportProgress(null)
+    }
+  }
+
+  const removeMotionPack = async pack => {
+    if (!window.confirm('卸载“' + pack.displayName + '”？这会删除本地动作帧和动作配置，但不会影响鲸鱼娘的聊天、记忆、关系或原始立绘。')) return
+    try {
+      const result = await callApi('motion-pack-delete', { packId: pack.id, confirmed: true })
+      if (result.deleted && motionPreview?.packId === pack.id) setMotionPreview(null)
+      setNotice(result.deleted ? '动作包已从本地动作库卸载。' : '动作包已不存在。')
+      await loadMotionPacks()
+    } catch (error) { setMotionPreviewError(error.message || String(error)) }
+  }
+
   const openUtilityPanel = panel => {
     setActivePanel(panel)
+    if (panel === 'motion') void loadMotionPacks()
     setShowMoreMenu(false)
     setError('')
     setNotice('')
@@ -363,14 +480,18 @@ function Companion() {
   }, [avatarMotion])
 
   useEffect(() => () => {
-    if (motionPreview?.frameUrls) {
-      Object.values(motionPreview.frameUrls).forEach(url => URL.revokeObjectURL(url))
-    }
+    for (const url of motionPreview?.blobUrls || []) URL.revokeObjectURL(url)
   }, [motionPreview])
 
   useEffect(() => {
     if (activePanel === 'motion') return
     motionRequestRef.current += 1
+    if (motionUploadControllerRef.current) motionUploadControllerRef.current.abort()
+    if (motionImportSessionRef.current) {
+      const sessionId = motionImportSessionRef.current
+      motionImportSessionRef.current = null
+      void callApi('motion-pack-abort', { sessionId }).catch(() => {})
+    }
     setMotionPreviewBusy(false)
     setMotionPlaying(false)
     setMotionPreview(previous => previous ? null : previous)
