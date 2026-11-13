@@ -2,6 +2,43 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 const API = '/api/dsh-virtual-avatar'
+const PPL_CONFIG_GROUPS = Object.freeze([
+  {
+    key: 'traits',
+    title: '性格特征',
+    fields: [
+      { key: 'warmth', label: '温柔度', min: 0.6, max: 1, hint: '关怀、耐心和情绪支持的基础倾向。' },
+      { key: 'playfulness', label: '活泼度', min: 0, max: 1, hint: '俏皮、轻松和主动调侃的程度。' },
+      { key: 'assertiveness', label: '主动表达', min: 0, max: 1, hint: '主动表达意见、提出建议和表达立场的程度。' },
+      { key: 'emotional_guard', label: '情绪克制', min: 0, max: 1, hint: '数值越高越谨慎内敛，越低越容易自然表达情绪。' },
+      { key: 'vulnerability', label: '坦诚程度', min: 0, max: 1, hint: '表达疲惫、害羞和自身感受的开放程度。' },
+    ],
+  },
+  {
+    key: 'style',
+    title: '表达方式',
+    fields: [
+      { key: 'formality', label: '正式程度', min: 0, max: 1, hint: '数值越高，措辞越礼貌、正式和克制。' },
+      { key: 'verbosity', label: '表达详略', min: 0, max: 1, hint: '数值越高，回答越充分；越低则越简洁。' },
+      { key: 'emotional_explicitness', label: '情绪表达', min: 0, max: 1, hint: '关心、开心、害羞等情绪表达的直接程度。' },
+      { key: 'action_description', label: '动作描写', min: 0, max: 1, hint: '回复中使用简短动作和表情描写的程度。' },
+    ],
+  },
+])
+const PPL_CONFIG_PRESETS = Object.freeze({
+  gentle: {
+    traits: { warmth: 0.9, playfulness: 0.62, assertiveness: 0.32, emotional_guard: 0.18, vulnerability: 0.68 },
+    style: { formality: 0.1, verbosity: 0.48, emotional_explicitness: 0.86, action_description: 0.28 },
+  },
+  lively: {
+    traits: { warmth: 0.84, playfulness: 0.92, assertiveness: 0.4, emotional_guard: 0.16, vulnerability: 0.58 },
+    style: { formality: 0.08, verbosity: 0.52, emotional_explicitness: 0.82, action_description: 0.3 },
+  },
+  calm: {
+    traits: { warmth: 0.78, playfulness: 0.5, assertiveness: 0.45, emotional_guard: 0.42, vulnerability: 0.48 },
+    style: { formality: 0.36, verbosity: 0.34, emotional_explicitness: 0.58, action_description: 0.12 },
+  },
+})
 const CSS = `
 .dva-root{position:fixed;right:18px;bottom:104px;z-index:8999;font-family:system-ui,"Microsoft YaHei",sans-serif;color:#eaf5ff}
 .dva-pet{width:112px;height:132px;border:0;border-radius:18px;background:transparent;box-shadow:none;cursor:pointer;padding:0;filter:drop-shadow(0 8px 14px #00172b88);transition:transform .18s ease}.dva-pet:hover{transform:translateY(-5px) scale(1.035)}.dva-pet img{width:100%;height:100%;object-fit:contain;animation:dva-pet-idle 5.2s ease-in-out infinite;transform-origin:50% 88%}.dva-pet span{display:block;margin-top:-4px;padding:4px 8px;border:1px solid #8bcdf288;border-radius:999px;background:#092642dd;color:#eaf5ff;font-size:11px;text-align:center}
@@ -479,6 +516,12 @@ function Companion() {
   const [storyMemory, setStoryMemory] = useState(null)
   const [summaryCandidate, setSummaryCandidate] = useState(null)
   const [profileDraft, setProfileDraft] = useState({})
+  const [pplConfigDraft, setPplConfigDraft] = useState(null)
+  const [pplConfigMeta, setPplConfigMeta] = useState(null)
+  const [pplConfigPreview, setPplConfigPreview] = useState(null)
+  const [pplConfigLoading, setPplConfigLoading] = useState(false)
+  const [pplConfigPreviewBusy, setPplConfigPreviewBusy] = useState(false)
+  const [pplConfigSaving, setPplConfigSaving] = useState(false)
   const [motionPreview, setMotionPreview] = useState(null)
   const [motionPreviewBusy, setMotionPreviewBusy] = useState(false)
   const [motionPreviewError, setMotionPreviewError] = useState('')
@@ -947,6 +990,60 @@ function Companion() {
     finally { setPplAuditLoading(false) }
   }
 
+  const loadPplConfiguration = async () => {
+    setShowMoreMenu(false)
+    setPplConfigLoading(true)
+    try {
+      const result = await callApi('ppl-config-get')
+      setPplConfigMeta(result.configuration)
+      setPplConfigDraft(result.configuration.effective)
+      setPplConfigPreview(null)
+      openUtilityPanel('ppl-config')
+    } catch (err) { setError(err.message || String(err)) }
+    finally { setPplConfigLoading(false) }
+  }
+
+  const previewPplConfiguration = async () => {
+    if (!pplConfigDraft) return
+    setPplConfigPreviewBusy(true)
+    setError('')
+    try {
+      const result = await callApi('ppl-config-preview', { configuration: pplConfigDraft })
+      setPplConfigPreview(result.preview)
+    } catch (err) { setError(err.message || String(err)); setPplConfigPreview(null) }
+    finally { setPplConfigPreviewBusy(false) }
+  }
+
+  const savePplConfiguration = async () => {
+    if (!pplConfigDraft || !pplConfigMeta || pplConfigSaving) return
+    setPplConfigSaving(true)
+    setError('')
+    try {
+      const result = await callApi('ppl-config-set', {
+        configuration: pplConfigDraft,
+        expectedRevision: pplConfigMeta.revision,
+      })
+      setPplConfigMeta(result.configuration)
+      setPplConfigDraft(result.configuration.effective)
+      setPplConfigPreview(null)
+      setActivePanel(null)
+      setNotice('PPL 人格参数已应用，从下一轮对话开始生效。')
+      await refresh()
+    } catch (err) {
+      setError(err.code === 'REVISION_CONFLICT'
+        ? '角色数据在编辑期间发生了变化，请重新打开人格调校并加载最新参数。'
+        : err.message || String(err))
+    } finally { setPplConfigSaving(false) }
+  }
+
+  const applyPplConfigurationPreset = preset => {
+    if (!pplConfigMeta) return
+    const values = preset === 'default' ? pplConfigMeta.defaults : PPL_CONFIG_PRESETS[preset]
+    if (!values) return
+    setPplConfigDraft(JSON.parse(JSON.stringify(values)))
+    setPplConfigPreview(null)
+  }
+
   const loadSummaryCandidate = async () => {
     setShowMoreMenu(false)
     try {
@@ -1314,6 +1411,7 @@ function Companion() {
                   openUtilityPanel('profile')
                 } catch (err) { setError(err.message || String(err)) }
               } }, '角色设定'),
+              React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', disabled: pplConfigLoading, onClick: () => void loadPplConfiguration() }, pplConfigLoading ? '读取人格参数…' : 'PPL 人格调校'),
               React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: openBackgroundPanel }, '背景与亮度'),
               React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: () => openUtilityPanel('motion') }, '动作库与动画'),
             ),
@@ -1446,11 +1544,17 @@ function Companion() {
                   const diagnostics = resolution.diagnostics || audit.error?.diagnostics || []
                   const effectTrace = resolution.effectTrace || {}
                   const effectPaths = Object.keys(effectTrace)
+                  const configurationChanges = audit.configuration?.changes || []
+                  const isConfiguration = item.status === 'configuration'
                   return React.createElement('div', { key: item.id, className: 'dva-memory-row' },
-                    React.createElement('strong', null, item.status === 'rejected' ? '规则解析失败' : '规则执行完成'),
+                    React.createElement('strong', null, isConfiguration ? '人格参数已更新' : item.status === 'rejected' ? '规则解析失败' : '规则执行完成'),
                     React.createElement('small', null, new Date(item.createdAt).toLocaleString()),
-                    React.createElement('div', null, '事件：' + (audit.event?.type || '未知') + ' · 场景：' + (audit.scene || '未知') + (audit.event?.classification?.rule ? ' · 分类：' + audit.event.classification.rule : '')),
-                    React.createElement('small', null, '命中规则 ' + activeRules.length + ' 条 · 状态变化 ' + stateChanges.length + ' 项 · 效果轨迹 ' + effectPaths.length + ' 项'),
+                    isConfiguration
+                      ? React.createElement('div', null, 'PPL 人格基础参数 · 调整 ' + configurationChanges.length + ' 项')
+                      : React.createElement('div', null, '事件：' + (audit.event?.type || '未知') + ' · 场景：' + (audit.scene || '未知') + (audit.event?.classification?.rule ? ' · 分类：' + audit.event.classification.rule : '')),
+                    isConfiguration
+                      ? configurationChanges.map(change => React.createElement('small', { key: change.group + '.' + change.key }, change.label + '：' + Math.round(change.before * 100) + '% → ' + Math.round(change.after * 100) + '%'))
+                      : React.createElement('small', null, '命中规则 ' + activeRules.length + ' 条 · 状态变化 ' + stateChanges.length + ' 项 · 效果轨迹 ' + effectPaths.length + ' 项'),
                     audit.persona?.irSha256 ? React.createElement('small', null, 'Persona IR：' + (audit.persona.version || '未知版本') + ' · ' + audit.persona.irSha256.slice(0, 12)) : null,
                     audit.snapshotSha256 ? React.createElement('small', null, '运行快照 SHA-256：' + audit.snapshotSha256.slice(0, 12)) : null,
                     audit.error ? React.createElement('small', { className: 'dva-error' }, (audit.error.code || 'PPL_ERROR') + ' · ' + (audit.error.message || '规则解析失败')) : null,
@@ -1770,6 +1874,71 @@ function Companion() {
             } catch (err) { setError(err.message || String(err)) }
           } }, '恢复默认设定'),
           React.createElement('button', { onClick: () => setActivePanel(null) }, '取消'),
+        ) : null,
+        activePanel === 'ppl-config' ? React.createElement('div', { className: 'dva-memories' },
+          React.createElement('div', { className: 'dva-memory-head' },
+            React.createElement('div', null,
+              React.createElement('strong', null, 'PPL 人格调校'),
+              React.createElement('small', null, '通过滑块调整鲸鱼娘的性格和表达方式，不需要编辑 PPL 源文件。'),
+            ),
+            React.createElement('button', { type: 'button', className: 'dva-panel-back', onClick: closeUtilityPanel }, '← 返回聊天'),
+          ),
+          React.createElement('p', null, '这里只调整人格基础参数；PPL 规则、关系阶段、安全边界和历史记忆保持不变。温柔度设有核心下限，避免破坏鲸鱼娘的基础人格约束。'),
+          React.createElement('div', { className: 'dva-help-actions' },
+            React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => applyPplConfigurationPreset('gentle') }, '温柔陪伴'),
+            React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => applyPplConfigurationPreset('lively') }, '活泼元气'),
+            React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => applyPplConfigurationPreset('calm') }, '稳重克制'),
+            React.createElement('button', { type: 'button', className: 'dva-help-action', onClick: () => applyPplConfigurationPreset('default') }, '恢复默认'),
+          ),
+          ...PPL_CONFIG_GROUPS.map(group => React.createElement('section', { key: group.key, style: { marginTop: '14px', padding: '12px', border: '1px solid #ffffff24', borderRadius: '12px', background: '#06213a88' } },
+            React.createElement('h4', { style: { margin: '0 0 8px' } }, group.title),
+            ...group.fields.map(field => {
+              const value = Number(pplConfigDraft?.[group.key]?.[field.key] ?? pplConfigMeta?.defaults?.[group.key]?.[field.key] ?? 0)
+              return React.createElement('label', { key: group.key + '.' + field.key, style: { display: 'block', marginTop: '12px' } },
+                React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' } },
+                  React.createElement('strong', null, field.label),
+                  React.createElement('strong', { style: { color: '#9bdcff', fontVariantNumeric: 'tabular-nums' } }, Math.round(value * 100) + '%'),
+                ),
+                React.createElement('small', { style: { display: 'block', opacity: .76, margin: '3px 0 6px' } }, field.hint),
+                React.createElement('input', {
+                  type: 'range',
+                  min: field.min,
+                  max: field.max,
+                  step: 0.01,
+                  value,
+                  disabled: pplConfigSaving || pplConfigLoading,
+                  onChange: event => {
+                    const nextValue = Number(event.target.value)
+                    setPplConfigDraft(current => ({
+                      ...current,
+                      [group.key]: { ...current[group.key], [field.key]: nextValue },
+                    }))
+                    setPplConfigPreview(null)
+                  },
+                  style: { width: '100%', accentColor: '#7fd0ff', cursor: 'pointer' },
+                }),
+                React.createElement('small', { style: { display: 'flex', justifyContent: 'space-between', opacity: .62 } },
+                  React.createElement('span', null, Math.round(field.min * 100) + '%'),
+                  React.createElement('span', null, Math.round(field.max * 100) + '%'),
+                ),
+              )
+            }),
+          )),
+          React.createElement('div', { className: 'dva-help-actions', style: { marginTop: '14px' } },
+            React.createElement('button', { type: 'button', disabled: pplConfigPreviewBusy || pplConfigSaving, onClick: () => void previewPplConfiguration() }, pplConfigPreviewBusy ? '正在验证…' : '预览规则效果'),
+            React.createElement('button', { type: 'button', disabled: pplConfigSaving || !pplConfigMeta, onClick: () => void savePplConfiguration() }, pplConfigSaving ? '保存中…' : '保存并应用'),
+            React.createElement('button', { type: 'button', onClick: closeUtilityPanel }, '取消'),
+          ),
+          pplConfigPreview ? React.createElement('section', { style: { marginTop: '12px', padding: '12px', border: '1px solid #68c9a5aa', borderRadius: '12px', background: '#063b3155' } },
+            React.createElement('strong', null, 'PPL 规则预览通过'),
+            React.createElement('small', { style: { display: 'block', opacity: .78, marginTop: '4px' } }, '以下场景均通过人格约束校验。保存后，新的 IR 哈希为 ' + String(pplConfigPreview.irSha256 || '').slice(0, 16) + '…'),
+            ...pplConfigPreview.scenarios.map(scenario => React.createElement('div', { key: scenario.id, className: 'dva-memory-row' },
+              React.createElement('strong', null, scenario.label),
+              React.createElement('small', null, '命中规则：' + (scenario.activeRules.length ? scenario.activeRules.join('、') : '无')),
+            )),
+          ) : null,
+          pplConfigMeta?.configurationError ? React.createElement('small', { className: 'dva-error' }, '已回退到安全默认配置：' + pplConfigMeta.configurationError.message) : null,
+          React.createElement('small', { style: { display: 'block', marginTop: '10px', opacity: .68 } }, '当前 Persona IR：' + String(pplConfigMeta?.irSha256 || '').slice(0, 16) + '…'),
         ) : null,
         activePanel === 'model' ? React.createElement('div', { className: 'dva-memories dva-model-settings' },
           React.createElement('div', { className: 'dva-memory-head' },

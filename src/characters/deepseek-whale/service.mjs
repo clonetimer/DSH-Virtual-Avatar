@@ -1,5 +1,12 @@
 import { createHash } from 'node:crypto'
-import { createDeepseekWhaleRuntime } from '../../ppl/index.mjs'
+import { createDeepseekWhaleRuntime, createPplRuntime } from '../../ppl/index.mjs'
+import {
+  applyPplConfiguration,
+  normalizePplConfiguration,
+  resolvePplConfiguration,
+  PPL_CONFIGURATION_SCHEMA,
+  PPL_CONFIGURATION_FIELDS,
+} from '../../ppl/configuration.mjs'
 import { MemoryService } from '../../memory/service.mjs'
 import { buildConversationContext } from './context-window.mjs'
 import { createSummaryCandidate } from './memory-summary.mjs'
@@ -135,6 +142,32 @@ export class DeepseekWhaleService {
     this.store = store
     this.memory = memoryService || new MemoryService({ store })
     this.ppl = pplRuntime || createDeepseekWhaleRuntime()
+    this.basePplIr = this.ppl.ir ? structuredClone(this.ppl.ir) : null
+    this.pplConfigurationHash = null
+    this.pplConfigurationLoadError = null
+  }
+
+  #syncPplConfiguration(raw = {}) {
+    if (!this.basePplIr) {
+      if (raw && Object.keys(raw).length) {
+        const error = new Error('the injected PPL runtime does not expose a mutable Persona IR')
+        error.code = 'PPL_CONFIGURATION_RUNTIME_UNAVAILABLE'
+        error.status = 503
+        throw error
+      }
+      return { overrides: { schema: PPL_CONFIGURATION_SCHEMA, traits: {}, style: {} } }
+    }
+    const applied = applyPplConfiguration(this.basePplIr, raw)
+    const configurationHash = hashPplValue(applied.overrides)
+    if (configurationHash !== this.pplConfigurationHash) {
+      this.ppl = createPplRuntime({
+        persona: applied.persona,
+        hostKind: 'dsh-virtual-avatar/deepseek-whale',
+      })
+      this.pplConfigurationHash = configurationHash
+    }
+    this.pplConfigurationOverrides = applied.overrides
+    return applied
   }
 
   #initialState(sessionId) {
@@ -147,8 +180,20 @@ export class DeepseekWhaleService {
 
   loadState({ sessionId = 'deepseek-whale' } = {}) {
     const loaded = this.store.loadCharacterState(DEEPSEEK_WHALE_ID)
+    let appliedConfiguration
+    try {
+      appliedConfiguration = this.#syncPplConfiguration(loaded?.state?.pplConfigOverrides || {})
+      this.pplConfigurationLoadError = null
+    } catch (error) {
+      appliedConfiguration = this.#syncPplConfiguration({})
+      this.pplConfigurationLoadError = {
+        code: error.code || 'PPL_CONFIGURATION_INVALID',
+        message: String(error.message || error).slice(0, 180),
+      }
+    }
     if (!loaded) return { state: this.#initialState(sessionId), revision: 0, persisted: false }
     const state = structuredClone(loaded.state)
+    state.pplConfigOverrides = appliedConfiguration.overrides
     state.pplRuntime = mergeObjectDefaults(this.ppl.initialState(sessionId), state.pplRuntime || {})
     if (!state.conversation) state.conversation = { log: [], chatLines: [], choices: [] }
     if (!state.storyMemory) state.storyMemory = createStoryMemory()
@@ -441,6 +486,130 @@ export class DeepseekWhaleService {
       characterId: DEEPSEEK_WHALE_ID,
       memories: this.listMemories(),
     }
+  }
+
+  getPplConfiguration() {
+    if (!this.basePplIr) {
+      const error = new Error('PPL configuration requires a runtime with a Persona IR')
+      error.code = 'PPL_CONFIGURATION_RUNTIME_UNAVAILABLE'
+      error.status = 503
+      throw error
+    }
+    const loaded = this.loadState()
+    const resolved = resolvePplConfiguration(this.basePplIr, loaded.state.pplConfigOverrides || {})
+    return {
+      ...resolved,
+      revision: loaded.revision,
+      irSha256: this.ppl.binding.irSha256,
+      configurationError: this.pplConfigurationLoadError,
+    }
+  }
+
+  previewPplConfiguration(raw = {}) {
+    if (!this.basePplIr) {
+      const error = new Error('PPL configuration requires a runtime with a Persona IR')
+      error.code = 'PPL_CONFIGURATION_RUNTIME_UNAVAILABLE'
+      error.status = 503
+      throw error
+    }
+    const applied = applyPplConfiguration(this.basePplIr, raw)
+    const candidate = createPplRuntime({
+      persona: applied.persona,
+      hostKind: 'dsh-virtual-avatar/deepseek-whale',
+    })
+    const scenarios = [
+      { id: 'private-chat', label: '私密日常交流', scene: 'PRIVATE_HOME', event: { type: 'MESSAGE', actor: 'admin' } },
+      { id: 'comfort', label: '安慰与支持', scene: 'PRIVATE_HOME', event: { type: 'COMFORT', actor: 'admin', subject: 'character', signal: 'comfort' } },
+      { id: 'praise', label: '赞美与鼓励', scene: 'PRIVATE_HOME', event: { type: 'PRAISE', actor: 'admin', subject: 'character', signal: 'praise' } },
+      { id: 'public-space', label: '公开场合', scene: 'PUBLIC_SPACE', event: { type: 'MESSAGE', actor: 'admin' } },
+    ]
+    const results = scenarios.map(scenario => {
+      const result = candidate.resolve({
+        runtimeState: candidate.initialState('ppl-configuration-preview'),
+        scene: scenario.scene,
+        event: scenario.event,
+        turn: 1,
+        step: 1,
+      })
+      if (!result.resolution.valid) {
+        const error = new Error('PPL configuration failed scenario validation: ' + scenario.label)
+        error.code = 'PPL_CONFIGURATION_SCENARIO_INVALID'
+        error.status = 400
+        error.diagnostics = result.resolution.diagnostics
+        throw error
+      }
+      return {
+        id: scenario.id,
+        label: scenario.label,
+        scene: scenario.scene,
+        activeRules: result.resolution.activeRules.map(rule => rule.id),
+        traits: result.resolution.resolved.traits,
+        style: result.resolution.resolved.style,
+        behaviors: result.resolution.resolved.behaviors,
+      }
+    })
+    return {
+      schema: PPL_CONFIGURATION_SCHEMA,
+      valid: true,
+      irSha256: candidate.binding.irSha256,
+      effective: applied.effective,
+      scenarios: results,
+    }
+  }
+
+  updatePplConfiguration(raw = {}, { expectedRevision } = {}) {
+    if (!this.basePplIr) {
+      const error = new Error('PPL configuration requires a runtime with a Persona IR')
+      error.code = 'PPL_CONFIGURATION_RUNTIME_UNAVAILABLE'
+      error.status = 503
+      throw error
+    }
+    const loaded = this.loadState()
+    const applied = applyPplConfiguration(this.basePplIr, raw)
+    const preview = this.previewPplConfiguration(applied.overrides)
+    const previousOverrides = normalizePplConfiguration(loaded.state.pplConfigOverrides || {}, this.basePplIr)
+    if (!this.pplConfigurationLoadError && hashPplValue(previousOverrides) === hashPplValue(applied.overrides)) {
+      return {
+        changed: false,
+        revision: loaded.revision,
+        configuration: this.getPplConfiguration(),
+        preview,
+      }
+    }
+    const previous = resolvePplConfiguration(this.basePplIr, previousOverrides).effective
+    const changes = PPL_CONFIGURATION_FIELDS
+      .map(field => ({
+        group: field.group,
+        key: field.key,
+        label: field.label,
+        before: previous[field.group][field.key],
+        after: applied.effective[field.group][field.key],
+      }))
+      .filter(change => change.before !== change.after)
+    const next = { ...loaded.state, pplConfigOverrides: applied.overrides }
+    const saveOptions = {
+      characterId: DEEPSEEK_WHALE_ID,
+      state: next,
+      expectedRevision: expectedRevision ?? loaded.revision,
+      beforeConfiguration: previousOverrides,
+      afterConfiguration: applied.overrides,
+      changes,
+      irSha256: hashPplValue(applied.persona),
+    }
+    const saved = typeof this.store.savePplConfiguration === 'function'
+      ? this.store.savePplConfiguration(saveOptions)
+      : this.store.saveCharacterState(DEEPSEEK_WHALE_ID, next, saveOptions.expectedRevision)
+    this.#syncPplConfiguration(applied.overrides)
+    return {
+      changed: true,
+      revision: saved.revision,
+      configuration: this.getPplConfiguration(),
+      preview,
+    }
+  }
+
+  resetPplConfiguration({ expectedRevision } = {}) {
+    return this.updatePplConfiguration({}, { expectedRevision })
   }
 
   updateProfile(overrides, { expectedRevision } = {}) {

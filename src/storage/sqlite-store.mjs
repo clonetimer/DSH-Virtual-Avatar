@@ -288,7 +288,7 @@ export class SqliteAvatarStore {
       const manifest = {
         schema: BACKUP_SCHEMA,
         createdAt: new Date().toISOString(),
-        pluginVersion: '0.1.0-dev.16',
+        pluginVersion: '0.1.0-dev.17',
         database: { path: 'avatar.sqlite', byteLength: statSync(databasePath).size, sha256: sha256(readFileSync(databasePath)) },
         assets: entries.filter(item => item.path.startsWith('assets/')),
         files: entries,
@@ -466,6 +466,30 @@ export class SqliteAvatarStore {
       ON CONFLICT(character_id) DO UPDATE SET state_json=excluded.state_json, revision=excluded.revision, updated_at=excluded.updated_at
     `).run(id, stableJson(state), revision, now)
     return { state: structuredClone(state), revision, updatedAt: now }
+  }
+
+  savePplConfiguration({
+    characterId = 'deepseek',
+    state,
+    expectedRevision,
+    beforeConfiguration = {},
+    afterConfiguration = {},
+    changes = [],
+    irSha256 = null,
+  } = {}) {
+    this.#assertOpen()
+    if (!state || typeof state !== 'object' || Array.isArray(state)) throw new TypeError('character state required')
+    return this.transaction(() => {
+      const saved = this.saveCharacterState(characterId, state, expectedRevision)
+      this.#recordAudit('character', String(characterId), 'PPL_CONFIGURATION_UPDATED', null,
+        beforeConfiguration, afterConfiguration, {
+          schema: 'dsh-virtual-avatar.ppl-config/1',
+          source: 'ppl-visual-editor',
+          changes: Array.isArray(changes) ? changes : [],
+          irSha256,
+        })
+      return saved
+    })
   }
 
   findDomainEvent(eventId) {

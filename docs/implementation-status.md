@@ -454,3 +454,38 @@
 - PPL Core conformance and official reference-persona suites on both matrix legs.
 - PPL source/IR/runtime/reference parity verification.
 - DSH Desktop manual acceptance of PPL audit display and a controlled resolution-failure scenario.
+
+
+## P5-C1：PPL 可视化人格配置（dev.17）
+
+### 已实现
+- 新增版本化配置契约 `dsh-virtual-avatar.ppl-config/1`，仅开放经过筛选的 traits 与 style 数值，不开放规则、关系转换、invariants、identity 或 semantic bindings 的直接编辑。
+- 温柔度下限为 0.60，与 `CORE_TONE` 不变量保持一致；其他开放参数限制在 0～1，统一按 0.01 步进归一化。
+- 角色服务从不可变基础 Persona IR 派生配置 IR；不会覆盖 `personas/deepseek-whale.ppl` 或 `personas/deepseek-whale.pir.json`。
+- 配置持久化在角色状态的 `pplConfigOverrides`，备份随角色状态保存；保存采用乐观 revision 检查。
+- SQLite 在同一事务中保存角色配置并写入 `PPL_CONFIGURATION_UPDATED` 审计事件，记录参数变化、配置 schema 和 IR SHA-256。
+- 新增预览场景：私密日常、安慰支持、赞美鼓励、公开场合；每个场景均执行真实 PPL Runtime 解析并检查不变量。
+- 新增 Host API：`ppl-config-get`、`ppl-config-preview`、`ppl-config-set`、`ppl-config-reset`。
+- 桌面端新增滑块、百分比读数、温柔陪伴/活泼元气/稳重克制预设、默认恢复、规则效果预览和保存应用入口。
+- PPL 审计历史新增人格参数变更记录；角色关系、记忆、聊天记录、动作库与安全规则保持独立。
+- 不带 Persona IR 的注入式测试/扩展 Runtime 保留原有行为，不强行替换其运行时适配器。
+
+### 自动化验收
+- PPL 配置 schema：仅允许白名单 traits/style 字段；拒绝未知字段、非有限数值、越界参数和不兼容 schema。
+- 服务层：预览不写入角色状态；保存后运行时 IR 哈希变化；重启服务后配置恢复；默认恢复保留其他角色数据。
+- 并发：使用 expectedRevision 拒绝过期配置写入。
+- Host API：覆盖读取、预览、保存、恢复、审计和参数越界错误。
+- 桌面端构建测试：检查 PPL 人格调校入口、预设、预览与保存操作进入 classic-script 交付包。
+
+### dev.17 CI verification
+- Node 24 and Node 24.9.0: PASS.
+- Plugin suite: 123 passed / 0 failed on each matrix leg.
+- PPL Core 0.3.0 conformance: 21/21 on each matrix leg.
+- Upstream reference personas: all 3 compile and pass 13 embedded source tests.
+- DeepSeek Whale PPL source tests: 7/7 passed.
+- PPL source/IR/runtime/reference parity verifier: PASS on both matrix legs.
+- PPL configuration tests cover whitelist/range validation, base-value normalization, immutable IR derivation, real runtime preview, persistent save/restart, audit, optimistic revisions, no-op saves and invalid-config recovery.
+- Desktop manual acceptance remains separate from automated CI.
+
+### 手动验收
+- DSH Desktop 0.2.2-rc.1 安装 dev.17，按《功能使用与桌面验收指南》第 12 节完成滑块、预设、场景预览、保存、重启和恢复默认验收。
