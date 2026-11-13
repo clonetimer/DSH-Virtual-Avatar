@@ -361,6 +361,7 @@
 
 ### Verification
 - Client unit tests cover native metadata mapping, tiered patpat selection, fallback when action references are missing, readable labels and frame/duration metadata.
-- CI Run 43377785866: Node 24 and Node 24.9.0 both PASS; each matrix leg reports 105 passed / 0 failed. PPL checks report 7 passed / 0 failed, and npm package verification passes.
-- Windows Web/Desktop artifact dev.13 generated: ZIP 3,524,169 bytes; inner TGZ 3,522,476 bytes; SHA-256 c53e99eb91e22fdfb25c64ee67ab3a9e6500d8f1da22a15a8ebd4e3b4813eda2, matching both the .sha256 file and package-info.json.
+- PR merge-commit CI Run 43377996000: Node 24 and Node 24.9.0 both PASS; each matrix leg reports 105 passed / 0 failed. PPL checks report 7 passed / 0 failed, and npm package verification passes.
+- Integrated Windows Web/Desktop artifact dev.13: outer ZIP 3,524,343 bytes (SHA-256 c89ea8f25b232a01419ca19a268cc0ac39d330773b08b4b2bfd6127e8a0a090b); inner TGZ 3,522,648 bytes; SHA-256 27ff334e1a287b9542262e2a192c47554705f14861d93db33a2008f82a44189b, matching both the .sha256 file and package-info.json.
+- Private Google Drive file updated in place; existing file ID and URL retained, then downloaded again and verified byte-identical to the PR merge-run artifact.
 - Desktop acceptance must confirm the mapping suggestions, action preview, PPL switching, collapsed-pet playback, reduced-motion and unbind behavior.
