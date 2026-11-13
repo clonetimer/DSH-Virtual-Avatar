@@ -530,6 +530,9 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
   const [modelCatalog, setModelCatalog] = useState(null)
   const [modelProvider, setModelProvider] = useState('')
   const [modelName, setModelName] = useState('')
+  const [modelTest, setModelTest] = useState(null)
+  const [editingMemoryId, setEditingMemoryId] = useState(null)
+  const [editingMemoryText, setEditingMemoryText] = useState('')
   const [auditEvents, setAuditEvents] = useState([])
   const [olderLines, setOlderLines] = useState([])
   const [olderCursor, setOlderCursor] = useState(null)
@@ -603,6 +606,7 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
         setModelCatalog(result)
         setModelProvider(result.selection?.provider || '')
         setModelName(result.selection?.model || '')
+        setModelTest(null)
       } else if (nextTab === 'audit') {
         const result = await callApi('character-audit-history', characterArgs({ limit: 50 }))
         setAuditEvents(result.events || [])
@@ -764,8 +768,27 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
           React.createElement('h3', null, '此角色的私人记忆'),
           React.createElement('p', null, '这些记忆只属于当前角色，不会自动加入鲸鱼娘或其他角色的对话。'),
           ...memories.map(item => React.createElement('div', { key: item.id, className: 'dva-memory-row' },
-            React.createElement('span', null, item.text),
+            editingMemoryId === item.id
+              ? React.createElement('div', null,
+                  React.createElement('textarea', {
+                    rows: 2, value: editingMemoryText, maxLength: 400,
+                    onChange: event => setEditingMemoryText(event.target.value),
+                  }),
+                  React.createElement('button', { type: 'button', disabled: disabled || !editingMemoryText.trim(), onClick: async () => {
+                    try {
+                      await callApi('character-memory-edit', characterArgs({ memoryId: item.id, text: editingMemoryText }))
+                      setEditingMemoryId(null)
+                      await openTab('memories')
+                    } catch (cause) { setError(cause.message || String(cause)) }
+                  } }, '保存修改'),
+                  React.createElement('button', { type: 'button', onClick: () => setEditingMemoryId(null) }, '取消'),
+                )
+              : React.createElement('span', null, item.text),
             React.createElement('div', null,
+              React.createElement('button', {
+                type: 'button', disabled: disabled,
+                onClick: () => { setEditingMemoryId(item.id); setEditingMemoryText(item.text) },
+              }, '编辑'),
               React.createElement('button', { type: 'button', disabled,
                 onClick: async () => {
                   try {
@@ -841,6 +864,7 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
                 const entry = modelCatalog.providers.find(item => item.id === provider)
                 setModelProvider(provider)
                 setModelName(entry?.models?.[0]?.id || '')
+                setModelTest(null)
               },
             },
               React.createElement('option', { value: '' }, '请选择'),
@@ -850,22 +874,36 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
           React.createElement('label', { className: 'dva-generic-field' }, '模型 ID',
             React.createElement('input', {
               value: modelName, disabled: disabled || modelCatalog.locked,
-              onChange: event => setModelName(event.target.value), placeholder: '填写模型 ID',
+              onChange: event => { setModelName(event.target.value); setModelTest(null) }, placeholder: '填写模型 ID',
             }),
           ),
           modelChoices.length ? React.createElement('select', {
             value: modelChoices.some(x => x.id === modelName) ? modelName : '',
             disabled: disabled || modelCatalog.locked,
-            onChange: event => setModelName(event.target.value),
+            onChange: event => { setModelName(event.target.value); setModelTest(null) },
           },
             React.createElement('option', { value: '' }, '从目录选择模型'),
             ...modelChoices.map(item => React.createElement('option', { key: item.id, value: item.id }, item.name)),
           ) : null,
+          modelTest ? React.createElement('p', { role: 'status' },
+            '模型连接测试通过：' + modelTest.provider + ' / ' + modelTest.model) : null,
           React.createElement('div', { className: 'dva-generic-buttons' },
+            React.createElement('button', { type: 'button', disabled, onClick: async () => {
+              setBusy(true)
+              try {
+                const result = await callApi('character-model-test', characterArgs({}))
+                setModelTest(result.test)
+                setNotice('当前角色模型连接测试成功。')
+              } catch (cause) {
+                setModelTest(null)
+                setError('模型测试失败：' + (cause.message || String(cause)))
+              } finally { setBusy(false) }
+            } }, busy ? '测试中…' : '测试模型连接'),
             React.createElement('button', { type: 'button', disabled: disabled || modelCatalog.locked, onClick: async () => {
               try {
                 await callApi('character-model-set', characterArgs({ provider: modelProvider, model: modelName }))
                 setNotice('角色模型已保存。')
+                setModelTest(null)
                 await openTab('models')
               } catch (cause) { setError(cause.message || String(cause)) }
             } }, '保存模型'),
@@ -873,6 +911,7 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
               try {
                 await callApi('character-model-clear', characterArgs({}))
                 setNotice('已恢复跟随 DSH 默认模型。')
+                setModelTest(null)
                 await openTab('models')
               } catch (cause) { setError(cause.message || String(cause)) }
             } }, '使用 DSH 默认模型'),
