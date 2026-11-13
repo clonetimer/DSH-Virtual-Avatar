@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { SqliteAvatarStore } from '../../src/storage/sqlite-store.mjs'
 import { createMultiCharacterRegistry } from '../../src/ppl/multi-character-registry.mjs'
 import { DeepseekWhaleService } from '../../src/characters/deepseek-whale/service.mjs'
@@ -132,4 +135,43 @@ test('P5-C2 identical event ids across roles are rejected even with identical pa
     assert.equal(store.loadCharacterState('deepseek'), null)
     assert.equal(store.loadCharacterState('ppl-zhuang-fangyi').state.conversation.chatLines.length, 2)
   } finally { store.close() }
+})
+
+test('P5-C2 SQLite restart restores selected role and every role-owned record independently', () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-multi-character-restart-'))
+  const filename = join(root, 'avatar.sqlite')
+  try {
+    const store = new SqliteAvatarStore(filename)
+    const registry = createMultiCharacterRegistry({ store })
+    const other = registry.getService('ppl-zhuang-fangyi')
+    registry.select('ppl-zhuang-fangyi')
+    const prepared = other.prepareTurn({ text: '早上好', eventId: 'restart-role-turn-1' })
+    other.finalizeTurn(prepared, { reply: '早上好。' })
+    other.remember('角色专属的休息计划', { eventId: 'restart-role-memory-1' })
+    other.saveConfiguration({ style: { verbosity: 0.53 } })
+    store.setChatModelSelection({
+      characterId: 'ppl-zhuang-fangyi',
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+    })
+    store.close()
+
+    const reopenedStore = new SqliteAvatarStore(filename)
+    try {
+      const reloaded = createMultiCharacterRegistry({ store: reopenedStore })
+      assert.equal(reloaded.active().characterId, 'ppl-zhuang-fangyi')
+      const companion = reloaded.getService('ppl-zhuang-fangyi')
+      assert.equal(companion.loadState().state.conversation.chatLines.length, 2)
+      assert.equal(companion.listMemories()[0].text, '角色专属的休息计划')
+      assert.equal(companion.getConfiguration().effective.style.verbosity, 0.53)
+      assert.equal(reopenedStore.getChatModelSelection('ppl-zhuang-fangyi').model, 'deepseek-v4-flash')
+      assert.equal(reopenedStore.getChatModelSelection('deepseek'), null)
+      assert.equal(new DeepseekWhaleService({ store: reopenedStore }).listMemories().length, 0)
+      assert.equal(new DeepseekWhaleService({ store: reopenedStore }).loadState().state.conversation.chatLines.length, 0)
+    } finally {
+      reopenedStore.close()
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
