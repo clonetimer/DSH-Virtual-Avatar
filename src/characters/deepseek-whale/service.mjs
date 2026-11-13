@@ -566,7 +566,7 @@ export class DeepseekWhaleService {
     const loaded = this.loadState()
     const applied = applyPplConfiguration(this.basePplIr, raw)
     const preview = this.previewPplConfiguration(applied.overrides)
-    const previousOverrides = loaded.state.pplConfigOverrides || {}
+    const previousOverrides = normalizePplConfiguration(loaded.state.pplConfigOverrides || {}, this.basePplIr)
     if (!this.pplConfigurationLoadError && hashPplValue(previousOverrides) === hashPplValue(applied.overrides)) {
       return {
         changed: false,
