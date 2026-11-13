@@ -163,3 +163,10 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - 导入动作包只会保存素材，不会自动启用，也不会替换 Whale 立绘、PPL、关系、聊天或记忆。
 - 当前尚无形象匹配且授权明确的 Whale 多帧素材包。Kitty/ChrisKitty 等示例仅用于验证格式与播放器，不得当作鲸鱼娘动画。
 - 详见 [DyberPet 本地动作库与持久化导入说明](docs/dyberpet-motion-library.md)。
+
+## Whale native motion binding and PPL action playback（dev.12）
+
+- 已导入的 DyberPet 动作包可显式绑定到鲸鱼娘：配置待机、思考、回复、摸摸、休息及可选 PPL 情绪动作。
+- 绑定前必须由用户确认素材形象与鲸鱼娘一致且拥有使用权；系统不自动推断角色身份。
+- 绑定后，PPL 表情和交互状态驱动展开立绘与收起桌宠播放对应原生帧；未配置的动作安全回退到待机动作。
+- 解除绑定恢复原有鲸鱼娘立绘；减少动态效果设置暂停逐帧播放。详见 [鲸鱼娘原生动作绑定与 PPL 联动](docs/whale-motion-binding.md)。
