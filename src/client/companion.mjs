@@ -977,7 +977,7 @@ function Companion() {
             }),
           ),
           React.createElement('small', { className: 'dva-motion-note' },
-            '仅发送配置和帧文件名到本地 DSH 插件进行校验；PNG 留在当前浏览器中预览，不上传、不保存、不替换鲸鱼娘。',
+            '校验时只发送配置与帧文件名；PNG 留在浏览器预览。只有明确点击“导入到本地动作库”后，才逐帧传输到本机 DSH Host 持久保存。',
           ),
           motionPreviewBusy ? React.createElement('div', { role: 'status' }, '正在验证角色配置与 PNG 帧…') : null,
           motionPreviewError ? React.createElement('div', { role: 'alert', className: 'dva-motion-error' }, motionPreviewError) : null,
