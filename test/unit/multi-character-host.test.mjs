@@ -57,7 +57,7 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
         return
       }
       invocations.push(input)
-      assert.equal(input.model, 'deepseek-v4-flash')
+      assert.ok(['deepseek-v4-flash', 'deepseek-v4-flash-draft'].includes(input.model), 'chat must use the selected DSH model route')
       assert.match(input.system, /庄方宜/)
       assert.doesNotMatch(input.system, /你正在 DeepSeek 鲸鱼娘/)
       assert.match(input.messages[0].content[0].text, /独立 PPL 角色陪伴对话/)
@@ -68,7 +68,7 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
         assert.ok(assistantHistory?.id)
         assert.equal(assistantHistory.source?.kind, 'model')
         assert.equal(assistantHistory.source?.provider, 'deepseek-official')
-        assert.equal(assistantHistory.source?.model, 'deepseek-v4-flash')
+        assert.equal(assistantHistory.source?.model, invocations[0].model, 'durable assistant history must preserve the model actually used')
       }
       yield { type: 'text-delta', text: '谢谢。我会注意休息。' }
       yield { type: 'finish', reason: { kind: 'stop' } }
