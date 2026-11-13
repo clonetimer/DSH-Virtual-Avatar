@@ -882,7 +882,7 @@ function Companion() {
   }, [runtimeBinding?.packId, runtimeMotionActionId])
 
   useEffect(() => {
-    if (prefersReducedMotion) {
+    if (prefersReducedMotion || runtimeMotionFrameFailed) {
       setRuntimeMotionStep(0)
       return
     }
@@ -895,7 +895,7 @@ function Companion() {
         : Math.min(step + 1, runtimeMotionFrameTotal - 1))
     }, Math.max(15, runtimeMotionAction.frameIntervalMs))
     return () => window.clearTimeout(timer)
-  }, [runtimeMotionActionId, runtimeMotionFrameTotal, runtimeMotionAction?.frameIntervalMs, avatarMotion, runtimeMotionStep, prefersReducedMotion])
+  }, [runtimeMotionActionId, runtimeMotionFrameTotal, runtimeMotionAction?.frameIntervalMs, avatarMotion, runtimeMotionStep, prefersReducedMotion, runtimeMotionFrameFailed])
 
   useEffect(() => {
     if (!runtimeMotionAction) return
@@ -1300,7 +1300,7 @@ function Companion() {
                 React.createElement('div', { className: 'dva-motion-pack-meta' },
                   React.createElement('strong', null, pack.displayName),
                   React.createElement('small', null,
-                    (view?.character?.motionBinding?.packId === pack.id ? '已绑定 · ' : '未绑定 · ') + pack.frameCount + ' 帧 · ' + (pack.byteLength / 1024 / 1024).toFixed(2) + ' MB · ' +
+                    (view?.character?.motionBinding?.packId === pack.id ? '已绑定 · ' : '未绑定 · ') + (pack.actionCount || 0) + ' 种动作 · ' + pack.frameCount + ' 帧 · ' + (pack.byteLength / 1024 / 1024).toFixed(2) + ' MB · ' +
                     new Date(pack.createdAt).toLocaleString(),
                   ),
                   React.createElement('small', null, 'SHA-256 ' + String(pack.sourceHash || '').slice(0, 16) + '…'),
