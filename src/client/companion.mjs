@@ -265,6 +265,18 @@ function createChatEventId() {
   return 'whale-chat-' + id
 }
 
+function formatChatFailure(error = {}, titleOverride = '') {
+  const failure = describeChatFailure(error)
+  const route = [failure.provider, failure.model].filter(Boolean).join(' / ')
+  return [
+    titleOverride || failure.title,
+    failure.code ? '错误代码：' + failure.code : '',
+    route ? '模型路由：' + route : '',
+    failure.hint,
+    failure.detail,
+  ].filter(Boolean).join('\n')
+}
+
 function describeChatFailure(error = {}) {
   const code = String(error?.code || '')
   const detail = String(error?.message || error || '未知错误').trim().slice(0, 240)
@@ -287,9 +299,30 @@ function describeChatFailure(error = {}) {
     failure.title = '模型响应超时'
     failure.hint = '服务端在等待模型响应时超时。可以稍后重试，或在模型设置中选择响应更快的模型。'
     failure.suggestedAction = 'model'
-  } else if (code === 'LLM_STREAM_FAILED' || code === 'MODEL_TEST_FAILED' || /transport failed/i.test(detail)) {
-    failure.title = '模型服务连接中断'
-    failure.hint = '检查服务商状态、API 凭证、接口地址、调用额度和网络，然后重试本次消息。'
+  } else if (code === 'TRANSPORT' || /transport failed/i.test(detail)) {
+    failure.title = '模型传输失败'
+    failure.hint = 'DSH 已找到模型路由，但请求未能完成。先在模型设置中测试当前服务商和模型，再检查网络、DNS、TLS、服务商接口地址及本地凭证。'
+  } else if (['MISSING_CREDENTIAL', 'INVALID_CREDENTIAL', 'AUTH', 'ACCOUNT_SIGN_IN_REQUIRED', 'ACCOUNT_TOKEN_INVALID'].includes(code)) {
+    failure.title = '模型凭证或登录状态不可用'
+    failure.hint = '请在 DSH 的服务商设置中补充 API Key 或重新登录账号。凭证不会保存在角色配置中。'
+    failure.retryable = false
+    failure.suggestedAction = 'model'
+  } else if (['RATE_LIMIT', 'QUOTA', 'ACCOUNT_QUOTA'].includes(code)) {
+    failure.title = '模型调用额度或频率受限'
+    failure.hint = '检查服务商额度、账号余额和速率限制；恢复后可以重试本次消息。'
+  } else if (code === 'NO_ADAPTER' || code === 'MODEL_PROVIDER_UNAVAILABLE') {
+    failure.title = 'DSH 尚未启用所选模型服务商'
+    failure.hint = '打开 DSH 的模型设置，启用对应服务商，再回到角色模型设置重新读取目录。'
+    failure.retryable = false
+    failure.suggestedAction = 'model'
+  } else if (code === 'MODEL_UNSUPPORTED' || code === 'CLIENT_UPGRADE_REQUIRED') {
+    failure.title = '当前 DSH 版本不支持所选模型'
+    failure.hint = '请从 DSH 已公布的模型目录中选择当前版本支持的模型，或升级 DSH。'
+    failure.retryable = false
+    failure.suggestedAction = 'model'
+  } else if (code === 'LLM_STREAM_FAILED' || code === 'MODEL_TEST_FAILED') {
+    failure.title = '模型服务未能完成响应'
+    failure.hint = '查看错误代码和路由信息，再检查服务商状态、凭证、额度及网络。'
   } else if (code === 'REVISION_CONFLICT') {
     failure.title = '角色状态刚刚发生变化'
     failure.hint = '本次回复没有提交。重试即可基于最新角色状态继续对话。'
@@ -528,6 +561,7 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
   const [configDraft, setConfigDraft] = useState(null)
   const [configPreview, setConfigPreview] = useState(null)
   const [modelCatalog, setModelCatalog] = useState(null)
+  const [modelCatalogLoading, setModelCatalogLoading] = useState(false)
   const [modelProvider, setModelProvider] = useState('')
   const [modelName, setModelName] = useState('')
   const [modelTest, setModelTest] = useState(null)
@@ -558,6 +592,7 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
     setConfigDraft(null)
     setConfiguration(null)
     setModelCatalog(null)
+    setModelCatalogLoading(false)
     setOlderLines([])
     setOlderCursor(null)
     void callApi('character-view', { characterId: roleId }).then(result => {
@@ -582,7 +617,7 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
       setText(current => current === clean ? '' : current)
       if (result.duplicate) setNotice('已找回上一条完成的回复，没有重复写入角色状态。')
     } catch (cause) {
-      setError('本次消息未完成：' + (cause.message || String(cause)) + '。消息已保留。')
+      setError(formatChatFailure(cause, '本次角色对话未完成') + '\n消息已保留，可修复模型路由后重试。')
       setRetry({ text: clean, eventId })
     } finally {
       setBusy(false)
@@ -602,17 +637,28 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
         setConfigDraft(result.configuration.effective)
         setConfigPreview(null)
       } else if (nextTab === 'models') {
-        const result = await callApi('character-model-catalog', characterArgs({}))
-        setModelCatalog(result)
-        setModelProvider(result.selection?.provider || '')
-        setModelName(result.selection?.model || '')
+        setModelCatalogLoading(true)
+        setModelCatalog(null)
         setModelTest(null)
+        try {
+          const result = await callApi('character-model-catalog', characterArgs({}))
+          setModelCatalog(result)
+          const provider = result.savedSelection?.provider || result.selection?.provider || result.providers?.[0]?.id || ''
+          const providerEntry = (result.providers || []).find(item => item.id === provider)
+          const model = result.savedSelection?.model || result.selection?.model || providerEntry?.models?.[0]?.id || ''
+          setModelProvider(provider)
+          setModelName(model)
+        } finally {
+          setModelCatalogLoading(false)
+        }
       } else if (nextTab === 'audit') {
         const result = await callApi('character-audit-history', characterArgs({ limit: 50 }))
         setAuditEvents(result.events || [])
       }
     } catch (cause) {
-      setError(cause.message || String(cause))
+      setError(formatChatFailure(cause))
+    } finally {
+      if (nextTab === 'models') setModelCatalogLoading(false)
     }
   }
 
@@ -853,136 +899,137 @@ function GenericCompanionPanel({ role, roles, open, onOpen, onCollapse, onSwitch
           configuration.configurationError ? React.createElement('p', { className: 'dva-error' },
             '检测到无效旧配置，已安全恢复默认参数：' + configuration.configurationError.message) : null,
         ) : null,
-        tab === 'models' && modelCatalog ? React.createElement('div', { className: 'dva-generic-section' },
+        tab === 'models' ? React.createElement('div', { className: 'dva-generic-section' },
           React.createElement('h3', null, '当前角色专用模型'),
-          React.createElement('p', null, '仅影响本角色的对话。未单独设置时使用 DSH 默认模型。'),
-          React.createElement('label', { className: 'dva-generic-field' }, '模型服务商',
+          React.createElement('p', null, '仅影响「' + role.label + '」，不会修改鲸鱼娘、其他角色或 DSH 主 Agent 的模型设置。'),
+          modelCatalogLoading ? React.createElement('p', { role: 'status' }, '正在读取 DSH 已启用的服务商与模型目录…') : null,
+          !modelCatalogLoading && !modelCatalog
+            ? React.createElement('div', { className: 'dva-generic-preview' },
+                React.createElement('strong', null, '模型目录读取失败'),
+                React.createElement('p', null, '模型设置面板仍可打开。请重新读取目录，或检查 DSH Host 的 LLM 服务状态。'),
+                React.createElement('button', { type: 'button', disabled, onClick: () => void openTab('models') }, '重新读取模型目录'),
+              )
+            : null,
+          modelCatalog?.providerCatalogError ? React.createElement('p', { className: 'dva-error' },
+            '服务商目录错误：' + modelCatalog.providerCatalogError) : null,
+          modelCatalog?.locked ? React.createElement('p', null, '模型由插件级配置固定；本角色可以测试当前模型，但不能覆盖它。') : null,
+          modelCatalog?.selection ? React.createElement('div', { className: 'dva-generic-preview' },
+            React.createElement('strong', null, '当前生效路由'),
+            React.createElement('p', null, modelCatalog.selection.provider + ' / ' + modelCatalog.selection.model),
+            React.createElement('small', null, '来源：' + ({
+              'character-local': '当前角色独立设置',
+              'dsh-default': 'DSH 默认模型',
+              'plugin-config': '插件固定配置',
+              fallback: '插件回退路由',
+            }[modelCatalog.selection.source] || modelCatalog.selection.source)),
+            modelCatalog.selectionRegistered === false
+              ? React.createElement('p', { className: 'dva-error' }, '该路由当前未在 DSH 注册，无法调用。请在 DSH 中启用对应服务商。')
+              : null,
+          ) : null,
+          modelCatalog && !modelCatalog.providers?.length ? React.createElement('div', { className: 'dva-generic-preview' },
+            React.createElement('strong', null, '没有发现已启用的模型服务商'),
+            React.createElement('p', null, '请先在 DSH 的模型设置中启用 DeepSeek API Key、DeepSeek 账号或其他服务商，然后返回本页面重新读取。'),
+          ) : null,
+          modelCatalog?.providers?.length ? React.createElement('label', { className: 'dva-generic-field' }, '模型服务商',
             React.createElement('select', {
-              disabled: disabled || modelCatalog.locked, value: modelProvider,
+              disabled: disabled || modelCatalog.locked,
+              value: modelProvider,
               onChange: event => {
                 const provider = event.target.value
                 const entry = modelCatalog.providers.find(item => item.id === provider)
                 setModelProvider(provider)
                 setModelName(entry?.models?.[0]?.id || '')
                 setModelTest(null)
+                setError('')
               },
             },
-              React.createElement('option', { value: '' }, '请选择'),
-              ...(modelCatalog.providers || []).map(item => React.createElement('option', { key: item.id, value: item.id }, item.name)),
+              React.createElement('option', { value: '' }, '请选择 DSH 已启用的服务商'),
+              ...modelCatalog.providers.map(item => React.createElement('option', { key: item.id, value: item.id }, item.name + ' · ' + item.id)),
             ),
-          ),
-          React.createElement('label', { className: 'dva-generic-field' }, '模型 ID',
-            React.createElement('input', {
-              value: modelName, disabled: disabled || modelCatalog.locked,
-              onChange: event => { setModelName(event.target.value); setModelTest(null) }, placeholder: '填写模型 ID',
-            }),
-          ),
-          modelChoices.length ? React.createElement('select', {
-            value: modelChoices.some(x => x.id === modelName) ? modelName : '',
-            disabled: disabled || modelCatalog.locked,
-            onChange: event => { setModelName(event.target.value); setModelTest(null) },
-          },
-            React.createElement('option', { value: '' }, '从目录选择模型'),
-            ...modelChoices.map(item => React.createElement('option', { key: item.id, value: item.id }, item.name)),
           ) : null,
-          modelTest ? React.createElement('p', { role: 'status' },
-            '模型连接测试通过：' + modelTest.provider + ' / ' + modelTest.model) : null,
+          modelCatalog?.providers?.length ? React.createElement('label', { className: 'dva-generic-field' }, '模型 ID',
+            React.createElement('input', {
+              value: modelName,
+              disabled: disabled || modelCatalog.locked,
+              onChange: event => { setModelName(event.target.value); setModelTest(null); setError('') },
+              placeholder: '例如 deepseek-v4-flash',
+            }),
+          ) : null,
+          modelCatalog?.providers?.find(item => item.id === modelProvider)?.models?.length
+            ? React.createElement('label', { className: 'dva-generic-field' }, '模型目录',
+                React.createElement('select', {
+                  value: modelChoices.some(item => item.id === modelName) ? modelName : '',
+                  disabled: disabled || modelCatalog.locked,
+                  onChange: event => { setModelName(event.target.value); setModelTest(null); setError('') },
+                },
+                  React.createElement('option', { value: '' }, '从当前服务商目录选择'),
+                  ...modelChoices.map(item => React.createElement('option', { key: item.id, value: item.id }, item.name + ' · ' + item.id)),
+                ),
+              )
+            : modelCatalog && modelProvider ? React.createElement('p', null,
+                modelCatalog.providers.find(item => item.id === modelProvider)?.catalogError
+                  || '当前服务商没有公布模型目录。可以手动填写模型 ID，但必须先通过真实连接测试。')
+              : null,
+          modelCatalog?.providers?.find(item => item.id === modelProvider)?.catalogError
+            ? React.createElement('small', null, modelCatalog.providers.find(item => item.id === modelProvider).catalogError)
+            : null,
+          modelTest && modelTest.provider === modelProvider && modelTest.model === modelName
+            ? React.createElement('div', { className: 'dva-generic-preview', role: 'status' },
+                React.createElement('strong', null, '模型连接测试通过'),
+                React.createElement('p', null, modelTest.provider + ' / ' + modelTest.model),
+                React.createElement('small', null, '响应：' + modelTest.response + ' · 尝试次数：' + modelTest.attempts),
+              )
+            : null,
           React.createElement('div', { className: 'dva-generic-buttons' },
-            React.createElement('button', { type: 'button', disabled, onClick: async () => {
-              setBusy(true)
-              try {
-                const result = await callApi('character-model-test', characterArgs({}))
-                setModelTest(result.test)
-                setNotice('当前角色模型连接测试成功。')
-              } catch (cause) {
+            React.createElement('button', {
+              type: 'button',
+              disabled: disabled || !modelProvider || !modelName.trim() || !modelCatalog?.providers?.some(item => item.id === modelProvider),
+              onClick: async () => {
+                setBusy(true)
+                setError('')
                 setModelTest(null)
-                setError('模型测试失败：' + (cause.message || String(cause)))
-              } finally { setBusy(false) }
-            } }, busy ? '测试中…' : '测试模型连接'),
-            React.createElement('button', { type: 'button', disabled: disabled || modelCatalog.locked, onClick: async () => {
-              try {
-                await callApi('character-model-set', characterArgs({ provider: modelProvider, model: modelName }))
-                setNotice('角色模型已保存。')
-                setModelTest(null)
-                await openTab('models')
-              } catch (cause) { setError(cause.message || String(cause)) }
-            } }, '保存模型'),
-            React.createElement('button', { type: 'button', disabled: disabled || modelCatalog.locked, onClick: async () => {
-              try {
-                await callApi('character-model-clear', characterArgs({}))
-                setNotice('已恢复跟随 DSH 默认模型。')
-                setModelTest(null)
-                await openTab('models')
-              } catch (cause) { setError(cause.message || String(cause)) }
-            } }, '使用 DSH 默认模型'),
+                try {
+                  const result = await callApi('character-model-test', characterArgs({ provider: modelProvider, model: modelName.trim() }))
+                  setModelTest(result.test)
+                  setNotice('当前角色模型连接测试成功。')
+                } catch (cause) {
+                  setModelTest(null)
+                  setError(formatChatFailure(cause, '模型连接测试未通过'))
+                } finally { setBusy(false) }
+              },
+            }, busy ? '正在测试…' : '测试当前选择'),
+            React.createElement('button', {
+              type: 'button',
+              disabled: disabled || modelCatalog?.locked || !modelProvider || !modelName.trim()
+                || modelTest?.provider !== modelProvider || modelTest?.model !== modelName.trim(),
+              onClick: async () => {
+                try {
+                  await callApi('character-model-set', characterArgs({ provider: modelProvider, model: modelName.trim() }))
+                  setNotice('角色专属模型已保存；后续对话将使用该路由。')
+                  setModelTest(null)
+                  await openTab('models')
+                } catch (cause) { setError(formatChatFailure(cause, '模型保存失败')) }
+              },
+            }, '保存并应用'),
+            React.createElement('button', {
+              type: 'button',
+              disabled: disabled || modelCatalog?.locked,
+              onClick: async () => {
+                try {
+                  await callApi('character-model-clear', characterArgs({}))
+                  setNotice('已清除角色覆盖，后续对话将跟随 DSH 默认模型。')
+                  setModelTest(null)
+                  await openTab('models')
+                } catch (cause) { setError(formatChatFailure(cause, '恢复 DSH 默认模型失败')) }
+              },
+            }, '使用 DSH 默认模型'),
+            React.createElement('button', {
+              type: 'button', disabled: modelCatalogLoading || disabled,
+              onClick: () => void openTab('models'),
+            }, '重新读取目录'),
           ),
         ) : null,
-        tab === 'audit' ? React.createElement('div', { className: 'dva-generic-section' },
-          React.createElement('h3', null, '角色专属 PPL 审计'),
-          !auditEvents.length ? React.createElement('p', null, '暂无已完成的 PPL 对话或参数修改记录。') : null,
-          ...auditEvents.map(item => React.createElement('div', { key: item.id, className: 'dva-memory-row' },
-            React.createElement('strong', null, item.type === 'PPL_CONFIGURATION_UPDATED' ? '人格配置更新' : '对话与规则提交'),
-            React.createElement('small', null, item.createdAt),
-            item.details?.pplAudit
-              ? React.createElement('small', null, '规则：' + (item.details.pplAudit.resolution?.activeRules || []).map(rule => rule.id).join('、'))
-              : null,
-            item.details?.changes
-              ? React.createElement('small', null, '调整字段：' + item.details.changes.map(change => change.label).join('、'))
-              : null,
-          )),
-        ) : null,
-      ),
-    ),
-  )
-}
-
-function Companion() {
-  const [view, setView] = useState(null)
-  const [roles, setRoles] = useState([])
-  const [selectedRoleId, setSelectedRoleId] = useState('deepseek')
-  const [roleSwitchBusy, setRoleSwitchBusy] = useState(false)
-  const [open, setOpen] = useState(false)
-  const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [avatarMotion, setAvatarMotion] = useState('idle')
-  const [avatarBubble, setAvatarBubble] = useState('')
-  const [avatarExpressionOverride, setAvatarExpressionOverride] = useState(null)
-  const [sceneBusy, setSceneBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [chatFailure, setChatFailure] = useState(null)
-  const [memories, setMemories] = useState([])
-  const [memoryQuery, setMemoryQuery] = useState('')
-  const [memoryLevel, setMemoryLevel] = useState('all')
-  const [memoryPinned, setMemoryPinned] = useState('all')
-  const [backups, setBackups] = useState([])
-  const [activePanel, setActivePanel] = useState(null)
-  const [showMoreMenu, setShowMoreMenu] = useState(false)
-  const [notice, setNotice] = useState('')
-  const [diagnostics, setDiagnostics] = useState(null)
-  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false)
-  const [modelTestBusy, setModelTestBusy] = useState(false)
-  const [modelTestResult, setModelTestResult] = useState(null)
-  const [modelCatalog, setModelCatalog] = useState(null)
-  const [modelCatalogBusy, setModelCatalogBusy] = useState(false)
-  const [modelDraftProvider, setModelDraftProvider] = useState('')
-  const [modelDraftModel, setModelDraftModel] = useState('')
-  const [modelSaving, setModelSaving] = useState(false)
-  const [backgroundDraft, setBackgroundDraft] = useState('palace-night')
-  const [backgroundOverlayDraft, setBackgroundOverlayDraft] = useState(0.32)
-  const [backgroundSaving, setBackgroundSaving] = useState(false)
-  const [backupBusy, setBackupBusy] = useState(false)
-  const [editingMemoryId, setEditingMemoryId] = useState(null)
-  const [memoryDraft, setMemoryDraft] = useState('')
-  const [olderLines, setOlderLines] = useState([])
-  const [historyCursor, setHistoryCursor] = useState(null)
-  const [historyTotal, setHistoryTotal] = useState(0)
-  const [historyLoading, setHistoryLoading] = useState(false)
-  const [historySearchLoading, setHistorySearchLoading] = useState(false)
-  const [relationshipLoading, setRelationshipLoading] = useState(false)
-  const [memoryLoading, setMemoryLoading] = useState(false)
-  const [historyQuery, setHistoryQuery] = useState('')
-  const [historyMatches, setHistoryMatches] = useState([])
-  const [relationshipEvents, setRelationshipEvents] = useState([])
+st [relationshipEvents, setRelationshipEvents] = useState([])
   const [pplAuditEvents, setPplAuditEvents] = useState([])
   const [pplAuditLoading, setPplAuditLoading] = useState(false)
   const [memoryCandidates, setMemoryCandidates] = useState([])
