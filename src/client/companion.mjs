@@ -1795,8 +1795,9 @@ function Companion() {
     setModelTestBusy(true)
     setError('')
     try {
-      const result = await callApi('model-test')
+      const result = await callApi('model-test', { provider: modelDraftProvider, model: modelDraftModel.trim() })
       setModelTestResult(result.test)
+      setNotice('当前模型草稿连接测试成功；确认无误后即可保存并应用。')
       if (activePanel === 'diagnostics') {
         const refreshed = await callApi('diagnostics')
         setDiagnostics(refreshed.diagnostics)
@@ -2632,6 +2633,7 @@ function Companion() {
                 setModelDraftProvider(provider)
                 setModelDraftModel(entry?.models?.[0]?.id || '')
                 setModelTestResult(null)
+                setError('')
               },
             },
               React.createElement('option', { value: '' }, '请选择已启用的服务商'),
@@ -2645,7 +2647,7 @@ function Companion() {
               maxLength: 256,
               disabled: modelCatalogBusy || modelCatalog?.locked || modelSaving || !modelDraftProvider,
               placeholder: '例如 deepseek-v4-flash',
-              onChange: event => { setModelDraftModel(event.target.value); setModelTestResult(null) },
+              onChange: event => { setModelDraftModel(event.target.value); setModelTestResult(null); setError('') },
             }),
           ),
           (() => {
@@ -2678,12 +2680,12 @@ function Companion() {
           React.createElement('div', { className: 'dva-model-actions' },
             React.createElement('button', {
               type: 'button',
-              disabled: modelCatalogBusy || modelSaving || modelCatalog?.locked || !modelDraftProvider || !modelDraftModel.trim(),
+              disabled: modelCatalogBusy || modelSaving || modelCatalog?.locked || !modelDraftProvider || !modelDraftModel.trim() || modelTestResult?.status !== 'success' || modelTestResult.provider !== modelDraftProvider || modelTestResult.model !== modelDraftModel.trim(),
               onClick: () => void saveModelSelection(),
             }, modelSaving ? '正在保存…' : '保存鲸鱼娘模型'),
             React.createElement('button', {
               type: 'button',
-              disabled: modelTestBusy || modelSaving || !modelCatalog?.selection || modelCatalog.selection.provider !== modelDraftProvider || modelCatalog.selection.model !== modelDraftModel.trim(),
+              disabled: modelTestBusy || modelSaving || modelCatalogBusy || !modelDraftProvider || !modelDraftModel.trim() || !modelCatalog?.providers?.some(item => item.id === modelDraftProvider),
               onClick: () => void testModelConnection(),
             }, modelTestBusy ? '测试中…' : '测试连接'),
             React.createElement('button', {
