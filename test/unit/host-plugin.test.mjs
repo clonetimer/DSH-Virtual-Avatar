@@ -594,6 +594,7 @@ test('DyberPet motion pack upload persists verified PNG frames, supports preview
     assert.equal(bound.body.binding.packId, packId)
     assert.equal(bound.body.view.character.motionBinding.identityConfirmed, true)
     assert.deepEqual(bound.body.view.character.motionBinding.mapping, { idle: 'idle', thinking: 'pat', patting: 'pat', cheerful: 'pat' })
+    assert.equal(Object.hasOwn(bound.body.view.character.motionBinding, 'catalog'), false)
 
     const bindingRead = await call(route.handler, { action: 'motion-pack-binding' })
     assert.equal(bindingRead.body.binding.displayName, 'Whale Gesture Test')
