@@ -125,6 +125,6 @@ test('built client preserves companion features without bundling its own React',
   assert.match(artifact, /本地动作库/)
   assert.match(artifact, /motionUploadControllerRef\.current\.abort\(\)/)
   assert.match(artifact, /blobUrls/)
-  assert.match(artifact, /motion-pack-preview/)
+  assert.match(artifact, /dva-motion-library/)
   assert.match(artifact, /shell\.overlay/)
 })
