@@ -308,13 +308,13 @@
 - Actual Windows DSH Desktop 0.2.2-rc.1 visual acceptance remains a manual gate.
 
 ### dev.11 CI and artifact evidence (2026-11-13)
-- Workflow Run `43362038139`: Node 24.9.0 and Node 24 both PASS.
+- Workflow Run `43362357104`: Node 24.9.0 and Node 24 both PASS.
 - Full project tests: 96 passed / 0 failed on each matrix leg.
 - SQLite persistence/reopen, duplicate detection, hash tamper detection, backup inclusion and restore, uninstall, and interrupted-uninstall recovery: PASS.
 - Host binary upload, complete-frame commit, GET frame integrity, diagnostics accounting, incomplete commit rejection and invalid path/PNG rejection: PASS.
 - Client classic artifact, explicit import consent, local library preview/uninstall and cancellation/cleanup checks: PASS.
 - PPL compile, DSH classic client loader and npm pack verification: PASS.
-- Windows artifact `0.1.0-dev.11`: ZIP 3,510,399 bytes; ZIP CRC PASS. Inner TGZ 3,508,713 bytes; SHA-256 `25bca9bb0e9d53f456fffa0de168d4ed29df23ec46514ebf9db20f2cf09022c0`, verified against both `.sha256` and `package-info.json`.
+- Windows artifact `0.1.0-dev.11`: ZIP 3,510,989 bytes; ZIP CRC PASS. Inner TGZ 3,509,313 bytes; SHA-256 `4e4500f6b078de719fdd7a14188c967950c012f87fcb63c4d2dd0b763d28595d`, verified against both `.sha256` and `package-info.json`.
 - Private Google Drive file updated in place; existing file ID and URL retained.
 
 ### Remaining manual gate
