@@ -55,3 +55,10 @@ test('chat failure guidance explains timeout and event-id conflicts without unsa
   assert.equal(conflict.title, '消息请求编号冲突')
   assert.equal(conflict.retryable, false)
 })
+
+test('Whale model settings tests the selected draft before allowing save', () => {
+  assert.match(source, /callApi\('model-test',\s*\{\s*provider:\s*modelDraftProvider,\s*model:\s*modelDraftModel\.trim\(\)\s*\}\)/u)
+  assert.match(source, /modelTestBusy \|\| modelSaving \|\| modelCatalogBusy \|\| !modelDraftProvider \|\| !modelDraftModel\.trim\(\)/u)
+  assert.match(source, /modelTestResult\?\.status !== 'success'.*modelTestResult\.provider !== modelDraftProvider.*modelTestResult\.model !== modelDraftModel\.trim\(\)/su)
+  assert.doesNotMatch(source, /modelCatalog\.selection\.provider !== modelDraftProvider \|\| modelCatalog\.selection\.model !== modelDraftModel\.trim\(\)/u)
+})
