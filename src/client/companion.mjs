@@ -169,6 +169,100 @@ const MOTION_BINDING_SLOTS = Object.freeze([
   { key: 'starry', label: '憧憬' },
 ])
 
+function describeMotionActionOption(id, action = {}) {
+  const normalized = String(id || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  const labels = [
+    [/^(?:default|stand|idle)$/u, '待机'],
+    [/^(?:think|thinking|focus)$/u, '思考'],
+    [/^(?:talk|speak|reply|respond|response)$/u, '回复'],
+    [/^(?:pat|patting|patpat|touch)$/u, '摸摸'],
+    [/^left_?walk$/u, '向左行走'],
+    [/^right_?walk$/u, '向右行走'],
+    [/^(?:walk|move)$/u, '行走'],
+    [/^fall_?asleep$/u, '入睡'],
+    [/^(?:sleep|rest|nap)$/u, '休息'],
+    [/^drag$/u, '拖拽'],
+    [/^fall$/u, '跌落'],
+    [/^(?:angry|mad)$/u, '生气'],
+    [/^(?:happy|cheerful|smile|joy)$/u, '开心'],
+    [/^(?:shy|blush)$/u, '害羞'],
+    [/^(?:serious|sad|subdued|grief)$/u, '认真 / 低落'],
+    [/^(?:confused|question|doubt)$/u, '疑惑'],
+    [/^(?:frightened|fright|scared|fear|nervous)$/u, '紧张'],
+    [/^(?:exasperated|annoyed|annoy|ugh)$/u, '无奈'],
+    [/^(?:starry|wonder|sparkle|dream)$/u, '憧憬'],
+    [/^on_?floor$/u, '地面姿态'],
+  ]
+  const matched = labels.find(([pattern]) => pattern.test(normalized))
+  const frameCount = Number(action?.frameCount ?? action?.frames?.length ?? 0)
+  const durationMs = Number(action?.durationMs || 0)
+  const details = frameCount > 0
+    ? ' · ' + frameCount + ' 帧' + (Number.isFinite(durationMs) && durationMs > 0 ? ' · ' + (durationMs / 1000).toFixed(1) + ' 秒' : '')
+    : ''
+  return (matched ? matched[1] + '（' + id + '）' : '动作（' + id + '）') + details
+}
+
+function suggestMotionBinding(catalog) {
+  const actions = catalog?.actions && typeof catalog.actions === 'object' ? catalog.actions : {}
+  const ids = Object.keys(actions)
+  const valid = id => typeof id === 'string' && Object.prototype.hasOwnProperty.call(actions, id)
+  const exact = (...names) => {
+    for (const name of names) {
+      const id = ids.find(candidate => candidate.toLowerCase() === name.toLowerCase())
+      if (valid(id)) return id
+    }
+    return null
+  }
+  const matching = pattern => ids.find(id => pattern.test(id)) || null
+  const bindings = catalog?.bindings || {}
+  const mapping = {}
+  const idle = valid(catalog?.defaultAction) ? catalog.defaultAction : ids[0] || null
+  if (idle) mapping.idle = idle
+
+  const thinking = (valid(bindings.focus) ? bindings.focus : null)
+    || exact('thinking', 'think', 'focus')
+    || matching(/(?:^|[_-])(?:thinking|think|focus)(?:$|[_-])/i)
+  if (thinking) mapping.thinking = thinking
+
+  const patpatCandidates = []
+  if (typeof bindings.patpat === 'string') patpatCandidates.push(bindings.patpat)
+  const patpatByTier = bindings.patpatByTier && typeof bindings.patpatByTier === 'object'
+    ? bindings.patpatByTier
+    : {}
+  for (const tier of Object.keys(patpatByTier).sort((a, b) => Number(a) - Number(b))) {
+    patpatCandidates.push(patpatByTier[tier])
+  }
+  const patting = patpatCandidates.find(valid)
+    || exact('patpat', 'pat', 'patting', 'touch')
+    || matching(/(?:^|[_-])(?:pat|patting|patpat|touch)(?:$|[_-])/i)
+  if (patting) mapping.patting = patting
+
+  const responding = exact('talk', 'speak', 'reply', 'respond', 'response', 'responding')
+    || matching(/(?:^|[_-])(?:talk|speak|reply|respond|response)(?:$|[_-])/i)
+  if (responding) mapping.responding = responding
+
+  const resting = exact('sleep', 'rest', 'nap')
+    || matching(/(?:^|[_-])(?:sleep|rest|nap)(?:$|[_-])/i)
+    || matching(/fall[_-]?asleep/i)
+  if (resting) mapping.resting = resting
+
+  const expressionPatterns = {
+    cheerful: /(?:^|[_-])(?:cheerful|happy|smile|joy)(?:$|[_-])/i,
+    shy: /(?:^|[_-])(?:shy|blush)(?:$|[_-])/i,
+    serious: /(?:^|[_-])(?:serious|sad|subdued|grief)(?:$|[_-])/i,
+    confused: /(?:^|[_-])(?:confused|confusion|question|doubt)(?:$|[_-])/i,
+    angry: /(?:^|[_-])(?:angry|anger|mad)(?:$|[_-])/i,
+    frightened: /(?:^|[_-])(?:frightened|fright|scared|fear|nervous)(?:$|[_-])/i,
+    exasperated: /(?:^|[_-])(?:exasperated|annoyed|annoy|ugh)(?:$|[_-])/i,
+    starry: /(?:^|[_-])(?:starry|wonder|sparkle|dream)(?:$|[_-])/i,
+  }
+  for (const [slot, pattern] of Object.entries(expressionPatterns)) {
+    const actionId = exact(slot) || matching(pattern)
+    if (actionId) mapping[slot] = actionId
+  }
+  return mapping
+}
+
 function resolveBoundMotionAction(binding, { avatarMotion = 'idle', expression = 'neutral', fatigue = 0 } = {}) {
   if (!binding?.identityConfirmed || !binding?.catalog?.actions) return null
   const mapping = binding.mapping || {}
@@ -409,7 +503,7 @@ function Companion() {
       })
       const currentBinding = view?.character?.motionBinding
       const existingMapping = currentBinding?.packId === pack.id ? currentBinding.mapping : null
-      setMotionBindingDraft(existingMapping || { idle: pack.catalog.defaultAction || Object.keys(pack.catalog.actions)[0] })
+      setMotionBindingDraft(existingMapping || suggestMotionBinding(pack.catalog))
       setMotionIdentityConfirmed(currentBinding?.packId === pack.id && currentBinding.identityConfirmed === true)
       setMotionActionId(pack.catalog.defaultAction || Object.keys(pack.catalog.actions)[0])
       setMotionPlaybackStep(0)
@@ -468,6 +562,15 @@ function Companion() {
     }
   }
 
+
+  const updateMotionBindingSlot = (slotKey, actionId) => {
+    setMotionBindingDraft(current => ({ ...current, [slotKey]: actionId || null }))
+    if (actionId) {
+      setMotionActionId(actionId)
+      setMotionPlaybackStep(0)
+      setMotionPlaying(true)
+    }
+  }
 
   const saveMotionBinding = async () => {
     if (motionPreview?.source !== 'installed' || !motionPreview.packId || !motionIdentityConfirmed || !motionBindingDraft.idle || motionBindingBusy) return
@@ -1185,7 +1288,7 @@ function Companion() {
                 onChange: event => { setMotionActionId(event.target.value); setMotionPlaybackStep(0); setMotionPlaying(false) },
               },
                 ...Object.keys(motionPreview.catalog.actions).map(id =>
-                  React.createElement('option', { key: id, value: id }, id),
+                  React.createElement('option', { key: id, value: id }, describeMotionActionOption(id, motionPreview.catalog.actions[id])),
                 ),
               ),
               React.createElement('button', {
@@ -1217,6 +1320,16 @@ function Companion() {
             React.createElement('small', { className: 'dva-motion-note' },
               '绑定后，鲸鱼娘的待机、思考、回复、摸摸和 PPL 情绪可以调用对应逐帧动作。原有聊天、关系和记忆不受影响。',
             ),
+            React.createElement('small', { className: 'dva-motion-note' },
+              '已从原生配置推荐 ' + Object.keys(suggestMotionBinding(motionPreview.catalog)).length + ' 项映射；未配置项会回退到待机。选择映射时会自动播放该动作，便于核对。',
+            ),
+            React.createElement('div', { className: 'dva-motion-binding-actions' },
+              React.createElement('button', {
+                type: 'button',
+                disabled: motionBindingBusy,
+                onClick: () => setMotionBindingDraft(suggestMotionBinding(motionPreview.catalog)),
+              }, '应用推荐映射'),
+            ),
             view?.character?.motionBinding && view.character.motionBinding.packId !== motionPreview.packId
               ? React.createElement('small', { className: 'dva-motion-note' },
                   '当前已绑定：' + view.character.motionBinding.displayName + '。保存后会切换到当前动作包。',
@@ -1229,11 +1342,11 @@ function Companion() {
                   React.createElement('select', {
                     value: motionBindingDraft[slot.key] || '',
                     'aria-label': slot.label,
-                    onChange: event => setMotionBindingDraft(current => ({ ...current, [slot.key]: event.target.value || null })),
+                    onChange: event => updateMotionBindingSlot(slot.key, event.target.value || null),
                   },
                     React.createElement('option', { value: '' }, slot.required ? '请选择待机动作' : '未单独指定'),
                     ...Object.keys(motionPreview.catalog.actions).map(id =>
-                      React.createElement('option', { key: id, value: id }, id),
+                      React.createElement('option', { key: id, value: id }, describeMotionActionOption(id, motionPreview.catalog.actions[id])),
                     ),
                   ),
                 ),
@@ -1248,11 +1361,11 @@ function Companion() {
                     React.createElement('select', {
                       value: motionBindingDraft[slot.key] || '',
                       'aria-label': slot.label,
-                      onChange: event => setMotionBindingDraft(current => ({ ...current, [slot.key]: event.target.value || null })),
+                      onChange: event => updateMotionBindingSlot(slot.key, event.target.value || null),
                     },
                       React.createElement('option', { value: '' }, '使用待机动作'),
                       ...Object.keys(motionPreview.catalog.actions).map(id =>
-                        React.createElement('option', { key: id, value: id }, id),
+                        React.createElement('option', { key: id, value: id }, describeMotionActionOption(id, motionPreview.catalog.actions[id])),
                       ),
                     ),
                   ),

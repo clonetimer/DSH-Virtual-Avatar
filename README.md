@@ -38,15 +38,15 @@ node --version
 npm --version
 ```
 
-从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.12` artifact 下载以下文件：
-- `dsh-virtual-avatar-0.1.0-dev.12.tgz`
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.13` artifact 下载以下文件：
+- `dsh-virtual-avatar-0.1.0-dev.13.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
 
 先校验包文件（在下载目录执行）：
 
 ```powershell
-Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.12.tgz -Algorithm SHA256
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.13.tgz -Algorithm SHA256
 ```
 
 将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
@@ -54,14 +54,14 @@ Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.12.tgz -Algorithm SHA256
 **DSH Web（web profile）：**
 
 ```powershell
-dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.12.tgz"
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.13.tgz"
 dsh --profile web --dump-config
 ```
 
 **DSH Desktop：** 建议直接使用桌面版「插件 → 添加插件」，输入 `.tgz` 的完整绝对路径。若在 DSH 桌面版「应用 → 管理 dsh 命令…」安装了专用 CLI，可在完全退出 Desktop 后使用其保留的 `desktop` profile：
 
 ```powershell
-dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.12.tgz"
+dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.13.tgz"
 dsh --profile desktop --dump-config
 ```
 
@@ -170,3 +170,11 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - 绑定前必须由用户确认素材形象与鲸鱼娘一致且拥有使用权；系统不自动推断角色身份。
 - 绑定后，PPL 表情和交互状态驱动展开立绘与收起桌宠播放对应原生帧；未配置的动作安全回退到待机动作。
 - 解除绑定恢复原有鲸鱼娘立绘；减少动态效果设置暂停逐帧播放。详见 [鲸鱼娘原生动作绑定与 PPL 联动](docs/whale-motion-binding.md)。
+
+
+## Guided native motion mapping（dev.13）
+
+- 打开已导入的 DyberPet 动作包时，插件会参考原生 pet_conf.json 的待机、focus、patpat 配置，并结合常见动作标识，给出可修改的映射建议。
+- 动作下拉项显示中文用途、原始动作标识、帧数和时长；选择映射时自动播放对应动作，便于逐项核对。
+- “应用推荐映射”可以恢复系统建议；未匹配的动作仍安全回退到待机，不会自动绑定未经确认的素材。
+- 推荐逻辑只辅助配置，不识别角色身份，也不会绕过用户对鲸鱼娘素材外观与使用权的确认。
