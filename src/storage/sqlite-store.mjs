@@ -127,6 +127,33 @@ CREATE TABLE IF NOT EXISTS media_assets (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_media_assets_character ON media_assets(character_id, created_at);
+
+CREATE TABLE IF NOT EXISTS motion_packs (
+  pack_id TEXT PRIMARY KEY,
+  character_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  source_hash TEXT NOT NULL UNIQUE,
+  pet_config_json TEXT NOT NULL,
+  act_config_json TEXT NOT NULL,
+  catalog_json TEXT NOT NULL,
+  frame_count INTEGER NOT NULL,
+  byte_length INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_motion_packs_character ON motion_packs(character_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS motion_pack_assets (
+  pack_id TEXT NOT NULL,
+  relative_path TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  byte_length INTEGER NOT NULL,
+  mime_type TEXT NOT NULL DEFAULT 'image/png',
+  PRIMARY KEY(pack_id, relative_path),
+  FOREIGN KEY(pack_id) REFERENCES motion_packs(pack_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_motion_pack_assets_pack ON motion_pack_assets(pack_id, relative_path);
+
 CREATE TABLE IF NOT EXISTS migration_rollback_snapshots (migration_id TEXT PRIMARY KEY, character_id TEXT NOT NULL, after_revision INTEGER NOT NULL, created_asset_ids_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'available', created_at TEXT NOT NULL, rolled_back_at TEXT, FOREIGN KEY(migration_id) REFERENCES migration_runs(migration_id));
 
 CREATE TABLE IF NOT EXISTS audit_events (
@@ -157,7 +184,33 @@ export class SqliteAvatarStore {
     this.assetDirectory = assetDirectory
     this.#db = new DatabaseSync(filename)
     this.#db.exec(SCHEMA)
+    this.#reconcileMotionPackDirectories()
     if (filename !== ':memory:') this.#db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
+  }
+
+  #reconcileMotionPackDirectories() {
+    if (!this.assetDirectory) return
+    const root = join(this.assetDirectory, 'motion-packs')
+    if (!existsSync(root)) return
+    const known = new Set(this.#db.prepare('SELECT pack_id FROM motion_packs').all().map(row => row.pack_id))
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.isSymbolicLink()) continue
+      const absolute = join(root, entry.name)
+      const deleting = /^\.([0-9a-f-]{36})\.deleting$/i.exec(entry.name)
+      if (deleting) {
+        const packId = deleting[1]
+        const finalDirectory = join(root, packId)
+        if (known.has(packId) && !existsSync(finalDirectory)) {
+          try { renameSync(absolute, finalDirectory) } catch { /* keep tombstone for the next startup */ }
+        } else {
+          try { rmSync(absolute, { recursive: true, force: true }) } catch { /* retry on next startup */ }
+        }
+        continue
+      }
+      if (/^\.[0-9a-f-]{36}\.tmp$/i.test(entry.name) || !known.has(entry.name)) {
+        try { rmSync(absolute, { recursive: true, force: true }) } catch { /* retry on next startup */ }
+      }
+    }
   }
 
   #assertOpen() {
@@ -217,7 +270,7 @@ export class SqliteAvatarStore {
       const manifest = {
         schema: BACKUP_SCHEMA,
         createdAt: new Date().toISOString(),
-        pluginVersion: '0.1.0-dev.1',
+        pluginVersion: '0.1.0-dev.11',
         database: { path: 'avatar.sqlite', byteLength: statSync(databasePath).size, sha256: sha256(readFileSync(databasePath)) },
         assets: entries.filter(item => item.path.startsWith('assets/')),
         files: entries,
@@ -674,6 +727,167 @@ export class SqliteAvatarStore {
       throw conflict('MEDIA_ASSET_HASH_MISMATCH', 'stored media asset failed hash verification')
     }
     return { asset, bytes }
+  }
+
+
+  getMotionPack(packId) {
+    this.#assertOpen()
+    const row = this.#db.prepare('SELECT * FROM motion_packs WHERE pack_id=?').get(String(packId))
+    if (!row) return null
+    return {
+      id: row.pack_id,
+      characterId: row.character_id,
+      displayName: row.display_name,
+      sourceHash: row.source_hash,
+      petConfig: JSON.parse(row.pet_config_json),
+      actConfig: JSON.parse(row.act_config_json),
+      catalog: JSON.parse(row.catalog_json),
+      frameCount: row.frame_count,
+      byteLength: row.byte_length,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
+  listMotionPacks(characterId = 'deepseek') {
+    this.#assertOpen()
+    return this.#db.prepare('SELECT pack_id FROM motion_packs WHERE character_id=? ORDER BY created_at DESC,pack_id')
+      .all(String(characterId)).map(row => this.getMotionPack(row.pack_id))
+  }
+
+  importMotionPack({ characterId = 'deepseek', displayName, petConfig, actConfig, catalog, frames } = {}) {
+    this.#assertOpen()
+    if (!this.assetDirectory) throw conflict('MOTION_STORAGE_UNAVAILABLE', 'persistent motion asset storage is not configured')
+    if (characterId !== 'deepseek') throw conflict('MOTION_CHARACTER_UNSUPPORTED', 'this plugin only accepts motion packs for the DeepSeek Whale character')
+    const name = String(displayName || '').trim().slice(0, 64)
+    if (!name) throw conflict('MOTION_PACK_NAME_REQUIRED', 'motion pack display name is required')
+    if (!petConfig || typeof petConfig !== 'object' || Array.isArray(petConfig)
+        || !actConfig || typeof actConfig !== 'object' || Array.isArray(actConfig)
+        || !catalog || catalog.schema !== 'dsh.dyberpet-motion/1') {
+      throw conflict('MOTION_PACK_CONFIG_INVALID', 'validated DyberPet configuration and catalog are required')
+    }
+    if (!Array.isArray(frames) || !frames.length || frames.length > 1200) {
+      throw conflict('MOTION_PACK_FRAME_COUNT_INVALID', 'motion pack must contain 1 to 1200 PNG frames')
+    }
+
+    const normalized = []
+    const seen = new Set()
+    let totalBytes = 0
+    for (const item of frames) {
+      const relativePath = String(item?.path || '')
+      if (!/^action\/[A-Za-z0-9_-]+_[0-9]+\.png$/i.test(relativePath) || relativePath.includes('..')) {
+        throw conflict('MOTION_PACK_PATH_INVALID', 'motion frame path is invalid')
+      }
+      const key = relativePath.toLowerCase()
+      if (seen.has(key)) throw conflict('MOTION_PACK_FRAME_DUPLICATE', 'motion pack contains duplicate frame paths')
+      seen.add(key)
+      const bytes = Buffer.isBuffer(item.bytes) ? item.bytes : Buffer.from(item.bytes || [])
+      if (!bytes.length || bytes.length > 6 * 1024 * 1024) throw conflict('MOTION_PACK_FRAME_SIZE_INVALID', 'each motion PNG must be between 1 byte and 6 MiB')
+      if (bytes.length < 8 || !Buffer.from([137,80,78,71,13,10,26,10]).equals(bytes.subarray(0,8))) {
+        throw conflict('MOTION_PACK_PNG_INVALID', 'motion frame is not a PNG file')
+      }
+      totalBytes += bytes.length
+      if (totalBytes > 64 * 1024 * 1024) throw conflict('MOTION_PACK_TOO_LARGE', 'motion pack exceeds the 64 MiB total limit')
+      normalized.push({ path: relativePath, bytes, sha256: sha256(bytes) })
+    }
+
+    const sourceDigest = createHash('sha256')
+    sourceDigest.update(stableJson({ characterId, displayName: name, petConfig, actConfig, catalog }))
+    for (const item of normalized.sort((a,b) => a.path.localeCompare(b.path))) {
+      sourceDigest.update(item.path).update('\0').update(item.sha256)
+    }
+    const sourceHash = sourceDigest.digest('hex')
+    const existing = this.#db.prepare('SELECT pack_id FROM motion_packs WHERE source_hash=?').get(sourceHash)
+    if (existing) return { duplicate: true, pack: this.getMotionPack(existing.pack_id) }
+
+    const packId = randomUUID()
+    const createdAt = new Date().toISOString()
+    const parent = join(this.assetDirectory, 'motion-packs')
+    const temporary = join(parent, '.' + packId + '.tmp')
+    const finalDirectory = join(parent, packId)
+    mkdirSync(temporary, { recursive: true, mode: 0o700 })
+    let moved = false
+    try {
+      for (const item of normalized) {
+        const absolute = join(temporary, item.path)
+        mkdirSync(dirname(absolute), { recursive: true, mode: 0o700 })
+        writeFileSync(absolute, item.bytes, { flag: 'wx', mode: 0o600 })
+      }
+      renameSync(temporary, finalDirectory)
+      moved = true
+      this.transaction(() => {
+        this.#db.prepare(`
+          INSERT INTO motion_packs(pack_id,character_id,display_name,source_hash,pet_config_json,act_config_json,catalog_json,frame_count,byte_length,created_at,updated_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?)
+        `).run(packId, characterId, name, sourceHash, stableJson(petConfig), stableJson(actConfig), stableJson(catalog), normalized.length, totalBytes, createdAt, createdAt)
+        const insert = this.#db.prepare('INSERT INTO motion_pack_assets(pack_id,relative_path,sha256,byte_length,mime_type) VALUES(?,?,?,?,?)')
+        for (const item of normalized) {
+          insert.run(packId, item.path, item.sha256, item.bytes.length, 'image/png')
+        }
+        this.#recordAudit('motion-pack', packId, 'MOTION_PACK_IMPORTED', null, null, { sourceHash }, {
+          characterId, displayName: name, frameCount: normalized.length, byteLength: totalBytes,
+        })
+      })
+      return { duplicate: false, pack: this.getMotionPack(packId) }
+    } catch (error) {
+      try { rmSync(temporary, { recursive: true, force: true }) } catch { /* preserve original error */ }
+      if (moved) { try { rmSync(finalDirectory, { recursive: true, force: true }) } catch { /* preserve original error */ } }
+      throw error
+    }
+  }
+
+  readMotionPackFrame(packId, relativePath) {
+    this.#assertOpen()
+    const path = String(relativePath || '')
+    if (!/^action\/[A-Za-z0-9_-]+_[0-9]+\.png$/i.test(path) || path.includes('..')) {
+      throw conflict('MOTION_PACK_PATH_INVALID', 'motion frame path is invalid')
+    }
+    const row = this.#db.prepare('SELECT sha256,byte_length FROM motion_pack_assets WHERE pack_id=? AND relative_path=?')
+      .get(String(packId), path)
+    if (!row) return null
+    const absolute = join(this.assetDirectory, 'motion-packs', String(packId), path)
+    let bytes
+    try { bytes = readFileSync(absolute) } catch (cause) {
+      const error = conflict('MOTION_PACK_FRAME_MISSING', 'stored motion frame is missing')
+      error.cause = cause
+      throw error
+    }
+    if (bytes.length !== row.byte_length || sha256(bytes) !== row.sha256) {
+      throw conflict('MOTION_PACK_FRAME_HASH_MISMATCH', 'stored motion frame failed integrity verification')
+    }
+    return { bytes, mimeType: 'image/png', byteLength: row.byte_length, sha256: row.sha256 }
+  }
+
+  deleteMotionPack(packId, { confirmed = false } = {}) {
+    this.#assertOpen()
+    if (confirmed !== true) throw conflict('CONFIRMATION_REQUIRED', 'explicit motion pack removal confirmation is required')
+    const pack = this.getMotionPack(packId)
+    if (!pack) return { deleted: false, reason: 'MOTION_PACK_NOT_FOUND' }
+    const parent = join(this.assetDirectory, 'motion-packs')
+    const directory = join(parent, String(packId))
+    if (!directory.startsWith(parent + '/') || String(packId).includes('/') || String(packId).includes('..')) {
+      throw conflict('MOTION_PACK_PATH_INVALID', 'motion pack directory path is invalid')
+    }
+    const tombstone = join(parent, '.' + String(packId) + '.deleting')
+    let moved = false
+    if (existsSync(directory)) {
+      renameSync(directory, tombstone)
+      moved = true
+    }
+    try {
+      this.transaction(() => {
+        this.#db.prepare('DELETE FROM motion_packs WHERE pack_id=?').run(String(packId))
+        this.#recordAudit('motion-pack', String(packId), 'MOTION_PACK_REMOVED', null, { sourceHash: pack.sourceHash }, null, {
+          characterId: pack.characterId, frameCount: pack.frameCount, byteLength: pack.byteLength,
+        })
+      })
+    } catch (error) {
+      if (moved) { try { renameSync(tombstone, directory) } catch { /* preserve original error */ } }
+      throw error
+    }
+    const cleanupErrors = []
+    if (moved) { try { rmSync(tombstone, { recursive: true, force: true }) } catch (error) { cleanupErrors.push(error.message) } }
+    return { deleted: true, packId: String(packId), cleanupErrors }
   }
 
   commitMigration({ migrationId, sources }) {

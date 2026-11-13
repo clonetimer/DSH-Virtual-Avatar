@@ -306,3 +306,16 @@
 ### Acceptance boundary
 - This is a PPL-to-existing-art presentation layer, not a new frame-art package. True frame-by-frame Whale movement still requires matching authorized Whale artwork.
 - Actual Windows DSH Desktop 0.2.2-rc.1 visual acceptance remains a manual gate.
+
+### dev.11 CI and artifact evidence (2026-11-13)
+- Workflow Run `43362357104`: Node 24.9.0 and Node 24 both PASS.
+- Full project tests: 96 passed / 0 failed on each matrix leg.
+- SQLite persistence/reopen, duplicate detection, hash tamper detection, backup inclusion and restore, uninstall, and interrupted-uninstall recovery: PASS.
+- Host binary upload, complete-frame commit, GET frame integrity, diagnostics accounting, incomplete commit rejection and invalid path/PNG rejection: PASS.
+- Client classic artifact, explicit import consent, local library preview/uninstall and cancellation/cleanup checks: PASS.
+- PPL compile, DSH classic client loader and npm pack verification: PASS.
+- Windows artifact `0.1.0-dev.11`: ZIP CRC PASS. The exact inner TGZ byte length and SHA-256 are recorded in `package-info.json` and the adjacent `.sha256` file; both are independently verified.
+- Private Google Drive file updated in place; existing file ID and URL retained.
+
+### Remaining manual gate
+- dev.9's DSH Desktop baseline was accepted by the user. dev.11's new persistent import, restart persistence, saved-pack preview, backup/restore and uninstall still require real DSH Desktop 0.2.2-rc.1 acceptance.

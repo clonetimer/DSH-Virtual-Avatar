@@ -24,6 +24,38 @@ async function call(handler, body) {
   return { status, body: JSON.parse(raw) }
 }
 
+async function callRaw(handler, url, bytes, headers = {}) {
+  let status = 0
+  let raw = ''
+  let responseHeaders = {}
+  const req = Readable.from([Buffer.from(bytes)])
+  req.method = 'POST'
+  req.url = url
+  req.headers = headers
+  const res = {
+    writeHead(value, valueHeaders = {}) { status = value; responseHeaders = valueHeaders },
+    end(value) { raw = value },
+  }
+  await handler(req, res)
+  return { status, body: raw ? JSON.parse(String(raw)) : null, headers: responseHeaders }
+}
+
+async function callGet(handler, url) {
+  let status = 0
+  let raw = Buffer.alloc(0)
+  let responseHeaders = {}
+  const req = Readable.from([])
+  req.method = 'GET'
+  req.url = url
+  req.headers = {}
+  const res = {
+    writeHead(value, valueHeaders = {}) { status = value; responseHeaders = valueHeaders },
+    end(value) { raw = Buffer.isBuffer(value) ? value : Buffer.from(value || '') },
+  }
+  await handler(req, res)
+  return { status, body: raw, headers: responseHeaders }
+}
+
 test('DSH host plugin serves one DeepSeek Whale companion and commits completed turns', async () => {
   const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-host-'))
   let route
@@ -478,6 +510,168 @@ test('native DyberPet folder metadata validates without mutating the Whale profi
     assert.deepEqual(after.body.character.chatLines, initial.body.character.chatLines)
     assert.equal(after.body.character.imageUrl, initial.body.character.imageUrl)
     assert.equal(after.body.revision, initial.body.revision)
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+
+test('DyberPet motion pack upload persists verified PNG frames, supports preview reads and explicit uninstall', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-motion-host-'))
+  let route
+  let cleanup
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm: { stream: async function* () { yield { type: 'text-delta', text: '你好' }; yield { type: 'finish', reason: { kind: 'stop' } } } },
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject() {},
+    effect(fn) { cleanup = fn() },
+  }
+  const png = Buffer.from([137,80,78,71,13,10,26,10,1,2,3,4])
+  const petConfig = { default: 'idle', patpat: 'pat' }
+  const actConfig = {
+    idle: { images: 'stand', act_num: 1, frame_refresh: 0.2 },
+    pat: { images: 'pat', act_num: 2, frame_refresh: 0.1 },
+  }
+  const frameFiles = ['action/stand_0.png', 'action/pat_0.png']
+  try {
+    const plugin = apply(ctx, {})
+    const before = await call(route.handler, { action: 'view' })
+    const begin = await call(route.handler, {
+      action: 'motion-pack-begin',
+      args: { displayName: 'Whale Gesture Test', petConfig, actConfig, frameFiles },
+    })
+    assert.equal(begin.status, 201)
+    assert.equal(begin.body.frameCount, 2)
+
+    const firstUpload = await callRaw(
+      route.handler,
+      '/api/dsh-virtual-avatar/motion-pack-upload?session=' + begin.body.sessionId + '&path=' + encodeURIComponent(frameFiles[0]),
+      png,
+      { 'content-type': 'image/png' },
+    )
+    assert.equal(firstUpload.status, 201)
+    assert.equal(firstUpload.body.uploaded, 1)
+
+    const incomplete = await call(route.handler, { action: 'motion-pack-commit', args: { sessionId: begin.body.sessionId } })
+    assert.equal(incomplete.status, 409)
+    assert.equal(incomplete.body.code, 'MOTION_PACK_INCOMPLETE')
+
+    const secondUpload = await callRaw(
+      route.handler,
+      '/api/dsh-virtual-avatar/motion-pack-upload?session=' + begin.body.sessionId + '&path=' + encodeURIComponent(frameFiles[1]),
+      png,
+      { 'content-type': 'image/png' },
+    )
+    assert.equal(secondUpload.status, 201)
+
+    const committed = await call(route.handler, { action: 'motion-pack-commit', args: { sessionId: begin.body.sessionId } })
+    assert.equal(committed.status, 200)
+    assert.equal(committed.body.duplicate, false)
+    assert.equal(committed.body.pack.frameCount, 2)
+    const packId = committed.body.pack.id
+
+    const listed = await call(route.handler, { action: 'motion-pack-list' })
+    assert.equal(listed.body.packs.length, 1)
+    assert.equal(listed.body.packs[0].id, packId)
+    const fetchedPack = await call(route.handler, { action: 'motion-pack-get', args: { packId } })
+    assert.equal(fetchedPack.status, 200)
+    assert.equal(fetchedPack.body.pack.displayName, 'Whale Gesture Test')
+    assert.equal(fetchedPack.body.pack.catalog.defaultAction, 'idle')
+
+    const diagnostics = await call(route.handler, { action: 'diagnostics' })
+    assert.equal(diagnostics.status, 200)
+    assert.equal(diagnostics.body.diagnostics.storage.motionPackCount, 1)
+    assert.equal(diagnostics.body.diagnostics.storage.motionPackFrames, 2)
+    assert.equal(diagnostics.body.diagnostics.storage.motionPackBytes, png.length * 2)
+
+    const frame = await callGet(route.handler,
+      '/api/dsh-virtual-avatar/motion-packs/' + packId + '/action/stand_0.png')
+    assert.equal(frame.status, 200)
+    assert.equal(frame.headers['Content-Type'], 'image/png')
+    assert.deepEqual(frame.body, png)
+
+    const after = await call(route.handler, { action: 'view' })
+    assert.equal(after.body.revision, before.body.revision)
+    assert.deepEqual(after.body.character.chatLines, before.body.character.chatLines)
+
+    const removed = await call(route.handler, {
+      action: 'motion-pack-delete',
+      args: { packId, confirmed: true },
+    })
+    assert.equal(removed.status, 200)
+    assert.equal(removed.body.deleted, true)
+    assert.equal(plugin.store.listMotionPacks().length, 0)
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('DyberPet motion pack upload rejects invalid PNG bytes and expires incomplete sessions on shutdown', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-motion-invalid-'))
+  let route
+  let cleanup
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm: { stream: async function* () { yield { type: 'text-delta', text: '你好' }; yield { type: 'finish', reason: { kind: 'stop' } } } },
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject() {},
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    const begin = await call(route.handler, {
+      action: 'motion-pack-begin',
+      args: {
+        displayName: 'Invalid Pack',
+        petConfig: { default: 'idle' },
+        actConfig: { idle: { images: 'stand', act_num: 1 } },
+        frameFiles: ['action/stand_0.png'],
+      },
+    })
+    assert.equal(begin.status, 201)
+    const invalid = await callRaw(
+      route.handler,
+      '/api/dsh-virtual-avatar/motion-pack-upload?session=' + begin.body.sessionId + '&path=' + encodeURIComponent('action/stand_0.png'),
+      Buffer.from('not a png'),
+      { 'content-type': 'image/png' },
+    )
+    assert.equal(invalid.status, 400)
+    assert.equal(invalid.body.code, 'MOTION_FRAME_PNG_INVALID')
+    const aborted = await call(route.handler, { action: 'motion-pack-abort', args: { sessionId: begin.body.sessionId } })
+    assert.equal(aborted.status, 200)
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('DyberPet motion pack begin rejects unsafe frame paths with a client error', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-motion-path-'))
+  let route
+  let cleanup
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm: { stream: async function* () { yield { type: 'text-delta', text: '你好' }; yield { type: 'finish', reason: { kind: 'stop' } } } },
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject() {},
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    const invalid = await call(route.handler, {
+      action: 'motion-pack-begin',
+      args: {
+        displayName: 'Unsafe Pack',
+        petConfig: { default: 'idle' },
+        actConfig: { idle: { images: 'stand', act_num: 1 } },
+        frameFiles: ['../stand_0.png'],
+      },
+    })
+    assert.equal(invalid.status, 400)
+    assert.match(invalid.body.code, /^DYBERPET_/)
   } finally {
     if (typeof cleanup === 'function') cleanup()
     rmSync(home, { recursive: true, force: true })
