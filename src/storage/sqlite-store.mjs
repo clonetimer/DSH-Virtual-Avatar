@@ -244,7 +244,7 @@ export class SqliteAvatarStore {
       const manifest = {
         schema: BACKUP_SCHEMA,
         createdAt: new Date().toISOString(),
-        pluginVersion: '0.1.0-dev.1',
+        pluginVersion: '0.1.0-dev.11',
         database: { path: 'avatar.sqlite', byteLength: statSync(databasePath).size, sha256: sha256(readFileSync(databasePath)) },
         assets: entries.filter(item => item.path.startsWith('assets/')),
         files: entries,
