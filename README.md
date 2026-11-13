@@ -18,7 +18,7 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 
 **当前产品不开发 Galgame 章节、剧情分支、结局、游戏式回复选项、小剧场或 CG。** 桌面宠物动画作为独立能力阶段推进，不影响核心陪伴链路；真正启用鲸鱼娘逐帧动作必须具备形象匹配且授权明确的素材。上游 Whale 项目仅作为角色设定、存档和素材来源。
 
-当前目标宿主为 DSH 0.2.2-rc.1，要求 Node.js >=24.9.0；CI 采用 Node 24.9.0 / 24 双矩阵。插件通过 `engines.dsh` 声明兼容范围 `>=0.2.2-rc.1 <0.2.3-0`。请查看 [实施状态与验收证据](docs/implementation-status.md)、[PPL-2 情绪状态与互动意图](docs/ppl-emotion-state.md)、[PPL Persona Registry](docs/ppl-persona-registry.md)、[日常交互体验改进](docs/companion-everyday-ux.md) 和 [DyberPet 动作兼容与记忆面板修复](docs/dyberpet-motion-compatibility.md) 和 [PPL 表情驱动与自主待机行为](docs/ppl-driven-whale-presentation.md)、[DyberPet 本地动作库与持久化导入](docs/dyberpet-motion-library.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
+当前目标宿主为 DSH 0.2.2-rc.1，要求 Node.js >=24.9.0；CI 采用 Node 24.9.0 / 24 双矩阵。插件通过 `engines.dsh` 声明兼容范围 `>=0.2.2-rc.1 <0.2.3-0`。请查看 [实施状态与验收证据](docs/implementation-status.md)、[功能使用与桌面验收指南](docs/manual-test-guide.md)、[PPL-2 情绪状态与互动意图](docs/ppl-emotion-state.md)、[PPL Persona Registry](docs/ppl-persona-registry.md)、[日常交互体验改进](docs/companion-everyday-ux.md) 和 [DyberPet 动作兼容与记忆面板修复](docs/dyberpet-motion-compatibility.md) 和 [PPL 表情驱动与自主待机行为](docs/ppl-driven-whale-presentation.md)、[DyberPet 本地动作库与持久化导入](docs/dyberpet-motion-library.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
 
 ## DSH 插件安装与 P4 宿主验收
 
@@ -38,15 +38,15 @@ node --version
 npm --version
 ```
 
-从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.13` artifact 下载以下文件：
-- `dsh-virtual-avatar-0.1.0-dev.13.tgz`
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.14` artifact 下载以下文件：
+- `dsh-virtual-avatar-0.1.0-dev.14.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
 
 先校验包文件（在下载目录执行）：
 
 ```powershell
-Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.13.tgz -Algorithm SHA256
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.14.tgz -Algorithm SHA256
 ```
 
 将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
@@ -54,14 +54,14 @@ Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.13.tgz -Algorithm SHA256
 **DSH Web（web profile）：**
 
 ```powershell
-dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.13.tgz"
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.14.tgz"
 dsh --profile web --dump-config
 ```
 
 **DSH Desktop：** 建议直接使用桌面版「插件 → 添加插件」，输入 `.tgz` 的完整绝对路径。若在 DSH 桌面版「应用 → 管理 dsh 命令…」安装了专用 CLI，可在完全退出 Desktop 后使用其保留的 `desktop` profile：
 
 ```powershell
-dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.13.tgz"
+dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.14.tgz"
 dsh --profile desktop --dump-config
 ```
 
@@ -178,3 +178,12 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - 动作下拉项显示中文用途、原始动作标识、帧数和时长；选择映射时自动播放对应动作，便于逐项核对。
 - “应用推荐映射”可以恢复系统建议；未匹配的动作仍安全回退到待机，不会自动绑定未经确认的素材。
 - 推荐逻辑只辅助配置，不识别角色身份，也不会绕过用户对鲸鱼娘素材外观与使用权的确认。
+
+
+## dev.14：模型选择与桌面外观体验
+
+- 增加鲸鱼娘独立模型设置：读取 DSH 已启用 Provider 与可用模型目录，支持手动填写模型 ID、连接测试和恢复跟随 DSH 默认模型。该设置只影响鲸鱼娘，不修改 DSH 其他 Agent 的全局默认模型。
+- 背景遮罩由近乎不透明的深色渐变调整为可读范围，并提供背景选择与遮罩强度调节。
+- 动作入口改为“动作库与动画”，明确预览、导入、绑定三者的区别；新增功能测试指南。
+- 聊天传输失败提示保留错误细节，同时明确提示本次对话未完成、输入仍可重试。
+- 详见 [功能使用与桌面验收指南](docs/manual-test-guide.md)。

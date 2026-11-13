@@ -72,6 +72,18 @@ const CSS = `
 @media(max-width:760px){.dva-motion-pack-row{align-items:flex-start;flex-direction:column}.dva-motion-pack-actions{width:100%}.dva-motion-pack-actions button{flex:1}}
 
 .dva-motion-error{font-size:12px;color:#ffd0c9;background:#52243888;border:1px solid #ffb3a944;border-radius:9px;padding:9px}
+.dva-model-settings,.dva-background-settings,.dva-help-guide{display:flex;flex-direction:column;gap:12px;line-height:1.6}
+.dva-model-field{display:flex;flex-direction:column;gap:5px;color:#d7eaf5;font-size:12px}
+.dva-model-field select,.dva-model-field input{box-sizing:border-box;width:100%;min-height:36px;padding:8px 10px;border:1px solid #4d7796;border-radius:9px;background:#06172a;color:#f2f9ff}
+.dva-model-actions,.dva-background-options{display:flex;gap:8px;flex-wrap:wrap}
+.dva-model-actions button,.dva-background-options button,.dva-background-save{border:1px solid #77b8df;border-radius:9px;background:#174b70;color:#f2f9ff;padding:8px 12px;cursor:pointer}
+.dva-model-actions button:disabled,.dva-background-save:disabled{opacity:.5;cursor:wait}
+.dva-background-preview{height:150px;border:1px solid #ffffff33;border-radius:12px;background-size:cover;background-position:center}
+.dva-background-options button[aria-pressed=true]{border-color:#9bd9ff;background:#1d628b;box-shadow:0 0 0 1px #9bd9ff55 inset}
+.dva-background-range{width:100%;accent-color:#8cccf4}
+.dva-help-guide section{padding:10px;border:1px solid #ffffff22;border-radius:10px;background:#ffffff08}
+.dva-help-guide h4{margin:0 0 5px;color:#eaf5ff}
+.dva-help-guide p{margin:0;color:#b8d8e9;font-size:12px}
 
 @media(max-width:900px){.dva-memory-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dva-memory-toolbar input{grid-column:1/-1}.dva-memory-head{align-items:center}.dva-panel-back{padding:7px 10px}}
 .dva-title{font-size:18px;font-weight:700}.dva-sub{font-size:12px;color:#a9c9df;margin-top:4px}
@@ -365,6 +377,14 @@ function Companion() {
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false)
   const [modelTestBusy, setModelTestBusy] = useState(false)
   const [modelTestResult, setModelTestResult] = useState(null)
+  const [modelCatalog, setModelCatalog] = useState(null)
+  const [modelCatalogBusy, setModelCatalogBusy] = useState(false)
+  const [modelDraftProvider, setModelDraftProvider] = useState('')
+  const [modelDraftModel, setModelDraftModel] = useState('')
+  const [modelSaving, setModelSaving] = useState(false)
+  const [backgroundDraft, setBackgroundDraft] = useState('palace-night')
+  const [backgroundOverlayDraft, setBackgroundOverlayDraft] = useState(0.32)
+  const [backgroundSaving, setBackgroundSaving] = useState(false)
   const [backupBusy, setBackupBusy] = useState(false)
   const [editingMemoryId, setEditingMemoryId] = useState(null)
   const [memoryDraft, setMemoryDraft] = useState('')
@@ -626,6 +646,33 @@ function Companion() {
     setError('')
   }
 
+  const openBackgroundPanel = () => {
+    const current = view?.character?.backgroundUrl?.includes('bg-deepseek-seaside-study')
+      ? 'bg-deepseek-seaside-study'
+      : 'palace-night'
+    setBackgroundDraft(current)
+    setBackgroundOverlayDraft(Number(view?.character?.backgroundOverlay ?? 0.32))
+    openUtilityPanel('background')
+  }
+
+  const saveBackgroundSettings = async () => {
+    if (backgroundSaving) return
+    setBackgroundSaving(true)
+    try {
+      const result = await callApi('background-set', {
+        background: backgroundDraft,
+        overlay: Number(backgroundOverlayDraft),
+      })
+      setView(result.view)
+      setNotice('背景和明暗设置已保存。')
+      setActivePanel(null)
+    } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setBackgroundSaving(false)
+    }
+  }
+
   const refresh = useCallback(async () => {
     try {
       const result = await callApi('view')
@@ -751,7 +798,7 @@ function Companion() {
       setAvatarMotion('idle')
       setAvatarBubble('')
       setAvatarExpressionOverride(null)
-      setError(err.message || String(err))
+      setError('本次对话未完成：' + (err.message || String(err)) + '。输入内容已保留，可以重试。')
     }
     finally { setBusy(false) }
   }, [busy])
@@ -837,14 +884,86 @@ function Companion() {
     } catch (err) { setError(err.message || String(err)) }
   }
 
+  const loadModelSettings = async () => {
+    setActivePanel('model')
+    setShowMoreMenu(false)
+    setModelCatalogBusy(true)
+    setError('')
+    try {
+      const result = await callApi('model-catalog')
+      setModelCatalog(result)
+      const selected = result.selection || result.defaultSelection
+      const provider = selected?.provider || result.providers?.[0]?.id || ''
+      const providerEntry = result.providers?.find(item => item.id === provider)
+      const model = selected?.model || providerEntry?.models?.[0]?.id || ''
+      setModelDraftProvider(provider)
+      setModelDraftModel(model)
+      setModelTestResult(null)
+    } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setModelCatalogBusy(false)
+    }
+  }
+
+  const saveModelSelection = async () => {
+    if (!modelDraftProvider || !modelDraftModel.trim() || modelSaving || modelCatalog?.locked) return
+    setModelSaving(true)
+    setError('')
+    try {
+      const result = await callApi('model-selection-set', {
+        provider: modelDraftProvider,
+        model: modelDraftModel.trim(),
+      })
+      const catalog = await callApi('model-catalog')
+      setModelCatalog(catalog)
+      setModelDraftProvider(result.selection.provider)
+      setModelDraftModel(result.selection.model)
+      setNotice('鲸鱼娘的模型选择已保存，不会修改 DSH 其他 Agent 的默认模型。')
+    } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setModelSaving(false)
+    }
+  }
+
+  const resetModelSelection = async () => {
+    if (modelSaving || modelCatalog?.locked) return
+    setModelSaving(true)
+    try {
+      await callApi('model-selection-clear')
+      const catalog = await callApi('model-catalog')
+      setModelCatalog(catalog)
+      const selected = catalog.selection || catalog.defaultSelection
+      const provider = selected?.provider || catalog.providers?.[0]?.id || ''
+      const providerEntry = catalog.providers?.find(item => item.id === provider)
+      setModelDraftProvider(provider)
+      setModelDraftModel(selected?.model || providerEntry?.models?.[0]?.id || '')
+      setModelTestResult(null)
+      setNotice('已恢复跟随 DSH 默认模型。')
+    } catch (err) {
+      setError(err.message || String(err))
+    } finally {
+      setModelSaving(false)
+    }
+  }
+
   const testModelConnection = async () => {
     setModelTestBusy(true)
+    setError('')
     try {
       const result = await callApi('model-test')
       setModelTestResult(result.test)
-      await loadDiagnostics()
-    } catch (err) { setError(err.message || String(err)) }
-    finally { setModelTestBusy(false) }
+      if (activePanel === 'diagnostics') {
+        const refreshed = await callApi('diagnostics')
+        setDiagnostics(refreshed.diagnostics)
+      }
+    } catch (err) {
+      setModelTestResult({ at: new Date().toISOString(), status: 'failed', message: err.message || String(err) })
+      setError('模型连接测试失败：' + (err.message || String(err)))
+    } finally {
+      setModelTestBusy(false)
+    }
   }
 
   const exportDiagnostics = () => {
@@ -1025,6 +1144,9 @@ function Companion() {
   )
 
   const character = view?.character
+  const backgroundOverlay = Math.max(0.15, Math.min(0.58, Number(character?.backgroundOverlay ?? 0.32)))
+  const backgroundTopOverlay = Math.max(0.12, backgroundOverlay - 0.08)
+  const backgroundBottomOverlay = Math.min(0.70, backgroundOverlay + 0.10)
   const lines = [...olderLines, ...(character?.chatLines || [])]
   const relationshipStage = character?.relationship?.stage || 'acquaintance'
   const relationshipStageLabel = character?.relationship?.stageLabel || ({ stranger: '陌生', acquaintance: '初识', colleague: '熟悉', trusted: '信任', close: '亲近', confession: '告白中', lover: '恋人', bonded: '深厚羁绊' }[relationshipStage] || '初识')
@@ -1050,7 +1172,7 @@ function Companion() {
     onClick: event => {
       if (showMoreMenu && !event.target?.closest?.('.dva-head-tools')) setShowMoreMenu(false)
     },
-    style: { backgroundImage: character?.backgroundUrl ? 'linear-gradient(180deg,rgba(4,15,29,.88),rgba(4,15,29,.94)),url(' + character.backgroundUrl + ')' : undefined, backgroundSize: 'cover', backgroundPosition: 'center' } },
+    style: { backgroundImage: character?.backgroundUrl ? 'linear-gradient(180deg,rgba(4,15,29,' + backgroundTopOverlay + '),rgba(4,15,29,' + backgroundBottomOverlay + ')),url(' + character.backgroundUrl + ')' : undefined, backgroundSize: 'cover', backgroundPosition: 'center' } },
     React.createElement('header', { className: 'dva-head' },
       React.createElement('div', null,
         React.createElement('div', { className: 'dva-title' }, character?.name || 'DeepSeek 鲸鱼娘'),
@@ -1092,23 +1214,17 @@ function Companion() {
                   openUtilityPanel('profile')
                 } catch (err) { setError(err.message || String(err)) }
               } }, '角色设定'),
-              React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: async () => {
-                setShowMoreMenu(false)
-                try {
-                  const next = character?.backgroundUrl?.includes('bg-deepseek-seaside-study') ? 'palace-night' : 'bg-deepseek-seaside-study'
-                  const result = await callApi('background-set', { background: next })
-                  setView(result.view)
-                  setNotice('背景已切换。')
-                } catch (err) { setError(err.message || String(err)) }
-              } }, '切换背景'),
-              React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: () => openUtilityPanel('motion') }, '动作包预览'),
+              React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: openBackgroundPanel }, '背景与亮度'),
+              React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: () => openUtilityPanel('motion') }, '动作库与动画'),
             ),
           ),
           React.createElement('div', { className: 'dva-menu-group' },
             React.createElement('strong', null, '数据与支持'),
             React.createElement('div', { className: 'dva-menu-grid' },
+              React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: () => void loadModelSettings() }, '模型设置'),
               React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', disabled: backupBusy, onClick: () => void loadBackups() }, '备份与恢复'),
               React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', disabled: diagnosticsBusy, onClick: () => void loadDiagnostics() }, '运行诊断'),
+              React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: () => openUtilityPanel('help') }, '功能测试指南'),
               React.createElement('button', { className: 'dva-menu-item', role: 'menuitem', onClick: () => { setShowMoreMenu(false); void refresh() } }, '刷新状态'),
             ),
           ),
@@ -1247,11 +1363,11 @@ function Companion() {
 
         activePanel === 'motion' ? React.createElement('div', { className: 'dva-memories dva-motion-panel' },
           React.createElement('div', { className: 'dva-motion-head' },
-            React.createElement('strong', null, '本地动作包预览'),
+            React.createElement('strong', null, '动作库与动画'),
             React.createElement('button', { type: 'button', className: 'dva-panel-back', onClick: closeUtilityPanel }, '← 返回聊天'),
           ),
           React.createElement('small', { className: 'dva-motion-help' },
-            '选择 DyberPet 角色文件夹（包含 pet_conf.json、act_conf.json 和 action 子目录）。先查看动作是否完整、形象是否匹配，再决定是否制作正式安装包。',
+            '这里先检查动作素材，再决定是否保存和启用。预览只在当前页面播放，不会让鲸鱼娘动；导入会保存到本机动作库，绑定后才会驱动鲸鱼娘。请只绑定形象匹配且有使用权的鲸鱼娘素材。',
           ),
           React.createElement('label', { className: 'dva-motion-picker' },
             '选择本地角色文件夹',
@@ -1407,7 +1523,9 @@ function Companion() {
               React.createElement('button', { type: 'button', disabled: motionLibraryBusy, onClick: () => void loadMotionPacks() }, motionLibraryBusy ? '刷新中…' : '刷新'),
             ),
             React.createElement('small', { className: 'dva-motion-note' }, '已导入的动作包保存在本机，并纳入插件备份；默认不应用到鲸鱼娘。'),
-            motionPacks.length === 0 && !motionLibraryBusy ? React.createElement('small', null, '还没有导入动作包。') : null,
+            motionPacks.length === 0 && !motionLibraryBusy ? React.createElement('div', { className: 'dva-memory-empty' },
+              '动作库目前为空。你可以先选择一个 DyberPet 角色文件夹进行临时预览；确认帧序列正常后再导入。要让鲸鱼娘真正播放动作，还需要形象一致且授权明确的多帧素材，并完成动作绑定。其他角色的动作包只能用于格式与播放器测试，不能替代鲸鱼娘。',
+            ) : null,
             React.createElement('div', { className: 'dva-motion-library-list' },
               ...motionPacks.map(pack => React.createElement('div', { key: pack.id, className: 'dva-motion-pack-row' },
                 React.createElement('div', { className: 'dva-motion-pack-meta' },
@@ -1489,6 +1607,169 @@ function Companion() {
             } catch (err) { setError(err.message || String(err)) }
           } }, '恢复默认设定'),
           React.createElement('button', { onClick: () => setActivePanel(null) }, '取消'),
+        ) : null,
+        activePanel === 'model' ? React.createElement('div', { className: 'dva-memories dva-model-settings' },
+          React.createElement('div', { className: 'dva-memory-head' },
+            React.createElement('div', null,
+              React.createElement('strong', null, '鲸鱼娘模型设置'),
+              React.createElement('small', null, '只影响鲸鱼娘的对话，不会修改 DSH 其他 Agent 的默认模型。'),
+            ),
+            React.createElement('button', { type: 'button', className: 'dva-panel-back', onClick: closeUtilityPanel }, '← 返回聊天'),
+          ),
+          modelCatalogBusy ? React.createElement('small', { role: 'status' }, '正在读取 DSH 已启用的模型服务商…') : null,
+          modelCatalog && !(modelCatalog.providers || []).length ? React.createElement('div', { className: 'dva-memory-empty' }, 'DSH 当前没有已启用的模型服务商。请先在 DSH 主界面的模型设置中添加并启用 Provider，然后返回这里选择鲸鱼娘使用的模型。') : null,
+          modelCatalog?.locked ? React.createElement('div', { className: 'dva-memory-empty' }, '当前模型由插件配置固定。若要修改，请调整插件配置；此处不会覆盖管理员指定的模型。') : null,
+          modelCatalog?.selectionError ? React.createElement('div', { className: 'dva-error' }, modelCatalog.selectionError) : null,
+          React.createElement('label', { className: 'dva-model-field' },
+            '模型服务商',
+            React.createElement('select', {
+              value: modelDraftProvider,
+              disabled: modelCatalogBusy || modelCatalog?.locked || modelSaving,
+              onChange: event => {
+                const provider = event.target.value
+                const entry = modelCatalog?.providers?.find(item => item.id === provider)
+                setModelDraftProvider(provider)
+                setModelDraftModel(entry?.models?.[0]?.id || '')
+              },
+            },
+              React.createElement('option', { value: '' }, '请选择已启用的服务商'),
+              ...(modelCatalog?.providers || []).map(item => React.createElement('option', { key: item.id, value: item.id }, item.name + '（' + item.id + '）')),
+            ),
+          ),
+          React.createElement('label', { className: 'dva-model-field' },
+            '模型 ID',
+            React.createElement('input', {
+              value: modelDraftModel,
+              maxLength: 256,
+              disabled: modelCatalogBusy || modelCatalog?.locked || modelSaving || !modelDraftProvider,
+              placeholder: '例如 deepseek-v4-flash',
+              onChange: event => setModelDraftModel(event.target.value),
+            }),
+          ),
+          (() => {
+            const provider = modelCatalog?.providers?.find(item => item.id === modelDraftProvider)
+            const models = provider?.models || []
+            return models.length
+              ? React.createElement('label', { className: 'dva-model-field' },
+                  '可用模型目录',
+                  React.createElement('select', {
+                    value: models.some(item => item.id === modelDraftModel) ? modelDraftModel : '',
+                    disabled: modelCatalogBusy || modelCatalog?.locked || modelSaving,
+                    onChange: event => setModelDraftModel(event.target.value),
+                  },
+                    React.createElement('option', { value: '' }, '手动填写模型 ID'),
+                    ...models.map(item => React.createElement('option', { key: item.id, value: item.id }, item.name + '（' + item.id + '）')),
+                  ),
+                  provider.catalogError ? React.createElement('small', null, '模型目录读取失败：' + provider.catalogError) : null,
+                )
+              : React.createElement('small', { className: 'dva-motion-note' }, provider?.catalogError
+                  ? '暂时无法读取该服务商的模型目录。仍可手动填写模型 ID，并通过连接测试确认。'
+                  : '该服务商没有提供可枚举的模型目录。可以手动填写模型 ID，保存后执行连接测试。')
+          })(),
+          React.createElement('div', { className: 'dva-memory-empty' },
+            '当前鲸鱼娘模型：' + (modelCatalog?.selection ? modelCatalog.selection.provider + ' / ' + modelCatalog.selection.model : '尚未选择') +
+            '；来源：' + (modelCatalog?.selection?.source === 'whale-local' ? '鲸鱼娘独立设置' : modelCatalog?.selection?.source === 'plugin-config' ? '插件固定配置' : modelCatalog?.selection?.source === 'dsh-default' ? '跟随 DSH 默认模型' : '未配置'),
+            modelCatalog?.defaultSelection ? React.createElement('small', { style: { display: 'block', marginTop: '5px' } },
+              'DSH 默认模型：' + modelCatalog.defaultSelection.provider + ' / ' + modelCatalog.defaultSelection.model,
+            ) : null,
+          ),
+          React.createElement('div', { className: 'dva-model-actions' },
+            React.createElement('button', {
+              type: 'button',
+              disabled: modelCatalogBusy || modelSaving || modelCatalog?.locked || !modelDraftProvider || !modelDraftModel.trim(),
+              onClick: () => void saveModelSelection(),
+            }, modelSaving ? '正在保存…' : '保存鲸鱼娘模型'),
+            React.createElement('button', {
+              type: 'button',
+              disabled: modelTestBusy || modelSaving || !modelCatalog?.selection || modelCatalog.selection.provider !== modelDraftProvider || modelCatalog.selection.model !== modelDraftModel.trim(),
+              onClick: () => void testModelConnection(),
+            }, modelTestBusy ? '测试中…' : '测试连接'),
+            React.createElement('button', {
+              type: 'button',
+              disabled: modelSaving || modelCatalogBusy || modelCatalog?.locked || !modelCatalog?.savedSelection,
+              onClick: () => void resetModelSelection(),
+            }, '恢复 DSH 默认'),
+            React.createElement('button', { type: 'button', onClick: () => void loadModelSettings(), disabled: modelCatalogBusy }, '刷新目录'),
+          ),
+          modelTestResult ? React.createElement('div', { className: modelTestResult.status === 'success' ? 'dva-memory-empty' : 'dva-motion-error', role: 'status' },
+            '最近连接测试：' + (modelTestResult.status === 'success' ? '成功' : '失败') +
+            (modelTestResult.provider ? ' · ' + modelTestResult.provider + ' / ' + modelTestResult.model : '') +
+            (modelTestResult.message ? ' · ' + modelTestResult.message : ''),
+          ) : null,
+          React.createElement('button', { type: 'button', onClick: closeUtilityPanel }, '关闭'),
+        ) : null,
+        activePanel === 'background' ? React.createElement('div', { className: 'dva-memories dva-background-settings' },
+          React.createElement('div', { className: 'dva-memory-head' },
+            React.createElement('div', null,
+              React.createElement('strong', null, '背景与亮度'),
+              React.createElement('small', null, '只调整鲸鱼娘窗口背景，不影响 DSH 全局主题。'),
+            ),
+            React.createElement('button', { type: 'button', className: 'dva-panel-back', onClick: closeUtilityPanel }, '← 返回聊天'),
+          ),
+          React.createElement('div', {
+            className: 'dva-background-preview',
+            style: {
+              backgroundImage: 'linear-gradient(180deg,rgba(4,15,29,' + Math.max(0.12, backgroundOverlayDraft - 0.08) + '),rgba(4,15,29,' + Math.min(0.70, backgroundOverlayDraft + 0.10) + ')),url(' + API + '/assets/' + backgroundDraft + '.webp)',
+            },
+          }),
+          React.createElement('strong', null, '选择背景'),
+          React.createElement('div', { className: 'dva-background-options' },
+            React.createElement('button', { type: 'button', 'aria-pressed': backgroundDraft === 'palace-night', onClick: () => setBackgroundDraft('palace-night') }, '深海工坊夜景'),
+            React.createElement('button', { type: 'button', 'aria-pressed': backgroundDraft === 'bg-deepseek-seaside-study', onClick: () => setBackgroundDraft('bg-deepseek-seaside-study') }, '海边书房'),
+          ),
+          React.createElement('label', { className: 'dva-model-field' },
+            '背景遮罩强度：' + Math.round(backgroundOverlayDraft * 100) + '%（数值越低，背景越清晰）',
+            React.createElement('input', {
+              className: 'dva-background-range',
+              type: 'range',
+              min: 0.15,
+              max: 0.58,
+              step: 0.01,
+              value: backgroundOverlayDraft,
+              onChange: event => setBackgroundOverlayDraft(Number(event.target.value)),
+            }),
+          ),
+          React.createElement('small', { className: 'dva-motion-note' }, '建议先尝试 22%～32%。聊天文字和气泡会保持独立对比度。'),
+          React.createElement('div', { className: 'dva-model-actions' },
+            React.createElement('button', { type: 'button', className: 'dva-background-save', disabled: backgroundSaving, onClick: () => void saveBackgroundSettings() }, backgroundSaving ? '正在保存…' : '应用背景设置'),
+            React.createElement('button', { type: 'button', onClick: () => { setBackgroundOverlayDraft(0.32); setBackgroundDraft('palace-night') } }, '恢复推荐值'),
+            React.createElement('button', { type: 'button', onClick: closeUtilityPanel }, '取消'),
+          ),
+        ) : null,
+        activePanel === 'help' ? React.createElement('div', { className: 'dva-memories dva-help-guide' },
+          React.createElement('div', { className: 'dva-memory-head' },
+            React.createElement('div', null,
+              React.createElement('strong', null, '功能使用与测试指南'),
+              React.createElement('small', null, '按下面顺序逐项验收；每一步都可以独立测试。'),
+            ),
+            React.createElement('button', { type: 'button', className: 'dva-panel-back', onClick: closeUtilityPanel }, '← 返回聊天'),
+          ),
+          React.createElement('section', null,
+            React.createElement('h4', null, '1. 模型与聊天'),
+            React.createElement('p', null, '打开“模型设置”，选择 DSH 已启用的服务商和模型，保存后测试连接，再发送一条新消息。诊断页应显示同一个 Provider / Model。'),
+          ),
+          React.createElement('section', null,
+            React.createElement('h4', null, '2. 角色与场景'),
+            React.createElement('p', null, '点击鲸鱼娘立绘测试摸摸反馈；切换“私密空间 / 公开场合”，分别发送一条日常消息，观察回复风格和角色状态。'),
+          ),
+          React.createElement('section', null,
+            React.createElement('h4', null, '3. 历史、记忆与关系'),
+            React.createElement('p', null, '发送几条有明确偏好的消息；在记忆建议中确认一条，再到“查看记忆”中搜索、置顶、编辑、取消置顶、删除并导出。用“搜索对话”和“关系记录”检查历史与关系事件。长期摘要需要先生成候选，再由你确认更新。'),
+          ),
+          React.createElement('section', null,
+            React.createElement('h4', null, '4. 外观与桌面交互'),
+            React.createElement('p', null, '在“背景与亮度”中切换背景和遮罩强度；测试收起 / 重新打开鲸鱼娘，以及减少动态效果设置。'),
+          ),
+          React.createElement('section', null,
+            React.createElement('h4', null, '5. 动作库与动画'),
+            React.createElement('p', null, '先选择 DyberPet 文件夹并播放预览，再导入到本地动作库，重新打开已保存动作包，检查映射建议和逐项预览。只有确认素材与鲸鱼娘形象一致且有使用权时，才绑定并测试 PPL 动作切换；最后解除绑定。'),
+          ),
+          React.createElement('section', null,
+            React.createElement('h4', null, '6. 备份与诊断'),
+            React.createElement('p', null, '先创建备份，再进行恢复测试；恢复会覆盖当前角色数据，务必确认备份有效。运行诊断并导出报告，检查模型、PPL、SQLite、记忆、动作包和最近错误。'),
+          ),
+          React.createElement('small', { className: 'dva-motion-note' }, '不要使用其他角色的素材绑定鲸鱼娘。测试删除、卸载或恢复前，先确认已备份需要保留的数据。'),
+          React.createElement('button', { type: 'button', onClick: closeUtilityPanel }, '关闭指南'),
         ) : null,
         activePanel === 'diagnostics' ? React.createElement('div', { className: 'dva-memories' },
           React.createElement('strong', null, '运行状态与诊断'),

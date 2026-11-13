@@ -156,7 +156,11 @@ async function streamReply(llm, model, system, contextMessages, userText, signal
       const kind = String(chunk.reason.kind || '')
       if (kind === 'error' || kind === 'aborted') {
         const failure = chunk.reason.failure
-        throw new Error(failure?.message || failure?.code || kind)
+        const error = new Error(failure?.message || failure?.code || kind)
+        error.code = failure?.code || 'LLM_STREAM_FAILED'
+        error.provider = model.provider
+        error.model = model.model
+        throw error
       }
       if (kind === 'max-tokens' || kind === 'length') terminalReason = 'max-tokens'
     }
@@ -171,22 +175,26 @@ function resolveDshHomePath(ctx) {
   return (...segments) => join(root, ...segments)
 }
 
-function selectModel(llm, agentDefaultModel, config) {
+function selectModel(llm, agentDefaultModel, config, store = null) {
   if (config.chatProvider && config.chatModel) {
-    return { provider: String(config.chatProvider), model: String(config.chatModel) }
+    return { provider: String(config.chatProvider), model: String(config.chatModel), source: 'plugin-config' }
+  }
+  const local = store?.getChatModelSelection?.('deepseek')
+  if (local?.provider && local?.model) {
+    return { provider: String(local.provider), model: String(local.model), source: 'whale-local' }
   }
   try {
     const current = agentDefaultModel?.currentSelection?.()
-    if (current?.provider && current?.model) return { provider: String(current.provider), model: String(current.model) }
-  } catch { /* try the provider catalog below */ }
+    if (current?.provider && current?.model) return { provider: String(current.provider), model: String(current.model), source: 'dsh-default' }
+  } catch { /* report missing model selection below */ }
   try {
     const providers = typeof llm?.listProviders === 'function' ? llm.listProviders() : []
     if (Array.isArray(providers) && providers.length) {
-      const provider = providers[0]
-      return { provider: String(provider.id), model: String(config.fallbackModel || 'deepseek-v4-flash') }
+      const provider = providers.find(item => String(item.id || '').startsWith('deepseek-'))
+      if (provider) return { provider: String(provider.id), model: String(config.fallbackModel || 'deepseek-v4-flash'), source: 'fallback' }
     }
   } catch { /* report missing model selection below */ }
-  throw new Error('No DSH model is configured. Select a main model or configure chatProvider/chatModel.')
+  throw new Error('No DSH model is configured. Select a model in Whale settings or configure the DSH default model.')
 }
 
 function safeBackgroundAsset(state) {
@@ -254,6 +262,7 @@ function publicView(service, memoryService, config, store = null) {
         shyness: presentation.shyness,
       },
       backgroundUrl: API_PATH + '/assets/' + safeBackgroundAsset(state),
+      backgroundOverlay: Number.isFinite(Number(state.backgroundOverlay)) ? Math.max(0.15, Math.min(0.58, Number(state.backgroundOverlay))) : 0.32,
       expressionUrls: Object.fromEntries(Object.keys(ASSET_TYPES).filter(key => key.startsWith('whale-')).map(key => [key.replace('whale-', '').replace('.webp', ''), API_PATH + '/assets/' + key])),
       level: state.level,
       affection: state.affection,
@@ -363,7 +372,7 @@ export function apply(ctx, config = {}) {
     const persona = service.ppl.ir
     let model = null
     let modelSelectionError = null
-    try { model = selectModel(llm, agentDefaultModel, runtimeConfig) }
+    try { model = selectModel(llm, agentDefaultModel, runtimeConfig, store) }
     catch (error) { modelSelectionError = { code: error.code || 'MODEL_NOT_CONFIGURED', message: String(error.message || error).replace(/(?:sk|api)[-_ ]?key[=: ]+[^ ]+/ig, '[credential redacted]').slice(0, 200) } }
     let providers = []
     try {
@@ -395,8 +404,8 @@ export function apply(ctx, config = {}) {
     } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
     return {
       checkedAt,
-      plugin: { id: name, version: '0.1.0-dev.12', enabled: runtimeConfig.enabled },
-      model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
+      plugin: { id: name, version: '0.1.0-dev.14', enabled: runtimeConfig.enabled },
+      model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, selectionSource: model?.source || null, hasWhaleOverride: Boolean(store.getChatModelSelection('deepseek')), configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
       persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0, registered: personaRegistry.list() },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, motionPackCount: motionPacks.length, motionPackFrames, motionPackBytes, mediaDirectory, backupDirectory },
       companion: {
@@ -456,7 +465,7 @@ export function apply(ctx, config = {}) {
       return
     }
     if (req.method === 'GET') {
-      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.12' })
+      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.14' })
       return
     }
     if (req.method !== 'POST') {
@@ -573,13 +582,94 @@ export function apply(ctx, config = {}) {
         return
       }
 
+      if (action === 'model-catalog') {
+        const registered = typeof llm.listProviders === 'function' ? llm.listProviders() : []
+        const providers = await Promise.all((Array.isArray(registered) ? registered : []).map(async item => {
+          const provider = String(item.id || '')
+          if (!provider) return null
+          let models = []
+          let catalogError = null
+          if (typeof llm.listModels === 'function') {
+            try {
+              const listed = await llm.listModels(provider)
+              models = (Array.isArray(listed) ? listed : []).map(model => ({
+                id: String(model.id || ''),
+                name: String(model.name || model.id || ''),
+                description: typeof model.description === 'string' ? model.description : '',
+                inputModalities: Array.isArray(model.inputModalities) ? model.inputModalities : [],
+              })).filter(model => model.id)
+            } catch (error) {
+              catalogError = String(error?.message || error).slice(0, 180)
+            }
+          }
+          return { id: provider, name: String(item.name || provider), models, catalogError }
+        })).then(rows => rows.filter(Boolean))
+        let defaultSelection = null
+        try {
+          const current = agentDefaultModel?.currentSelection?.()
+          if (current?.provider && current?.model) defaultSelection = { provider: String(current.provider), model: String(current.model) }
+        } catch { /* no DSH default configured */ }
+        const savedSelection = store.getChatModelSelection('deepseek')
+        let selection = null
+        let selectionError = null
+        try {
+          const current = selectModel(llm, agentDefaultModel, runtimeConfig, store)
+          selection = { provider: current.provider, model: current.model, source: current.source }
+        } catch (error) {
+          selectionError = String(error?.message || error).slice(0, 200)
+        }
+        json(res, 200, {
+          ok: true,
+          providers,
+          selection,
+          defaultSelection,
+          savedSelection,
+          locked: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel),
+          selectionError,
+        })
+        return
+      }
+
+      if (action === 'model-selection-set') {
+        if (runtimeConfig.chatProvider && runtimeConfig.chatModel) {
+          const error = new Error('模型由插件配置固定，不能在角色界面修改。')
+          error.status = 409
+          error.code = 'MODEL_SELECTION_LOCKED'
+          throw error
+        }
+        const provider = String(args.provider || '').trim()
+        const model = String(args.model || '').trim()
+        const providers = typeof llm.listProviders === 'function' ? llm.listProviders() : []
+        if (!provider || !Array.isArray(providers) || !providers.some(item => item.id === provider)) {
+          const error = new Error('所选模型服务商当前未在 DSH 中启用。请先在 DSH 模型设置中配置并启用该服务商。')
+          error.status = 400
+          error.code = 'MODEL_PROVIDER_UNAVAILABLE'
+          throw error
+        }
+        const selection = store.setChatModelSelection({ characterId: 'deepseek', provider, model })
+        json(res, 200, { ok: true, selection, source: 'whale-local' })
+        return
+      }
+
+      if (action === 'model-selection-clear') {
+        if (runtimeConfig.chatProvider && runtimeConfig.chatModel) {
+          const error = new Error('模型由插件配置固定，不能在角色界面修改。')
+          error.status = 409
+          error.code = 'MODEL_SELECTION_LOCKED'
+          throw error
+        }
+        const result = store.clearChatModelSelection('deepseek')
+        json(res, 200, { ok: true, ...result })
+        return
+      }
+
       if (action === 'diagnostics') {
         json(res, 200, { ok: true, diagnostics: buildDiagnostics() })
         return
       }
 
       if (action === 'model-test') {
-        const model = selectModel(llm, agentDefaultModel, runtimeConfig)
+        const model = selectModel(llm, agentDefaultModel, runtimeConfig, store)
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(new Error('model test timed out')), 20000)
         let output = ''
@@ -857,7 +947,7 @@ export function apply(ctx, config = {}) {
           context: {},
           activityHint: typeof args.activityHint === 'string' ? args.activityHint.slice(0, 600) : '',
         })
-        const model = selectModel(llm, agentDefaultModel, runtimeConfig)
+        const model = selectModel(llm, agentDefaultModel, runtimeConfig, store)
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(new Error('DeepSeek Whale model request timed out')), 110000)
         let generated
@@ -1012,7 +1102,13 @@ export function apply(ctx, config = {}) {
           return
         }
         const loaded = service.loadState()
-        const next = { ...loaded.state, chosenBuiltinBackground: key }
+        const currentOverlay = Number.isFinite(Number(loaded.state.backgroundOverlay)) ? Number(loaded.state.backgroundOverlay) : 0.32
+        const overlay = args.overlay === undefined ? currentOverlay : Number(args.overlay)
+        if (!Number.isFinite(overlay) || overlay < 0.15 || overlay > 0.58) {
+          json(res, 400, { ok: false, error: 'background overlay must be between 0.15 and 0.58', code: 'BACKGROUND_OVERLAY_INVALID' })
+          return
+        }
+        const next = { ...loaded.state, chosenBuiltinBackground: key, backgroundOverlay: overlay }
         const saved = store.saveCharacterState('deepseek', next, loaded.revision)
         json(res, 200, { ok: true, background: key, revision: saved.revision, view: publicView(service, memoryService, runtimeConfig, store) })
         return
