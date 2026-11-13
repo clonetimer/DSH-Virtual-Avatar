@@ -65,7 +65,7 @@ const CSS = `
 .dva-motion-binding-actions button:disabled{opacity:.5;cursor:wait}
 .dva-motion-binding details{border-top:1px solid #ffffff22;padding-top:8px}
 .dva-motion-binding summary{cursor:pointer;color:#b8d8e9;font-size:12px}
-.dva-avatar-stage.has-native-motion img,.dva-pet.has-native-motion img{animation:none!important;transform:none!important}
+.dva-avatar-stage.has-native-motion img,.dva-pet.has-native-motion img{animation:none!important;transform:none!important}.dva-avatar-stage.has-native-motion img{will-change:auto}.dva-pet.has-native-motion img{will-change:auto}
 .dva-avatar-stage.has-native-motion::after{display:none}
 @media(max-width:760px){.dva-motion-binding-grid{grid-template-columns:1fr}}
 
@@ -1251,7 +1251,7 @@ function Companion() {
                 React.createElement('div', { className: 'dva-motion-pack-meta' },
                   React.createElement('strong', null, pack.displayName),
                   React.createElement('small', null,
-                    '未启用 · ' + pack.frameCount + ' 帧 · ' + (pack.byteLength / 1024 / 1024).toFixed(2) + ' MB · ' +
+                    (view?.character?.motionBinding?.packId === pack.id ? '已绑定 · ' : '未绑定 · ') + pack.frameCount + ' 帧 · ' + (pack.byteLength / 1024 / 1024).toFixed(2) + ' MB · ' +
                     new Date(pack.createdAt).toLocaleString(),
                   ),
                   React.createElement('small', null, 'SHA-256 ' + String(pack.sourceHash || '').slice(0, 16) + '…'),
