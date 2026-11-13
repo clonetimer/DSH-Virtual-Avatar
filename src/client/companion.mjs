@@ -298,6 +298,7 @@ function Companion() {
   const [motionIdentityConfirmed, setMotionIdentityConfirmed] = useState(false)
   const [motionBindingBusy, setMotionBindingBusy] = useState(false)
   const [runtimeMotionStep, setRuntimeMotionStep] = useState(0)
+  const [runtimeMotionFrameFailed, setRuntimeMotionFrameFailed] = useState(false)
   const [runtimeMotionCatalog, setRuntimeMotionCatalog] = useState(null)
   const [runtimeMotionCatalogPackId, setRuntimeMotionCatalogPackId] = useState(null)
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
@@ -610,7 +611,7 @@ function Companion() {
       return
     }
     const timer = window.setTimeout(() => setMotionPlaybackStep(step => step + 1),
-      Math.max(30, action.frameIntervalMs))
+      Math.max(15, action.frameIntervalMs))
     return () => window.clearTimeout(timer)
   }, [motionPlaying, activePanel, motionPreview, motionActionId, motionPlaybackStep])
 
@@ -876,20 +877,23 @@ function Companion() {
   useEffect(() => {
     setRuntimeMotionStep(0)
   }, [runtimeBinding?.packId, runtimeMotionActionId, avatarMotion])
+  useEffect(() => {
+    setRuntimeMotionFrameFailed(false)
+  }, [runtimeBinding?.packId, runtimeMotionActionId])
 
   useEffect(() => {
     if (prefersReducedMotion) {
       setRuntimeMotionStep(0)
       return
     }
-    if (!runtimeMotionAction || !runtimeMotionFrameTotal) return
+    if (!runtimeMotionAction || runtimeMotionFrameTotal <= 1) return
     const loops = avatarMotion === 'idle' || avatarMotion === 'thinking' || avatarMotion === 'swaying'
     if (!loops && runtimeMotionStep >= runtimeMotionFrameTotal - 1) return
     const timer = window.setTimeout(() => {
       setRuntimeMotionStep(step => loops
         ? (step + 1) % runtimeMotionFrameTotal
         : Math.min(step + 1, runtimeMotionFrameTotal - 1))
-    }, Math.max(30, runtimeMotionAction.frameIntervalMs))
+    }, Math.max(15, runtimeMotionAction.frameIntervalMs))
     return () => window.clearTimeout(timer)
   }, [runtimeMotionActionId, runtimeMotionFrameTotal, runtimeMotionAction?.frameIntervalMs, avatarMotion, runtimeMotionStep, prefersReducedMotion])
 
@@ -911,8 +915,8 @@ function Companion() {
   }, [runtimeBinding?.packId, runtimeMotionActionId])
 
   if (!open) return React.createElement('div', { className: 'dva-root' },
-    React.createElement('button', { className: 'dva-pet' + (runtimeMotionFrameUrl ? ' has-native-motion' : ''), title: '打开鲸鱼娘', onClick: () => { setOpen(true); void refresh() } },
-      React.createElement('img', { src: runtimeMotionFrameUrl || view?.character?.imageUrl || API + '/assets/maid-left.webp', alt: 'DeepSeek 鲸鱼娘', draggable: false }),
+    React.createElement('button', { className: 'dva-pet' + (runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? ' has-native-motion' : ''), title: '打开鲸鱼娘', onClick: () => { setOpen(true); void refresh() } },
+      React.createElement('img', { src: runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? runtimeMotionFrameUrl : view?.character?.imageUrl || API + '/assets/maid-left.webp', alt: 'DeepSeek 鲸鱼娘', draggable: false, onError: () => { if (runtimeMotionFrameUrl) { setRuntimeMotionFrameFailed(true); setNotice('动作帧读取失败，已恢复原有鲸鱼娘立绘。') } } }),
       React.createElement('span', null, '鲸鱼娘'),
     ),
   )
@@ -1011,7 +1015,7 @@ function Companion() {
     React.createElement('div', { className: 'dva-main' },
       React.createElement('aside', { className: 'dva-character' },
         React.createElement('div', {
-          className: 'dva-avatar-stage is-' + avatarMotion + ' is-state-' + (character?.presentation?.motion || 'calm') + (runtimeMotionFrameUrl ? ' has-native-motion' : ''),
+          className: 'dva-avatar-stage is-' + avatarMotion + ' is-state-' + (character?.presentation?.motion || 'calm') + (runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? ' has-native-motion' : ''),
           'data-expression': character?.presentation?.expression || 'neutral',
           'data-expression-source': character?.presentation?.expressionSource || 'baseline',
           'data-tempo': character?.presentation?.tempo || 'normal',
@@ -1029,11 +1033,12 @@ function Companion() {
         },
           React.createElement('img', {
             key: avatarExpressionOverride || character?.imageUrl || 'default-avatar',
-            src: runtimeMotionFrameUrl || (avatarExpressionOverride
+            src: runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? runtimeMotionFrameUrl : (avatarExpressionOverride
               ? character?.expressionUrls?.[avatarExpressionOverride] || character?.imageUrl || API + '/assets/maid-left.webp'
               : character?.imageUrl || API + '/assets/maid-left.webp'),
             alt: character?.name || '鲸鱼娘',
             draggable: false,
+            onError: () => { if (runtimeMotionFrameUrl) { setRuntimeMotionFrameFailed(true); setNotice('动作帧读取失败，已恢复原有鲸鱼娘立绘。') } },
           }),
           avatarMotion === 'thinking' ? React.createElement('span', { className: 'dva-avatar-status', role: 'status' }, '正在思考…') : null,
           avatarBubble ? React.createElement('span', { className: 'dva-avatar-bubble', role: 'status' }, avatarBubble) : null,
