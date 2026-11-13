@@ -16,7 +16,7 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 - DSH Cordis 插件入口与 Web Client overlay；支持自由聊天、历史分页、角色设定、表情和内置场景切换。
 - Whale 旧存档的 DeepSeek 角色导入原型；其他角色明确延期，原始存档保留。
 
-**当前产品不开发 Galgame 章节、剧情分支、结局、游戏式回复选项、小剧场或 CG。** 桌面宠物动画也不作为本阶段交付门槛。上游 Whale 项目仅作为角色设定、存档和素材来源。
+**当前产品不开发 Galgame 章节、剧情分支、结局、游戏式回复选项、小剧场或 CG。** 桌面宠物动画作为独立能力阶段推进，不影响核心陪伴链路；真正启用鲸鱼娘逐帧动作必须具备形象匹配且授权明确的素材。上游 Whale 项目仅作为角色设定、存档和素材来源。
 
 当前目标宿主为 DSH 0.2.2-rc.1，要求 Node.js >=24.9.0；CI 采用 Node 24.9.0 / 24 双矩阵。插件通过 `engines.dsh` 声明兼容范围 `>=0.2.2-rc.1 <0.2.3-0`。请查看 [实施状态与验收证据](docs/implementation-status.md)、[PPL-2 情绪状态与互动意图](docs/ppl-emotion-state.md)、[PPL Persona Registry](docs/ppl-persona-registry.md)、[日常交互体验改进](docs/companion-everyday-ux.md) 和 [DyberPet 动作兼容与记忆面板修复](docs/dyberpet-motion-compatibility.md) 和 [PPL 表情驱动与自主待机行为](docs/ppl-driven-whale-presentation.md)、[DyberPet 本地动作库与持久化导入](docs/dyberpet-motion-library.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
 
