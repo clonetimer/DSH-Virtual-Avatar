@@ -661,7 +661,9 @@ export class SqliteAvatarStore {
 
   setChatModelSelection({ characterId = 'deepseek', provider, model } = {}) {
     this.#assertOpen()
-    if (characterId !== 'deepseek') throw conflict('MODEL_CHARACTER_UNSUPPORTED', 'only the DeepSeek Whale character can have a local model selection')
+    if (characterId !== 'deepseek' && !/^ppl-[a-z0-9][a-z0-9-]{2,59}$/u.test(String(characterId))) {
+      throw conflict('MODEL_CHARACTER_UNSUPPORTED', 'model selection requires a registered companion character')
+    }
     if (typeof provider !== 'string' || !provider.trim() || provider.length > 128) {
       throw conflict('MODEL_PROVIDER_INVALID', 'a valid registered model provider is required')
     }
@@ -675,7 +677,7 @@ export class SqliteAvatarStore {
       this.#db.prepare('INSERT INTO chat_model_selections(character_id,provider,model,updated_at) VALUES(?,?,?,?) ON CONFLICT(character_id) DO UPDATE SET provider=excluded.provider,model=excluded.model,updated_at=excluded.updated_at')
         .run(characterId, normalized.provider, normalized.model, now)
       this.#recordAudit('model-selection', characterId, 'CHAT_MODEL_SELECTED', null,
-        previous, { ...normalized, updatedAt: now }, { source: 'whale-companion-settings' })
+        previous, { ...normalized, updatedAt: now }, { source: 'companion-model-settings' })
     })
     return this.getChatModelSelection(characterId)
   }
