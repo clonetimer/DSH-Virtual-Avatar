@@ -38,15 +38,15 @@ node --version
 npm --version
 ```
 
-从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.9` artifact 下载以下文件：
-- `dsh-virtual-avatar-0.1.0-dev.9.tgz`
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.10` artifact 下载以下文件：
+- `dsh-virtual-avatar-0.1.0-dev.10.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
 
 先校验包文件（在下载目录执行）：
 
 ```powershell
-Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.9.tgz -Algorithm SHA256
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.10.tgz -Algorithm SHA256
 ```
 
 将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
@@ -54,14 +54,14 @@ Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.9.tgz -Algorithm SHA256
 **DSH Web（web profile）：**
 
 ```powershell
-dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.9.tgz"
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.10.tgz"
 dsh --profile web --dump-config
 ```
 
 **DSH Desktop：** 建议直接使用桌面版「插件 → 添加插件」，输入 `.tgz` 的完整绝对路径。若在 DSH 桌面版「应用 → 管理 dsh 命令…」安装了专用 CLI，可在完全退出 Desktop 后使用其保留的 `desktop` profile：
 
 ```powershell
-dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.9.tgz"
+dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.10.tgz"
 dsh --profile desktop --dump-config
 ```
 
@@ -144,3 +144,12 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - PPL emotion state also selects a restrained idle motion profile. High character fatigue slows the ambient animation; it does not change the expression unless an emotion threshold is crossed.
 - The expanded portrait has subtle state-specific idle motion, and the collapsed desktop pet gently floats. When the companion panel is open and idle, a small body sway occurs about every 24 seconds; it pauses while chatting or reading a utility panel.
 - All ambient motion respects `prefers-reduced-motion`. No blink, lip-sync, rigged limbs or frame-by-frame movement is claimed for the current static portrait pack.
+
+## DyberPet 本地动作文件夹预览（dev.10）
+
+- 在鲸鱼娘的「更多 → 角色与外观 → 动作包预览」中选择本地 DyberPet 角色文件夹，直接检验和播放该角色的 PNG 逐帧动作。
+- 文件夹要求：`pet_conf.json`、`act_conf.json` 和 `action/<动作前缀>_<帧号>.png`，无需运行命令行或手动修改源文件。
+- 预览由 Host 按 DyberPet 原生格式校验引用、帧顺序、播放间隔和重复次数；浏览器对每张 PNG 检查文件签名，支持暂停、切换动作及从头播放。
+- 本轮 **仅预览**：PNG 文件保留在当前浏览器实例，不上传到 Host，不写入 SQLite，也不替换鲸鱼娘立绘或其他角色数据。关闭预览后释放临时文件 URL。
+- 角色包可能使用不同角色的美术形象。用户可在预览中检查形象一致性；只有具备相应鲸鱼娘授权帧图时，才能进入正式逐帧动画启用阶段。
+- 详见 [DyberPet 角色动作预览说明](docs/dyberpet-folder-preview.md)。

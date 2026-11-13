@@ -432,3 +432,54 @@ test('PPL emotion state drives the Whale portrait across completed turns', async
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+
+test('native DyberPet folder metadata validates without mutating the Whale profile', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-avatar-motion-preview-'))
+  let route
+  let cleanup
+  const ctx = {
+    webServer: { register(value) { route = value; return () => { route = null } } },
+    llm: { stream: async function* () { yield { type: 'text-delta', text: '你好' }; yield { type: 'finish', reason: { kind: 'stop' } } } },
+    dshHomePath: (...segments) => join(home, ...segments),
+    inject() {},
+    effect(fn) { cleanup = fn() },
+  }
+  try {
+    apply(ctx, {})
+    const initial = await call(route.handler, { action: 'view' })
+    const preview = await call(route.handler, {
+      action: 'motion-preview-validate',
+      args: {
+        petConfig: { default: 'idle', random_act: [] },
+        actConfig: { idle: { images: 'stand', act_num: 2, frame_refresh: 0.15 } },
+        frameFiles: ['action/stand_1.png', 'action/stand_0.png'],
+      },
+    })
+    assert.equal(preview.status, 200)
+    assert.equal(preview.body.ok, true)
+    assert.equal(preview.body.previewOnly, true)
+    assert.equal(preview.body.persistent, false)
+    assert.deepEqual(preview.body.catalog.actions.idle.frames, ['action/stand_0.png', 'action/stand_1.png'])
+    assert.equal(preview.body.catalog.actions.idle.durationMs, 600)
+
+    const malformed = await call(route.handler, {
+      action: 'motion-preview-validate',
+      args: {
+        petConfig: { default: 'idle' },
+        actConfig: { idle: { images: 'stand' } },
+        frameFiles: ['../unsafe.png'],
+      },
+    })
+    assert.equal(malformed.status, 400)
+    assert.match(malformed.body.code, /^DYBERPET_/)
+
+    const after = await call(route.handler, { action: 'view' })
+    assert.deepEqual(after.body.character.chatLines, initial.body.character.chatLines)
+    assert.equal(after.body.character.imageUrl, initial.body.character.imageUrl)
+    assert.equal(after.body.revision, initial.body.revision)
+  } finally {
+    if (typeof cleanup === 'function') cleanup()
+    rmSync(home, { recursive: true, force: true })
+  }
+})

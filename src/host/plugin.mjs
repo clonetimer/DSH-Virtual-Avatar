@@ -9,6 +9,7 @@ import { createDefaultPersonaRegistry } from '../ppl/registry.mjs'
 import { extractMemoryCandidates } from '../memory/candidates.mjs'
 import { DEEPSEEK_WHALE_PROFILE, affectionCap, relationshipStageLabel, resolveDeepseekWhaleProfile } from '../characters/deepseek-whale/profile.mjs'
 import { resolveDeepseekWhalePresentation } from '../characters/deepseek-whale/presentation.mjs'
+import { compileDyberPetMotionCatalog } from '../characters/deepseek-whale/dyberpet-motion.mjs'
 
 export const name = 'dsh-virtual-avatar'
 export const inject = ['webServer', 'llm']
@@ -330,7 +331,7 @@ export function apply(ctx, config = {}) {
     } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
     return {
       checkedAt,
-      plugin: { id: name, version: '0.1.0-dev.9', enabled: runtimeConfig.enabled },
+      plugin: { id: name, version: '0.1.0-dev.10', enabled: runtimeConfig.enabled },
       model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
       persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0, registered: personaRegistry.list() },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, mediaDirectory, backupDirectory },
@@ -371,7 +372,7 @@ export function apply(ctx, config = {}) {
       return
     }
     if (req.method === 'GET') {
-      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.9' })
+      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.10' })
       return
     }
     if (req.method !== 'POST') {
@@ -473,6 +474,24 @@ export function apply(ctx, config = {}) {
 
       if (action === 'view') {
         json(res, 200, publicView(service, memoryService, runtimeConfig))
+        return
+      }
+
+      if (action === 'motion-preview-validate') {
+        // Preview-only: only role configuration and filenames reach the host.
+        // PNG bytes stay in the user's browser; no state or artwork is written.
+        let catalog
+        try {
+          catalog = compileDyberPetMotionCatalog({
+            petConfig: args.petConfig,
+            actConfig: args.actConfig,
+            frameFiles: args.frameFiles,
+          })
+        } catch (error) {
+          if (String(error?.code || '').startsWith('DYBERPET_')) error.status = 400
+          throw error
+        }
+        json(res, 200, { ok: true, catalog, persistent: false, previewOnly: true })
         return
       }
 
