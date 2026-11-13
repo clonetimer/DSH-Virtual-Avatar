@@ -51,6 +51,13 @@ test('motion pack import persists configs and PNG frames across SQLite reopen', 
     const backup = f.store.createBackup(join(f.directory, 'backup'))
     assert.equal(f.store.verifyBackup(join(f.directory, 'backup')).valid, true)
     assert.ok(backup.manifest.files.some(item => item.path.includes('assets/motion-packs/')))
+    const removedBeforeRestore = f.store.deleteMotionPack(imported.pack.id, { confirmed: true })
+    assert.equal(removedBeforeRestore.deleted, true)
+    assert.equal(f.store.listMotionPacks().length, 0)
+    const restoredBackup = f.store.restoreBackup(join(f.directory, 'backup'))
+    assert.equal(restoredBackup.restored, true)
+    assert.equal(f.store.listMotionPacks().length, 1)
+    assert.deepEqual(f.store.readMotionPackFrame(imported.pack.id, 'action/stand_0.png').bytes, PNG)
   } finally { f.store.close(); rmSync(f.directory, { recursive: true, force: true }) }
 })
 
