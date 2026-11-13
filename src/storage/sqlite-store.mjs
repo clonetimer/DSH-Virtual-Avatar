@@ -165,6 +165,13 @@ CREATE TABLE IF NOT EXISTS motion_pack_bindings (
 );
 CREATE INDEX IF NOT EXISTS idx_motion_pack_bindings_pack ON motion_pack_bindings(pack_id);
 
+CREATE TABLE IF NOT EXISTS chat_model_selections (
+  character_id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS migration_rollback_snapshots (migration_id TEXT PRIMARY KEY, character_id TEXT NOT NULL, after_revision INTEGER NOT NULL, created_asset_ids_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'available', created_at TEXT NOT NULL, rolled_back_at TEXT, FOREIGN KEY(migration_id) REFERENCES migration_runs(migration_id));
 
 CREATE TABLE IF NOT EXISTS audit_events (
@@ -542,6 +549,51 @@ export class SqliteAvatarStore {
       this.#recordAudit('character', characterId, 'AFFECTION_DELTA', id, current, saved.state, { delta, levelUps: result.levelUps })
       return { duplicate: false, ...result, state: saved.state, revision: saved.revision }
     })
+  }
+
+  getChatModelSelection(characterId = 'deepseek') {
+    this.#assertOpen()
+    const row = this.#db.prepare('SELECT character_id,provider,model,updated_at FROM chat_model_selections WHERE character_id=?')
+      .get(String(characterId))
+    return row ? {
+      characterId: row.character_id,
+      provider: row.provider,
+      model: row.model,
+      updatedAt: row.updated_at,
+    } : null
+  }
+
+  setChatModelSelection({ characterId = 'deepseek', provider, model } = {}) {
+    this.#assertOpen()
+    if (characterId !== 'deepseek') throw conflict('MODEL_CHARACTER_UNSUPPORTED', 'only the DeepSeek Whale character can have a local model selection')
+    if (typeof provider !== 'string' || !provider.trim() || provider.length > 128) {
+      throw conflict('MODEL_PROVIDER_INVALID', 'a valid registered model provider is required')
+    }
+    if (typeof model !== 'string' || !model.trim() || model.length > 256) {
+      throw conflict('MODEL_ID_INVALID', 'a model id between 1 and 256 characters is required')
+    }
+    const normalized = { characterId, provider: provider.trim(), model: model.trim() }
+    const previous = this.getChatModelSelection(characterId)
+    const now = new Date().toISOString()
+    this.transaction(() => {
+      this.#db.prepare('INSERT INTO chat_model_selections(character_id,provider,model,updated_at) VALUES(?,?,?,?) ON CONFLICT(character_id) DO UPDATE SET provider=excluded.provider,model=excluded.model,updated_at=excluded.updated_at')
+        .run(characterId, normalized.provider, normalized.model, now)
+      this.#recordAudit('model-selection', characterId, 'CHAT_MODEL_SELECTED', null,
+        previous, { ...normalized, updatedAt: now }, { source: 'whale-companion-settings' })
+    })
+    return this.getChatModelSelection(characterId)
+  }
+
+  clearChatModelSelection(characterId = 'deepseek') {
+    this.#assertOpen()
+    const previous = this.getChatModelSelection(characterId)
+    if (!previous) return { cleared: false, selection: null }
+    this.transaction(() => {
+      this.#db.prepare('DELETE FROM chat_model_selections WHERE character_id=?').run(String(characterId))
+      this.#recordAudit('model-selection', String(characterId), 'CHAT_MODEL_SELECTION_CLEARED', null,
+        previous, null, { source: 'whale-companion-settings' })
+    })
+    return { cleared: true, selection: null }
   }
 
   listMemoryItems(ownerKind, ownerId) {
