@@ -85,3 +85,36 @@ test('PPL visual configuration uses optimistic revision checks and rejects invar
     store.close()
   }
 })
+
+test('saving unchanged default PPL configuration is a no-op', () => {
+  const store = new SqliteAvatarStore(':memory:')
+  try {
+    const service = new DeepseekWhaleService({ store })
+    const initial = service.getPplConfiguration()
+    const result = service.updatePplConfiguration(initial.effective, { expectedRevision: initial.revision })
+    assert.equal(result.changed, false)
+    assert.equal(result.revision, 0)
+    assert.equal(store.loadCharacterState('deepseek'), null)
+  } finally {
+    store.close()
+  }
+})
+
+test('invalid persisted PPL configuration falls back safely and can be reset', () => {
+  const store = new SqliteAvatarStore(':memory:')
+  try {
+    store.saveCharacterState('deepseek', {
+      pplConfigOverrides: { schema: 'dsh-virtual-avatar.ppl-config/1', traits: { warmth: 0.2 } },
+    }, 0)
+    const service = new DeepseekWhaleService({ store })
+    const recovered = service.getPplConfiguration()
+    assert.equal(recovered.configurationError.code, 'PPL_CONFIGURATION_VALUE_OUT_OF_RANGE')
+    assert.equal(recovered.effective.traits.warmth, 0.78)
+    const reset = service.resetPplConfiguration({ expectedRevision: recovered.revision })
+    assert.equal(reset.changed, true)
+    assert.equal(reset.configuration.configurationError, null)
+    assert.equal(reset.configuration.effective.traits.warmth, 0.78)
+  } finally {
+    store.close()
+  }
+})
