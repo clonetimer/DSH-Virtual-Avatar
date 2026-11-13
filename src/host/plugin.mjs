@@ -23,7 +23,7 @@ const CHARACTER_ASSET_ROOT = fileURLToPath(new URL('../../assets/characters/', i
 const CHARACTER_ASSETS = Object.freeze({
   'characters/zhuang-fangyi/portrait.svg': Object.freeze({
     root: CHARACTER_ASSET_ROOT,
-    file: 'zhuang-fangyi/portrait.webp',
+    file: 'zhuang-fangyi/portrait.svg',
     contentType: 'image/svg+xml',
   }),
 })
