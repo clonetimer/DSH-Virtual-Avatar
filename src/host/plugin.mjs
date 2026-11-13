@@ -7,6 +7,7 @@ import { createAvatarStore } from '../storage/sqlite-store.mjs'
 import { DeepseekWhaleService } from '../characters/deepseek-whale/service.mjs'
 import { createDefaultPersonaRegistry } from '../ppl/registry.mjs'
 import { createMultiCharacterRegistry } from '../ppl/multi-character-registry.mjs'
+import { createCharacterArtworkRegistry } from '../characters/artwork/registry.mjs'
 import { extractMemoryCandidates } from '../memory/candidates.mjs'
 import { DEEPSEEK_WHALE_PROFILE, affectionCap, relationshipStageLabel, resolveDeepseekWhaleProfile } from '../characters/deepseek-whale/profile.mjs'
 import { resolveDeepseekWhalePresentation } from '../characters/deepseek-whale/presentation.mjs'
@@ -284,10 +285,11 @@ function publicView(service, memoryService, config, store = null) {
 }
 
 
-function genericRoleView(role, service) {
+function genericRoleView(role, service, artworkRegistry) {
   const loaded = service.loadState()
   const state = loaded.state
   const relation = state.pplRuntime?.relationships?.admin || {}
+  const artwork = artworkRegistry.get(role.characterId)
   return {
     ok: true,
     character: {
@@ -295,7 +297,8 @@ function genericRoleView(role, service) {
       personaId: role.personaId,
       kind: role.kind,
       name: service.displayName,
-      hasDedicatedArtwork: false,
+      hasDedicatedArtwork: Boolean(artwork.portraitUrl),
+      artwork,
       avatarLabel: String(service.displayName || '?').slice(0, 1),
       description: role.description,
       relationship: {
@@ -367,6 +370,7 @@ export function apply(ctx, config = {}) {
   const store = createAvatarStore({ dshHomePath })
   const personaRegistry = createDefaultPersonaRegistry()
   const multiCharacterRegistry = createMultiCharacterRegistry({ store, personaRegistry })
+  const artworkRegistry = createCharacterArtworkRegistry()
   const service = new DeepseekWhaleService({
     store,
     pplRuntime: personaRegistry.createRuntime('DEEPSEEK_WHALE'),
@@ -482,6 +486,31 @@ export function apply(ctx, config = {}) {
     let action = 'unknown'
     const pathname = new URL(req.url || '/', 'http://dsh.local').pathname
     const assetMarker = pathname.lastIndexOf('/assets/')
+    if (req.method === 'GET' && pathname.startsWith(API_PATH + '/assets/characters/')) {
+      const parts = pathname.slice((API_PATH + '/assets/characters/').length).split('/').map(decodeURIComponent)
+      if (parts.length !== 2) {
+        json(res, 404, { ok: false, error: 'character artwork not found' })
+        return
+      }
+      const asset = artworkRegistry.readAsset(parts[0], parts[1])
+      if (!asset) {
+        json(res, 404, { ok: false, error: 'character artwork not found' })
+        return
+      }
+      try {
+        const bytes = readFileSync(asset.path)
+        res.writeHead(200, {
+          'Content-Type': asset.contentType,
+          'Content-Length': bytes.byteLength,
+          'Cache-Control': 'private, max-age=86400',
+          'X-Content-Type-Options': 'nosniff',
+        })
+        res.end(bytes)
+      } catch {
+        json(res, 404, { ok: false, error: 'character artwork unavailable' })
+      }
+      return
+    }
     if (req.method === 'GET' && assetMarker >= 0) {
       const assetName = decodeURIComponent(pathname.slice(assetMarker + '/assets/'.length))
       const contentType = ASSET_TYPES[assetName]
@@ -602,7 +631,7 @@ export function apply(ctx, config = {}) {
       if (action.startsWith('character-') && action !== 'character-list' && action !== 'character-select') {
         const role = multiCharacterRegistry.resolve(args.characterId, { requireGeneric: true })
         const companion = multiCharacterRegistry.getService(role.characterId)
-        const roleView = () => genericRoleView(role, companion)
+        const roleView = () => genericRoleView(role, companion, artworkRegistry)
 
         if (action === 'character-view') {
           json(res, 200, roleView())
