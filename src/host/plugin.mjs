@@ -156,7 +156,11 @@ async function streamReply(llm, model, system, contextMessages, userText, signal
       const kind = String(chunk.reason.kind || '')
       if (kind === 'error' || kind === 'aborted') {
         const failure = chunk.reason.failure
-        throw new Error(failure?.message || failure?.code || kind)
+        const error = new Error(failure?.message || failure?.code || kind)
+        error.code = failure?.code || 'LLM_STREAM_FAILED'
+        error.provider = model.provider
+        error.model = model.model
+        throw error
       }
       if (kind === 'max-tokens' || kind === 'length') terminalReason = 'max-tokens'
     }
@@ -400,7 +404,7 @@ export function apply(ctx, config = {}) {
     } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
     return {
       checkedAt,
-      plugin: { id: name, version: '0.1.0-dev.12', enabled: runtimeConfig.enabled },
+      plugin: { id: name, version: '0.1.0-dev.14', enabled: runtimeConfig.enabled },
       model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, selectionSource: model?.source || null, hasWhaleOverride: Boolean(store.getChatModelSelection('deepseek')), configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
       persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0, registered: personaRegistry.list() },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, motionPackCount: motionPacks.length, motionPackFrames, motionPackBytes, mediaDirectory, backupDirectory },
@@ -461,7 +465,7 @@ export function apply(ctx, config = {}) {
       return
     }
     if (req.method === 'GET') {
-      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.12' })
+      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.14' })
       return
     }
     if (req.method !== 'POST') {
