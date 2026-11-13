@@ -53,6 +53,22 @@ const CSS = `
 .dva-motion-pack-actions button,.dva-motion-import{border:1px solid #77b8df;border-radius:9px;background:#174b70;color:#f2f9ff;padding:7px 10px;cursor:pointer}
 .dva-motion-import{align-self:flex-start;background:#1c674f;border-color:#75c8a6}
 .dva-motion-import:disabled,.dva-motion-pack-actions button:disabled{opacity:.5;cursor:wait}
+.dva-motion-binding{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid #7cc6a477;border-radius:12px;background:#0c2d2a88}
+.dva-motion-binding-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.dva-motion-binding-field{display:flex;flex-direction:column;gap:5px;min-width:0;color:#b8d8e9;font-size:11px}
+.dva-motion-binding-field select{width:100%;min-width:0;box-sizing:border-box;border:1px solid #4d7796;border-radius:8px;background:#06172a;color:#f2f9ff;padding:8px}
+.dva-motion-binding-confirm{display:flex;align-items:flex-start;gap:8px;color:#d7eaf5;font-size:12px;line-height:1.5}
+.dva-motion-binding-confirm input{margin-top:2px;flex:0 0 auto}
+.dva-motion-binding-actions{display:flex;gap:8px;flex-wrap:wrap}
+.dva-motion-binding-actions button{border:1px solid #77b8df;border-radius:9px;background:#174b70;color:#f2f9ff;padding:8px 12px;cursor:pointer}
+.dva-motion-binding-actions button.primary{background:#1c674f;border-color:#75c8a6}
+.dva-motion-binding-actions button:disabled{opacity:.5;cursor:wait}
+.dva-motion-binding details{border-top:1px solid #ffffff22;padding-top:8px}
+.dva-motion-binding summary{cursor:pointer;color:#b8d8e9;font-size:12px}
+.dva-avatar-stage.has-native-motion img,.dva-pet.has-native-motion img{animation:none!important;transform:none!important}.dva-avatar-stage.has-native-motion img{will-change:auto}.dva-pet.has-native-motion img{will-change:auto}
+.dva-avatar-stage.has-native-motion::after{display:none}
+@media(max-width:760px){.dva-motion-binding-grid{grid-template-columns:1fr}}
+
 @media(max-width:760px){.dva-motion-pack-row{align-items:flex-start;flex-direction:column}.dva-motion-pack-actions{width:100%}.dva-motion-pack-actions button{flex:1}}
 
 .dva-motion-error{font-size:12px;color:#ffd0c9;background:#52243888;border:1px solid #ffb3a944;border-radius:9px;padding:9px}
@@ -135,6 +151,35 @@ async function callApi(action, args = {}) {
   const result = await response.json()
   if (!response.ok || result.ok === false) throw new Error(result.error || '请求失败')
   return result
+}
+
+const MOTION_BINDING_SLOTS = Object.freeze([
+  { key: 'idle', label: '日常待机', required: true },
+  { key: 'thinking', label: '思考中' },
+  { key: 'responding', label: '回复后' },
+  { key: 'patting', label: '摸摸互动' },
+  { key: 'resting', label: '休息状态' },
+  { key: 'cheerful', label: '开心' },
+  { key: 'shy', label: '害羞' },
+  { key: 'serious', label: '认真 / 低落' },
+  { key: 'confused', label: '疑惑' },
+  { key: 'angry', label: '不开心' },
+  { key: 'frightened', label: '紧张' },
+  { key: 'exasperated', label: '无奈' },
+  { key: 'starry', label: '憧憬' },
+])
+
+function resolveBoundMotionAction(binding, { avatarMotion = 'idle', expression = 'neutral', fatigue = 0 } = {}) {
+  if (!binding?.identityConfirmed || !binding?.catalog?.actions) return null
+  const mapping = binding.mapping || {}
+  const idle = mapping.idle || binding.catalog.defaultAction || null
+  if (!idle || !binding.catalog.actions[idle]) return null
+  const choose = (...ids) => ids.find(id => typeof id === 'string' && binding.catalog.actions[id]) || idle
+  if (avatarMotion === 'thinking') return choose(mapping.thinking)
+  if (avatarMotion === 'patting') return choose(mapping.patting, mapping[expression])
+  if (avatarMotion === 'responding') return choose(mapping.responding, mapping[expression])
+  if (Number(fatigue) >= 0.75 && mapping.resting) return choose(mapping.resting)
+  return choose(mapping[expression])
 }
 
 function describeCharacterState(state = {}, presentation = {}) {
@@ -249,6 +294,14 @@ function Companion() {
   const [motionActionId, setMotionActionId] = useState('')
   const [motionPlaybackStep, setMotionPlaybackStep] = useState(0)
   const [motionPlaying, setMotionPlaying] = useState(false)
+  const [motionBindingDraft, setMotionBindingDraft] = useState({ idle: '' })
+  const [motionIdentityConfirmed, setMotionIdentityConfirmed] = useState(false)
+  const [motionBindingBusy, setMotionBindingBusy] = useState(false)
+  const [runtimeMotionStep, setRuntimeMotionStep] = useState(0)
+  const [runtimeMotionFrameFailed, setRuntimeMotionFrameFailed] = useState(false)
+  const [runtimeMotionCatalog, setRuntimeMotionCatalog] = useState(null)
+  const [runtimeMotionCatalogPackId, setRuntimeMotionCatalogPackId] = useState(null)
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
   const motionRequestRef = React.useRef(0)
   const [motionPacks, setMotionPacks] = useState([])
   const [motionLibraryBusy, setMotionLibraryBusy] = useState(false)
@@ -354,6 +407,10 @@ function Companion() {
         frameUrls,
         blobUrls: [],
       })
+      const currentBinding = view?.character?.motionBinding
+      const existingMapping = currentBinding?.packId === pack.id ? currentBinding.mapping : null
+      setMotionBindingDraft(existingMapping || { idle: pack.catalog.defaultAction || Object.keys(pack.catalog.actions)[0] })
+      setMotionIdentityConfirmed(currentBinding?.packId === pack.id && currentBinding.identityConfirmed === true)
       setMotionActionId(pack.catalog.defaultAction || Object.keys(pack.catalog.actions)[0])
       setMotionPlaybackStep(0)
     } catch (error) {
@@ -411,11 +468,42 @@ function Companion() {
     }
   }
 
+
+  const saveMotionBinding = async () => {
+    if (motionPreview?.source !== 'installed' || !motionPreview.packId || !motionIdentityConfirmed || !motionBindingDraft.idle || motionBindingBusy) return
+    setMotionBindingBusy(true)
+    setMotionPreviewError('')
+    try {
+      const result = await callApi('motion-pack-bind', {
+        packId: motionPreview.packId,
+        identityConfirmed: true,
+        mapping: motionBindingDraft,
+      })
+      setView(result.view)
+      setNotice('动作已绑定到鲸鱼娘。PPL 情绪和互动状态现在可以驱动这组逐帧动作。')
+    } catch (error) {
+      setMotionPreviewError(error.message || String(error))
+    } finally { setMotionBindingBusy(false) }
+  }
+
+  const clearMotionBinding = async () => {
+    if (motionBindingBusy || !window.confirm('解除动作绑定？鲸鱼娘会恢复使用原有立绘和待机动画，本地动作包不会被删除。')) return
+    setMotionBindingBusy(true)
+    try {
+      const result = await callApi('motion-pack-unbind')
+      setView(result.view)
+      setMotionIdentityConfirmed(false)
+      setNotice('已解除动作绑定，本地动作包仍保留在动作库中。')
+    } catch (error) { setMotionPreviewError(error.message || String(error)) }
+    finally { setMotionBindingBusy(false) }
+  }
+
   const removeMotionPack = async pack => {
     if (!window.confirm('卸载“' + pack.displayName + '”？这会删除本地动作帧和动作配置，但不会影响鲸鱼娘的聊天、记忆、关系或原始立绘。')) return
     try {
       const result = await callApi('motion-pack-delete', { packId: pack.id, confirmed: true })
       if (result.deleted && motionPreview?.packId === pack.id) setMotionPreview(null)
+      if (result.view) setView(result.view)
       setNotice(result.deleted ? '动作包已从本地动作库卸载。' : '动作包已不存在。')
       await loadMotionPacks()
     } catch (error) { setMotionPreviewError(error.message || String(error)) }
@@ -523,7 +611,7 @@ function Companion() {
       return
     }
     const timer = window.setTimeout(() => setMotionPlaybackStep(step => step + 1),
-      Math.max(30, action.frameIntervalMs))
+      Math.max(15, action.frameIntervalMs))
     return () => window.clearTimeout(timer)
   }, [motionPlaying, activePanel, motionPreview, motionActionId, motionPlaybackStep])
 
@@ -729,9 +817,106 @@ function Companion() {
     finally { setMemoryLoading(false) }
   }
 
+  const runtimeCharacter = view?.character
+  const runtimeBinding = runtimeCharacter?.motionBinding || null
+  const runtimeBindingForPlayback = runtimeBinding && runtimeMotionCatalogPackId === runtimeBinding.packId
+    ? { ...runtimeBinding, catalog: runtimeMotionCatalog }
+    : null
+  const runtimeExpression = avatarExpressionOverride || runtimeCharacter?.presentation?.expression || 'neutral'
+  const runtimeMotionActionId = resolveBoundMotionAction(runtimeBindingForPlayback, {
+    avatarMotion,
+    expression: runtimeExpression,
+    fatigue: runtimeCharacter?.pplState?.fatigue,
+  })
+  const runtimeMotionAction = runtimeBindingForPlayback?.catalog?.actions?.[runtimeMotionActionId] || null
+  const runtimeMotionFrameTotal = runtimeMotionAction
+    ? runtimeMotionAction.frames.length * runtimeMotionAction.repeats
+    : 0
+  const runtimeMotionFrameIndex = runtimeMotionFrameTotal
+    ? (runtimeMotionStep % runtimeMotionFrameTotal) % runtimeMotionAction.frames.length
+    : 0
+  const runtimeMotionFramePath = runtimeMotionAction?.frames?.[runtimeMotionFrameIndex] || null
+  const runtimeMotionFrameUrl = runtimeMotionFramePath && runtimeBinding?.packId
+    ? API + '/motion-packs/' + encodeURIComponent(runtimeBinding.packId) + '/' +
+      runtimeMotionFramePath.split('/').map(encodeURIComponent).join('/')
+    : null
+
+  useEffect(() => {
+    let active = true
+    const packId = runtimeBinding?.packId
+    if (!packId) {
+      setRuntimeMotionCatalog(null)
+      setRuntimeMotionCatalogPackId(null)
+      return () => { active = false }
+    }
+    setRuntimeMotionCatalog(null)
+    setRuntimeMotionCatalogPackId(null)
+    void callApi('motion-pack-runtime').then(result => {
+      if (!active) return
+      if (!result.binding || result.binding.packId !== packId || !result.binding.catalog?.actions) {
+        setNotice('动作包绑定状态已变化，鲸鱼娘暂时恢复使用原有立绘。')
+        return
+      }
+      setRuntimeMotionCatalog(result.binding.catalog)
+      setRuntimeMotionCatalogPackId(packId)
+    }).catch(() => {
+      if (active) setNotice('暂时无法读取原生动作资源，鲸鱼娘已回退到原有立绘。')
+    })
+    return () => { active = false }
+  }, [runtimeBinding?.packId, runtimeBinding?.updatedAt])
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    if (!media) return
+    const update = () => setPrefersReducedMotion(media.matches)
+    update()
+    media.addEventListener?.('change', update)
+    return () => media.removeEventListener?.('change', update)
+  }, [])
+
+  useEffect(() => {
+    setRuntimeMotionStep(0)
+  }, [runtimeBinding?.packId, runtimeMotionActionId, avatarMotion])
+  useEffect(() => {
+    setRuntimeMotionFrameFailed(false)
+  }, [runtimeBinding?.packId, runtimeMotionActionId])
+
+  useEffect(() => {
+    if (prefersReducedMotion || runtimeMotionFrameFailed) {
+      setRuntimeMotionStep(0)
+      return
+    }
+    if (!runtimeMotionAction || runtimeMotionFrameTotal <= 1) return
+    const loops = avatarMotion === 'idle' || avatarMotion === 'thinking' || avatarMotion === 'swaying'
+    if (!loops && runtimeMotionStep >= runtimeMotionFrameTotal - 1) return
+    const timer = window.setTimeout(() => {
+      setRuntimeMotionStep(step => loops
+        ? (step + 1) % runtimeMotionFrameTotal
+        : Math.min(step + 1, runtimeMotionFrameTotal - 1))
+    }, Math.max(15, runtimeMotionAction.frameIntervalMs))
+    return () => window.clearTimeout(timer)
+  }, [runtimeMotionActionId, runtimeMotionFrameTotal, runtimeMotionAction?.frameIntervalMs, avatarMotion, runtimeMotionStep, prefersReducedMotion, runtimeMotionFrameFailed])
+
+  useEffect(() => {
+    if (!runtimeMotionAction) return
+    const images = runtimeMotionAction.frames.slice(0, 12).map(path => {
+      const image = new Image()
+      const url = API + '/motion-packs/' + encodeURIComponent(runtimeBinding.packId) + '/' +
+        path.split('/').map(encodeURIComponent).join('/')
+      image.src = url
+      return image
+    })
+    return () => {
+      for (const image of images) {
+        image.onload = null
+        image.onerror = null
+      }
+    }
+  }, [runtimeBinding?.packId, runtimeMotionActionId])
+
   if (!open) return React.createElement('div', { className: 'dva-root' },
-    React.createElement('button', { className: 'dva-pet', title: '打开鲸鱼娘', onClick: () => { setOpen(true); void refresh() } },
-      React.createElement('img', { src: view?.character?.imageUrl || API + '/assets/maid-left.webp', alt: 'DeepSeek 鲸鱼娘' }),
+    React.createElement('button', { className: 'dva-pet' + (runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? ' has-native-motion' : ''), title: '打开鲸鱼娘', onClick: () => { setOpen(true); void refresh() } },
+      React.createElement('img', { src: runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? runtimeMotionFrameUrl : view?.character?.imageUrl || API + '/assets/maid-left.webp', alt: 'DeepSeek 鲸鱼娘', draggable: false, onError: () => { if (runtimeMotionFrameUrl) { setRuntimeMotionFrameFailed(true); setNotice('动作帧读取失败，已恢复原有鲸鱼娘立绘。') } } }),
       React.createElement('span', null, '鲸鱼娘'),
     ),
   )
@@ -830,7 +1015,7 @@ function Companion() {
     React.createElement('div', { className: 'dva-main' },
       React.createElement('aside', { className: 'dva-character' },
         React.createElement('div', {
-          className: 'dva-avatar-stage is-' + avatarMotion + ' is-state-' + (character?.presentation?.motion || 'calm'),
+          className: 'dva-avatar-stage is-' + avatarMotion + ' is-state-' + (character?.presentation?.motion || 'calm') + (runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? ' has-native-motion' : ''),
           'data-expression': character?.presentation?.expression || 'neutral',
           'data-expression-source': character?.presentation?.expressionSource || 'baseline',
           'data-tempo': character?.presentation?.tempo || 'normal',
@@ -848,11 +1033,12 @@ function Companion() {
         },
           React.createElement('img', {
             key: avatarExpressionOverride || character?.imageUrl || 'default-avatar',
-            src: avatarExpressionOverride
+            src: runtimeMotionFrameUrl && !runtimeMotionFrameFailed ? runtimeMotionFrameUrl : (avatarExpressionOverride
               ? character?.expressionUrls?.[avatarExpressionOverride] || character?.imageUrl || API + '/assets/maid-left.webp'
-              : character?.imageUrl || API + '/assets/maid-left.webp',
+              : character?.imageUrl || API + '/assets/maid-left.webp'),
             alt: character?.name || '鲸鱼娘',
             draggable: false,
+            onError: () => { if (runtimeMotionFrameUrl) { setRuntimeMotionFrameFailed(true); setNotice('动作帧读取失败，已恢复原有鲸鱼娘立绘。') } },
           }),
           avatarMotion === 'thinking' ? React.createElement('span', { className: 'dva-avatar-status', role: 'status' }, '正在思考…') : null,
           avatarBubble ? React.createElement('span', { className: 'dva-avatar-bubble', role: 'status' }, avatarBubble) : null,
@@ -1026,6 +1212,73 @@ function Companion() {
               motionPreview.source === 'installed' ? '这是已保存到本地动作库的素材包，目前仅供预览，尚未应用到鲸鱼娘。' : '当前是本地临时预览；只有点击“导入到本地动作库”才会持久保存。导入不会替换鲸鱼娘立绘或改变关系数据。',
             ),
           ) : null,
+          motionPreview?.source === 'installed' ? React.createElement('div', { className: 'dva-motion-binding' },
+            React.createElement('strong', null, '绑定到鲸鱼娘的动作'),
+            React.createElement('small', { className: 'dva-motion-note' },
+              '绑定后，鲸鱼娘的待机、思考、回复、摸摸和 PPL 情绪可以调用对应逐帧动作。原有聊天、关系和记忆不受影响。',
+            ),
+            view?.character?.motionBinding && view.character.motionBinding.packId !== motionPreview.packId
+              ? React.createElement('small', { className: 'dva-motion-note' },
+                  '当前已绑定：' + view.character.motionBinding.displayName + '。保存后会切换到当前动作包。',
+                )
+              : null,
+            React.createElement('div', { className: 'dva-motion-binding-grid' },
+              ...MOTION_BINDING_SLOTS.filter(slot => ['idle', 'thinking', 'responding', 'patting', 'resting'].includes(slot.key)).map(slot =>
+                React.createElement('label', { className: 'dva-motion-binding-field', key: slot.key },
+                  slot.label + (slot.required ? '（必选）' : ''),
+                  React.createElement('select', {
+                    value: motionBindingDraft[slot.key] || '',
+                    'aria-label': slot.label,
+                    onChange: event => setMotionBindingDraft(current => ({ ...current, [slot.key]: event.target.value || null })),
+                  },
+                    React.createElement('option', { value: '' }, slot.required ? '请选择待机动作' : '未单独指定'),
+                    ...Object.keys(motionPreview.catalog.actions).map(id =>
+                      React.createElement('option', { key: id, value: id }, id),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            React.createElement('details', null,
+              React.createElement('summary', null, '按 PPL 情绪细分动作（可选）'),
+              React.createElement('div', { className: 'dva-motion-binding-grid', style: { marginTop: '9px' } },
+                ...MOTION_BINDING_SLOTS.filter(slot => ['cheerful', 'shy', 'serious', 'confused', 'angry', 'frightened', 'exasperated', 'starry'].includes(slot.key)).map(slot =>
+                  React.createElement('label', { className: 'dva-motion-binding-field', key: slot.key },
+                    slot.label,
+                    React.createElement('select', {
+                      value: motionBindingDraft[slot.key] || '',
+                      'aria-label': slot.label,
+                      onChange: event => setMotionBindingDraft(current => ({ ...current, [slot.key]: event.target.value || null })),
+                    },
+                      React.createElement('option', { value: '' }, '使用待机动作'),
+                      ...Object.keys(motionPreview.catalog.actions).map(id =>
+                        React.createElement('option', { key: id, value: id }, id),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            React.createElement('label', { className: 'dva-motion-binding-confirm' },
+              React.createElement('input', {
+                type: 'checkbox',
+                checked: motionIdentityConfirmed,
+                onChange: event => setMotionIdentityConfirmed(event.target.checked),
+              }),
+              '我已确认：这份动作素材的角色外观与鲸鱼娘一致，并且我拥有使用这些素材的权利。',
+            ),
+            React.createElement('div', { className: 'dva-motion-binding-actions' },
+              React.createElement('button', {
+                type: 'button',
+                className: 'primary',
+                disabled: motionBindingBusy || !motionIdentityConfirmed || !motionBindingDraft.idle,
+                onClick: () => void saveMotionBinding(),
+              }, motionBindingBusy ? '正在保存…' : view?.character?.motionBinding?.packId === motionPreview.packId ? '保存动作映射' : '启用并绑定到鲸鱼娘'),
+              view?.character?.motionBinding?.packId === motionPreview.packId
+                ? React.createElement('button', { type: 'button', disabled: motionBindingBusy, onClick: () => void clearMotionBinding() }, '解除绑定')
+                : null,
+            ),
+          ) : null,
           motionImportBusy ? React.createElement('div', { role: 'status', className: 'dva-motion-note' },
             '正在安全导入动作帧：' + (motionImportProgress?.current || 0) + ' / ' + (motionImportProgress?.total || 0),
           ) : null,
@@ -1047,7 +1300,7 @@ function Companion() {
                 React.createElement('div', { className: 'dva-motion-pack-meta' },
                   React.createElement('strong', null, pack.displayName),
                   React.createElement('small', null,
-                    '未启用 · ' + pack.frameCount + ' 帧 · ' + (pack.byteLength / 1024 / 1024).toFixed(2) + ' MB · ' +
+                    (view?.character?.motionBinding?.packId === pack.id ? '已绑定 · ' : '未绑定 · ') + (pack.actionCount || 0) + ' 种动作 · ' + pack.frameCount + ' 帧 · ' + (pack.byteLength / 1024 / 1024).toFixed(2) + ' MB · ' +
                     new Date(pack.createdAt).toLocaleString(),
                   ),
                   React.createElement('small', null, 'SHA-256 ' + String(pack.sourceHash || '').slice(0, 16) + '…'),

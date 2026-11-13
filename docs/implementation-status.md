@@ -319,3 +319,33 @@
 
 ### Remaining manual gate
 - dev.9's DSH Desktop baseline was accepted by the user. dev.11's new persistent import, restart persistence, saved-pack preview, backup/restore and uninstall still require real DSH Desktop 0.2.2-rc.1 acceptance.
+
+## Whale native motion binding and PPL runtime integration (dev.12)
+
+### Implemented
+- Added a persistent one-active-pack-per-character `motion_pack_bindings` record with explicit identity confirmation, validated action mapping and audit events.
+- Added user controls for idle, thinking, responding, patting and resting actions, plus optional mappings for PPL expression states.
+- Bound motion actions now drive both the expanded Whale portrait and the collapsed desktop pet. PPL expression, fatigue and local interaction state resolve to an imported native action; missing mappings safely fall back to idle.
+- Frame URLs use immutable private caching; the compact public view carries only the binding metadata, and the mapped runtime catalog is fetched lazily only when the binding changes. The client preloads at most 12 frames for the active action and reads remaining frames on demand.
+- Native frame playback honors `prefers-reduced-motion`; missing or corrupt frames fall back to the original Whale portrait. Unbinding restores the original static Whale expression art. Uninstalling the bound pack cascades the binding removal.
+
+### Verification added
+- Storage: confirmation, mapping validation, persistence/reopen, unbind and cascade removal.
+- Host: bind/read/unbind, public view mapping, immutable frame reads and cleanup after uninstall.
+- Client: PPL/action resolver, fallback rules, interaction action selection, reduced-motion and classic DSH script artifact.
+
+### Acceptance boundary
+- Identity confirmation is explicit user attestation, not automatic image recognition. No unrelated character artwork should be bound as the Whale.
+- User accepted dev.9 desktop baseline. dev.12 native-frame binding and PPL switching require a fresh DSH Desktop 0.2.2-rc.1 visual test.
+
+### dev.12 CI and Windows artifact evidence (2026-11-13)
+- Workflow Run `43376826573`: Node 24 and Node 24.9.0 both PASS.
+- Full project tests: 102 passed / 0 failed on each matrix leg.
+- Storage/Host/Client tests cover identity confirmation, action mapping, PPL/interaction resolution, binding persistence, unbind, cascade uninstall, frame integrity, reduced-motion and classic DSH client loading.
+- PPL compilation, DSH classic-script client loader and npm package verification: PASS.
+- Windows artifact `0.1.0-dev.12`: ZIP 3,520,652 bytes; ZIP CRC PASS. Inner TGZ 3,518,957 bytes; SHA-256 `1c46a6460e0416b567dee56dacfa5732cd11e0b519047949430fc24c515204f9`, verified against `.sha256` and `package-info.json`.
+- Private Google Drive file updated in place; existing file ID and URL retained.
+
+### Remaining manual gate
+- User accepted dev.9's DSH Desktop baseline. dev.12's explicit identity confirmation, action mapping, actual PPL-driven frame switching, collapsed desktop pet playback, reduced-motion, unbind and restart persistence still require real DSH Desktop 0.2.2-rc.1 verification.
+- No matching authorized multi-frame Whale art pack has been supplied in this development thread. Kitty/ChrisKitty assets remain format/playback test material, not Whale art.

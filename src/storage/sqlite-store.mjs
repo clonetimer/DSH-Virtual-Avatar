@@ -154,6 +154,17 @@ CREATE TABLE IF NOT EXISTS motion_pack_assets (
 );
 CREATE INDEX IF NOT EXISTS idx_motion_pack_assets_pack ON motion_pack_assets(pack_id, relative_path);
 
+CREATE TABLE IF NOT EXISTS motion_pack_bindings (
+  character_id TEXT PRIMARY KEY,
+  pack_id TEXT NOT NULL,
+  identity_confirmed INTEGER NOT NULL CHECK(identity_confirmed = 1),
+  mapping_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(pack_id) REFERENCES motion_packs(pack_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_motion_pack_bindings_pack ON motion_pack_bindings(pack_id);
+
 CREATE TABLE IF NOT EXISTS migration_rollback_snapshots (migration_id TEXT PRIMARY KEY, character_id TEXT NOT NULL, after_revision INTEGER NOT NULL, created_asset_ids_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'available', created_at TEXT NOT NULL, rolled_back_at TEXT, FOREIGN KEY(migration_id) REFERENCES migration_runs(migration_id));
 
 CREATE TABLE IF NOT EXISTS audit_events (
@@ -270,7 +281,7 @@ export class SqliteAvatarStore {
       const manifest = {
         schema: BACKUP_SCHEMA,
         createdAt: new Date().toISOString(),
-        pluginVersion: '0.1.0-dev.11',
+        pluginVersion: '0.1.0-dev.12',
         database: { path: 'avatar.sqlite', byteLength: statSync(databasePath).size, sha256: sha256(readFileSync(databasePath)) },
         assets: entries.filter(item => item.path.startsWith('assets/')),
         files: entries,
@@ -834,6 +845,85 @@ export class SqliteAvatarStore {
       if (moved) { try { rmSync(finalDirectory, { recursive: true, force: true }) } catch { /* preserve original error */ } }
       throw error
     }
+  }
+
+
+  getMotionPackBinding(characterId = 'deepseek') {
+    this.#assertOpen()
+    const row = this.#db.prepare(`
+      SELECT b.character_id,b.pack_id,b.identity_confirmed,b.mapping_json,b.created_at,b.updated_at,
+             p.display_name,p.source_hash,p.catalog_json,p.frame_count,p.byte_length
+      FROM motion_pack_bindings b
+      JOIN motion_packs p ON p.pack_id=b.pack_id
+      WHERE b.character_id=?
+    `).get(String(characterId))
+    return row ? {
+      characterId: row.character_id,
+      packId: row.pack_id,
+      displayName: row.display_name,
+      sourceHash: row.source_hash,
+      identityConfirmed: row.identity_confirmed === 1,
+      mapping: JSON.parse(row.mapping_json),
+      catalog: JSON.parse(row.catalog_json),
+      frameCount: row.frame_count,
+      byteLength: row.byte_length,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    } : null
+  }
+
+  setMotionPackBinding({ characterId = 'deepseek', packId, identityConfirmed = false, mapping } = {}) {
+    this.#assertOpen()
+    if (characterId !== 'deepseek') throw conflict('MOTION_CHARACTER_UNSUPPORTED', 'only the DeepSeek Whale character can be bound')
+    if (identityConfirmed !== true) throw conflict('MOTION_IDENTITY_CONFIRMATION_REQUIRED', 'confirm that the selected artwork matches the Whale and is authorized before binding')
+    const pack = this.getMotionPack(packId)
+    if (!pack) throw conflict('MOTION_PACK_NOT_FOUND', 'motion pack does not exist')
+    const allowedSlots = new Set([
+      'idle', 'thinking', 'responding', 'patting', 'resting',
+      'cheerful', 'shy', 'serious', 'confused', 'angry',
+      'frightened', 'exasperated', 'starry',
+    ])
+    if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping)) {
+      throw conflict('MOTION_BINDING_INVALID', 'motion action mapping must be an object')
+    }
+    const normalized = {}
+    for (const [slot, rawActionId] of Object.entries(mapping)) {
+      if (!allowedSlots.has(slot)) throw conflict('MOTION_BINDING_SLOT_INVALID', 'unsupported motion mapping slot: ' + slot)
+      if (rawActionId === null || rawActionId === undefined || rawActionId === '') continue
+      if (typeof rawActionId !== 'string' || !pack.catalog.actions?.[rawActionId]) {
+        throw conflict('MOTION_BINDING_ACTION_INVALID', 'mapping slot ' + slot + ' references an action not present in the imported pack')
+      }
+      normalized[slot] = rawActionId
+    }
+    if (!normalized.idle) throw conflict('MOTION_BINDING_IDLE_REQUIRED', 'an idle action must be selected before binding')
+    const now = new Date().toISOString()
+    const previous = this.getMotionPackBinding(characterId)
+    this.transaction(() => {
+      this.#db.prepare(`
+        INSERT INTO motion_pack_bindings(character_id,pack_id,identity_confirmed,mapping_json,created_at,updated_at)
+        VALUES(?,?,1,?,?,?)
+        ON CONFLICT(character_id) DO UPDATE SET
+          pack_id=excluded.pack_id,identity_confirmed=1,mapping_json=excluded.mapping_json,updated_at=excluded.updated_at
+      `).run(characterId, String(packId), stableJson(normalized), previous?.createdAt || now, now)
+      this.#recordAudit('motion-binding', characterId, 'MOTION_PACK_BOUND', null,
+        previous ? { packId: previous.packId, mapping: previous.mapping } : null,
+        { packId: String(packId), mapping: normalized },
+        { identityConfirmed: true, displayName: pack.displayName, sourceHash: pack.sourceHash })
+    })
+    return this.getMotionPackBinding(characterId)
+  }
+
+  clearMotionPackBinding(characterId = 'deepseek') {
+    this.#assertOpen()
+    const previous = this.getMotionPackBinding(characterId)
+    if (!previous) return { cleared: false, reason: 'MOTION_BINDING_NOT_FOUND' }
+    this.transaction(() => {
+      this.#db.prepare('DELETE FROM motion_pack_bindings WHERE character_id=?').run(String(characterId))
+      this.#recordAudit('motion-binding', String(characterId), 'MOTION_PACK_UNBOUND', null,
+        { packId: previous.packId, mapping: previous.mapping }, null,
+        { displayName: previous.displayName, sourceHash: previous.sourceHash })
+    })
+    return { cleared: true, packId: previous.packId }
   }
 
   readMotionPackFrame(packId, relativePath) {

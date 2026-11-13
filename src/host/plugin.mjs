@@ -197,7 +197,7 @@ function safeBackgroundAsset(state) {
     : 'palace-night.webp'
 }
 
-function publicView(service, memoryService, config) {
+function publicView(service, memoryService, config, store = null) {
   const loaded = service.loadState()
   const state = loaded.state
   const profile = resolveDeepseekWhaleProfile(state.profileOverrides || {})
@@ -213,6 +213,16 @@ function publicView(service, memoryService, config) {
   }
   const lastReplyEmotion = state.conversation?.chatLines?.filter(line => line.who === 'heroine').at(-1)?.emotion || 'normal'
   const presentation = resolveDeepseekWhalePresentation({ pplState, replyEmotion: lastReplyEmotion })
+  const savedMotionBinding = store?.getMotionPackBinding('deepseek') || null
+  const motionBinding = savedMotionBinding ? {
+    characterId: savedMotionBinding.characterId,
+    packId: savedMotionBinding.packId,
+    displayName: savedMotionBinding.displayName,
+    sourceHash: savedMotionBinding.sourceHash,
+    identityConfirmed: savedMotionBinding.identityConfirmed,
+    mapping: savedMotionBinding.mapping,
+    updatedAt: savedMotionBinding.updatedAt,
+  } : null
   const relationshipStage = String(pplRelationship.stage || state.relationship?.stage || 'acquaintance')
   const relationship = {
     ...state.relationship,
@@ -231,6 +241,7 @@ function publicView(service, memoryService, config) {
       greeting: profile.greeting,
       visual: profile.visual,
       imageUrl: API_PATH + '/assets/' + presentation.asset,
+      motionBinding,
       presentation: {
         expression: presentation.expression,
         expressionLabel: presentation.expressionLabel,
@@ -384,7 +395,7 @@ export function apply(ctx, config = {}) {
     } catch (error) { ir = { status: 'error', message: String(error.message || error).slice(0, 160) } }
     return {
       checkedAt,
-      plugin: { id: name, version: '0.1.0-dev.11', enabled: runtimeConfig.enabled },
+      plugin: { id: name, version: '0.1.0-dev.12', enabled: runtimeConfig.enabled },
       model: { status: model ? 'selected' : 'not-configured', selected: model, selectionError: modelSelectionError, providers, configuredExplicitly: Boolean(runtimeConfig.chatProvider && runtimeConfig.chatModel), lastTest: lastModelTest },
       persona: { source, ir, runtime: persona ? 'loaded' : 'unavailable', rules: Array.isArray(persona?.rules) ? persona.rules.length : 0, registered: personaRegistry.list() },
       storage: { database, memoryCount: memories.length, pinnedMemoryCount: memories.filter(item => item.pinned).length, mediaAssetCount: mediaAssets.length, mediaBytes, motionPackCount: motionPacks.length, motionPackFrames, motionPackBytes, mediaDirectory, backupDirectory },
@@ -437,7 +448,7 @@ export function apply(ctx, config = {}) {
           json(res, 404, { ok: false, error: 'motion frame not found' })
           return
         }
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': frame.byteLength, 'Cache-Control': 'private, max-age=0, no-store', 'X-Content-Type-Options': 'nosniff' })
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': frame.byteLength, 'Cache-Control': 'private, max-age=31536000, immutable', 'ETag': '"' + frame.sha256 + '"', 'X-Content-Type-Options': 'nosniff' })
         res.end(frame.bytes)
       } catch (error) {
         json(res, Number.isInteger(error?.status) ? error.status : 400, { ok: false, error: String(error.message || error).slice(0, 200), code: error.code || 'MOTION_FRAME_READ_FAILED' })
@@ -445,7 +456,7 @@ export function apply(ctx, config = {}) {
       return
     }
     if (req.method === 'GET') {
-      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.11' })
+      json(res, 200, { ok: true, service: name, character: 'deepseek', version: '0.1.0-dev.12' })
       return
     }
     if (req.method !== 'POST') {
@@ -597,7 +608,7 @@ export function apply(ctx, config = {}) {
       }
 
       if (action === 'view') {
-        json(res, 200, publicView(service, memoryService, runtimeConfig))
+        json(res, 200, publicView(service, memoryService, runtimeConfig, store))
         return
       }
 
@@ -703,9 +714,75 @@ export function apply(ctx, config = {}) {
           frameCount: pack.frameCount,
           byteLength: pack.byteLength,
           createdAt: pack.createdAt,
-          catalog: pack.catalog,
+          actionCount: Object.keys(pack.catalog.actions || {}).length,
+          actionIds: Object.keys(pack.catalog.actions || {}),
         }))
         json(res, 200, { ok: true, packs })
+        return
+      }
+
+      if (action === 'motion-pack-bind') {
+        let binding
+        try {
+          binding = store.setMotionPackBinding({
+            characterId: 'deepseek',
+            packId: args.packId,
+            identityConfirmed: args.identityConfirmed === true,
+            mapping: args.mapping,
+          })
+        } catch (error) {
+          if (String(error?.code || '').startsWith('MOTION_')) error.status = 400
+          throw error
+        }
+        json(res, 200, { ok: true, binding: {
+          characterId: binding.characterId,
+          packId: binding.packId,
+          displayName: binding.displayName,
+          sourceHash: binding.sourceHash,
+          identityConfirmed: binding.identityConfirmed,
+          mapping: binding.mapping,
+          updatedAt: binding.updatedAt,
+        }, view: publicView(service, memoryService, runtimeConfig, store) })
+        return
+      }
+
+      if (action === 'motion-pack-unbind') {
+        const result = store.clearMotionPackBinding('deepseek')
+        json(res, 200, { ok: true, ...result, view: publicView(service, memoryService, runtimeConfig, store) })
+        return
+      }
+
+      if (action === 'motion-pack-binding') {
+        const binding = store.getMotionPackBinding('deepseek')
+        json(res, 200, { ok: true, binding: binding ? {
+          characterId: binding.characterId,
+          packId: binding.packId,
+          displayName: binding.displayName,
+          sourceHash: binding.sourceHash,
+          identityConfirmed: binding.identityConfirmed,
+          mapping: binding.mapping,
+          updatedAt: binding.updatedAt,
+        } : null })
+        return
+      }
+
+      if (action === 'motion-pack-runtime') {
+        const binding = store.getMotionPackBinding('deepseek')
+        if (!binding) {
+          json(res, 200, { ok: true, binding: null })
+          return
+        }
+        const actionIds = [...new Set(Object.values(binding.mapping || {}))]
+          .filter(id => binding.catalog?.actions?.[id])
+        json(res, 200, { ok: true, binding: {
+          packId: binding.packId,
+          mapping: binding.mapping,
+          catalog: {
+            schema: binding.catalog.schema,
+            defaultAction: binding.catalog.defaultAction,
+            actions: Object.fromEntries(actionIds.map(id => [id, binding.catalog.actions[id]])),
+          },
+        } })
         return
       }
 
@@ -721,7 +798,7 @@ export function apply(ctx, config = {}) {
 
       if (action === 'motion-pack-delete') {
         const result = store.deleteMotionPack(args.packId, { confirmed: args.confirmed === true })
-        json(res, 200, { ok: true, ...result })
+        json(res, 200, { ok: true, ...result, view: publicView(service, memoryService, runtimeConfig, store) })
         return
       }
 
@@ -750,7 +827,7 @@ export function apply(ctx, config = {}) {
           scene: result.scene,
           changed: result.changed,
           revision: result.revision,
-          view: publicView(service, memoryService, runtimeConfig),
+          view: publicView(service, memoryService, runtimeConfig, store),
         })
         return
       }
@@ -809,7 +886,7 @@ export function apply(ctx, config = {}) {
           reply: generated.text,
           emotion: emotionFromText(generated.text),
           choices: [],
-          view: publicView(service, memoryService, runtimeConfig),
+          view: publicView(service, memoryService, runtimeConfig, store),
           duplicate: committed.duplicate === true,
         })
         return
@@ -847,7 +924,7 @@ export function apply(ctx, config = {}) {
           eventId: typeof args.eventId === 'string' ? args.eventId : randomUUID(),
           source: 'explicit-user-memory',
         })
-        json(res, 200, { ok: true, result, view: publicView(service, memoryService, runtimeConfig) })
+        json(res, 200, { ok: true, result, view: publicView(service, memoryService, runtimeConfig, store) })
         return
       }
       if (action === 'backup-list') {
@@ -937,7 +1014,7 @@ export function apply(ctx, config = {}) {
         const loaded = service.loadState()
         const next = { ...loaded.state, chosenBuiltinBackground: key }
         const saved = store.saveCharacterState('deepseek', next, loaded.revision)
-        json(res, 200, { ok: true, background: key, revision: saved.revision, view: publicView(service, memoryService, runtimeConfig) })
+        json(res, 200, { ok: true, background: key, revision: saved.revision, view: publicView(service, memoryService, runtimeConfig, store) })
         return
       }
 

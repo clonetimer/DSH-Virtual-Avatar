@@ -16,7 +16,7 @@ DeepSeek Harness 单插件虚拟人格与陪伴系统。当前首发角色为 **
 - DSH Cordis 插件入口与 Web Client overlay；支持自由聊天、历史分页、角色设定、表情和内置场景切换。
 - Whale 旧存档的 DeepSeek 角色导入原型；其他角色明确延期，原始存档保留。
 
-**当前产品不开发 Galgame 章节、剧情分支、结局、游戏式回复选项、小剧场或 CG。** 桌面宠物动画也不作为本阶段交付门槛。上游 Whale 项目仅作为角色设定、存档和素材来源。
+**当前产品不开发 Galgame 章节、剧情分支、结局、游戏式回复选项、小剧场或 CG。** 桌面宠物动画作为独立能力阶段推进，不影响核心陪伴链路；真正启用鲸鱼娘逐帧动作必须具备形象匹配且授权明确的素材。上游 Whale 项目仅作为角色设定、存档和素材来源。
 
 当前目标宿主为 DSH 0.2.2-rc.1，要求 Node.js >=24.9.0；CI 采用 Node 24.9.0 / 24 双矩阵。插件通过 `engines.dsh` 声明兼容范围 `>=0.2.2-rc.1 <0.2.3-0`。请查看 [实施状态与验收证据](docs/implementation-status.md)、[PPL-2 情绪状态与互动意图](docs/ppl-emotion-state.md)、[PPL Persona Registry](docs/ppl-persona-registry.md)、[日常交互体验改进](docs/companion-everyday-ux.md) 和 [DyberPet 动作兼容与记忆面板修复](docs/dyberpet-motion-compatibility.md) 和 [PPL 表情驱动与自主待机行为](docs/ppl-driven-whale-presentation.md)、[DyberPet 本地动作库与持久化导入](docs/dyberpet-motion-library.md)。真实 DSH Web/Desktop 实机安装、真实模型流式调用、备份恢复和迁移回滚仍需验收；当前不是 Stable 发布版。
 
@@ -38,15 +38,15 @@ node --version
 npm --version
 ```
 
-从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.11` artifact 下载以下文件：
-- `dsh-virtual-avatar-0.1.0-dev.11.tgz`
+从本仓库 GitHub Actions 的 `dsh-virtual-avatar-dsh-0.2.2-rc.1-windows-web-desktop-dev.12` artifact 下载以下文件：
+- `dsh-virtual-avatar-0.1.0-dev.12.tgz`
 - 对应的 `.sha256` 文件
 - `package-info.json`
 
 先校验包文件（在下载目录执行）：
 
 ```powershell
-Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.11.tgz -Algorithm SHA256
+Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.12.tgz -Algorithm SHA256
 ```
 
 将输出与 `.sha256` 文件中的摘要核对。然后通过 DSH 插件管理 CLI 安装本地包：
@@ -54,14 +54,14 @@ Get-FileHash .\dsh-virtual-avatar-0.1.0-dev.11.tgz -Algorithm SHA256
 **DSH Web（web profile）：**
 
 ```powershell
-dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.11.tgz"
+dsh plugin --profile web add ".\dsh-virtual-avatar-0.1.0-dev.12.tgz"
 dsh --profile web --dump-config
 ```
 
 **DSH Desktop：** 建议直接使用桌面版「插件 → 添加插件」，输入 `.tgz` 的完整绝对路径。若在 DSH 桌面版「应用 → 管理 dsh 命令…」安装了专用 CLI，可在完全退出 Desktop 后使用其保留的 `desktop` profile：
 
 ```powershell
-dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.11.tgz"
+dsh plugin --profile desktop add ".\dsh-virtual-avatar-0.1.0-dev.12.tgz"
 dsh --profile desktop --dump-config
 ```
 
@@ -163,3 +163,10 @@ CI 使用固定 PPL Core 提交编译 `personas/deepseek-whale.ppl`，生成并�
 - 导入动作包只会保存素材，不会自动启用，也不会替换 Whale 立绘、PPL、关系、聊天或记忆。
 - 当前尚无形象匹配且授权明确的 Whale 多帧素材包。Kitty/ChrisKitty 等示例仅用于验证格式与播放器，不得当作鲸鱼娘动画。
 - 详见 [DyberPet 本地动作库与持久化导入说明](docs/dyberpet-motion-library.md)。
+
+## Whale native motion binding and PPL action playback（dev.12）
+
+- 已导入的 DyberPet 动作包可显式绑定到鲸鱼娘：配置待机、思考、回复、摸摸、休息及可选 PPL 情绪动作。
+- 绑定前必须由用户确认素材形象与鲸鱼娘一致且拥有使用权；系统不自动推断角色身份。
+- 绑定后，PPL 表情和交互状态驱动展开立绘与收起桌宠播放对应原生帧；未配置的动作安全回退到待机动作。
+- 解除绑定恢复原有鲸鱼娘立绘；减少动态效果设置暂停逐帧播放。详见 [鲸鱼娘原生动作绑定与 PPL 联动](docs/whale-motion-binding.md)。
