@@ -1,0 +1,19 @@
+{
+  "schema": "dsh-virtual-avatar.character-art/1",
+  "characterId": "ppl-zhuang-fangyi",
+  "personaId": "ZHUANG_FANGYI",
+  "artwork": {
+    "portrait": "portrait.svg",
+    "avatar": "portrait.svg",
+    "format": "image/svg+xml",
+    "kind": "ai-generated-original-concept",
+    "description": "Original Q-style character concept with dark long hair, gold horn ornaments and black-white-gold formal outfit.",
+    "officialGameAsset": false,
+    "animationFrames": []
+  },
+  "notes": [
+    "This is an original AI-generated concept illustration, not a bundled official game image.",
+    "The character has no dedicated expression or motion frame pack yet.",
+    "Never fall back to the DeepSeek Whale's art or animation assets."
+  ]
+}
