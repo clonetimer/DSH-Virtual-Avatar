@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 const API = '/api/dsh-virtual-avatar'
 const CSS = `
 .dva-root{position:fixed;right:18px;bottom:104px;z-index:8999;font-family:system-ui,"Microsoft YaHei",sans-serif;color:#eaf5ff}
-.dva-pet{width:112px;height:132px;border:0;border-radius:18px;background:transparent;box-shadow:none;cursor:pointer;padding:0;filter:drop-shadow(0 8px 14px #00172b88);transition:transform .18s ease}.dva-pet:hover{transform:translateY(-5px) scale(1.035)}.dva-pet img{width:100%;height:100%;object-fit:contain};animation:dva-pet-idle 5.2s ease-in-out infinite;transform-origin:50% 88%.dva-pet span{display:block;margin-top:-4px;padding:4px 8px;border:1px solid #8bcdf288;border-radius:999px;background:#092642dd;color:#eaf5ff;font-size:11px;text-align:center}
+.dva-pet{width:112px;height:132px;border:0;border-radius:18px;background:transparent;box-shadow:none;cursor:pointer;padding:0;filter:drop-shadow(0 8px 14px #00172b88);transition:transform .18s ease}.dva-pet:hover{transform:translateY(-5px) scale(1.035)}.dva-pet img{width:100%;height:100%;object-fit:contain;animation:dva-pet-idle 5.2s ease-in-out infinite;transform-origin:50% 88%}.dva-pet span{display:block;margin-top:-4px;padding:4px 8px;border:1px solid #8bcdf288;border-radius:999px;background:#092642dd;color:#eaf5ff;font-size:11px;text-align:center}
 .dva-panel{position:fixed;inset:5vh 5vw;z-index:9000;display:flex;flex-direction:column;overflow:hidden;border:1px solid #6ea9cc;border-radius:20px;background:linear-gradient(160deg,#0b2340,#07172b 65%,#0b3152);box-shadow:0 24px 80px #000b;color:#eaf5ff}
 .dva-head{position:relative;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 20px;border-bottom:1px solid #ffffff22}
 .dva-head-tools{position:relative;display:flex;align-items:center;gap:8px;flex-shrink:0}
@@ -42,6 +42,19 @@ const CSS = `
 .dva-motion-stage{display:flex;align-items:center;justify-content:center;min-height:160px;height:min(43vh,400px);border:1px solid #ffffff22;border-radius:14px;background:radial-gradient(ellipse at center,#16466b,#091b30 70%);overflow:hidden}
 .dva-motion-stage img{display:block;max-width:100%;max-height:100%;object-fit:contain}
 .dva-motion-note{font-size:11px;color:#9abbd2;line-height:1.5}
+.dva-motion-library{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-top:12px;border-top:1px solid #ffffff22}
+.dva-motion-library-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dva-motion-library-list{display:flex;flex-direction:column;gap:7px}
+.dva-motion-pack-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px;border:1px solid #ffffff20;border-radius:10px;background:#ffffff08}
+.dva-motion-pack-meta{display:flex;flex-direction:column;gap:4px;min-width:0}
+.dva-motion-pack-meta strong{overflow-wrap:anywhere}
+.dva-motion-pack-meta small{color:#9abbd2;font-size:10px;line-height:1.4}
+.dva-motion-pack-actions{display:flex;gap:6px;flex:0 0 auto}
+.dva-motion-pack-actions button,.dva-motion-import{border:1px solid #77b8df;border-radius:9px;background:#174b70;color:#f2f9ff;padding:7px 10px;cursor:pointer}
+.dva-motion-import{align-self:flex-start;background:#1c674f;border-color:#75c8a6}
+.dva-motion-import:disabled,.dva-motion-pack-actions button:disabled{opacity:.5;cursor:wait}
+@media(max-width:760px){.dva-motion-pack-row{align-items:flex-start;flex-direction:column}.dva-motion-pack-actions{width:100%}.dva-motion-pack-actions button{flex:1}}
+
 .dva-motion-error{font-size:12px;color:#ffd0c9;background:#52243888;border:1px solid #ffb3a944;border-radius:9px;padding:9px}
 
 @media(max-width:900px){.dva-memory-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dva-memory-toolbar input{grid-column:1/-1}.dva-memory-head{align-items:center}.dva-panel-back{padding:7px 10px}}
@@ -1006,9 +1019,42 @@ function Companion() {
                 : React.createElement('small', null, '选择动作后显示对应帧'),
             ),
             React.createElement('small', { className: 'dva-motion-note' },
-              '动作包目前仅供本地预览。退出此界面后自动释放预览资源，不会安装角色或改变现有聊天与记忆。',
+              motionPreview.source === 'installed' ? '这是已保存到本地动作库的素材包，目前仅供预览，尚未应用到鲸鱼娘。' : '当前是本地临时预览；只有点击“导入到本地动作库”才会持久保存。导入不会替换鲸鱼娘立绘或改变关系数据。',
             ),
           ) : null,
+          motionImportBusy ? React.createElement('div', { role: 'status', className: 'dva-motion-note' },
+            '正在安全导入动作帧：' + (motionImportProgress?.current || 0) + ' / ' + (motionImportProgress?.total || 0),
+          ) : null,
+          motionPreview?.source === 'local' ? React.createElement('button', {
+            type: 'button',
+            className: 'dva-motion-import',
+            disabled: motionImportBusy || motionPreviewBusy,
+            onClick: () => void importMotionPack(),
+          }, motionImportBusy ? '正在导入…' : '导入到本地动作库（不启用）') : null,
+          React.createElement('div', { className: 'dva-motion-library' },
+            React.createElement('div', { className: 'dva-motion-library-head' },
+              React.createElement('strong', null, '本地动作库 · ' + motionPacks.length),
+              React.createElement('button', { type: 'button', disabled: motionLibraryBusy, onClick: () => void loadMotionPacks() }, motionLibraryBusy ? '刷新中…' : '刷新'),
+            ),
+            React.createElement('small', { className: 'dva-motion-note' }, '已导入的动作包保存在本机，并纳入插件备份；默认不应用到鲸鱼娘。'),
+            motionPacks.length === 0 && !motionLibraryBusy ? React.createElement('small', null, '还没有导入动作包。') : null,
+            React.createElement('div', { className: 'dva-motion-library-list' },
+              ...motionPacks.map(pack => React.createElement('div', { key: pack.id, className: 'dva-motion-pack-row' },
+                React.createElement('div', { className: 'dva-motion-pack-meta' },
+                  React.createElement('strong', null, pack.displayName),
+                  React.createElement('small', null,
+                    '未启用 · ' + pack.frameCount + ' 帧 · ' + (pack.byteLength / 1024 / 1024).toFixed(2) + ' MB · ' +
+                    new Date(pack.createdAt).toLocaleString(),
+                  ),
+                  React.createElement('small', null, 'SHA-256 ' + String(pack.sourceHash || '').slice(0, 16) + '…'),
+                ),
+                React.createElement('div', { className: 'dva-motion-pack-actions' },
+                  React.createElement('button', { type: 'button', disabled: motionPreviewBusy, onClick: () => void loadInstalledMotionPack(pack.id) }, '预览'),
+                  React.createElement('button', { type: 'button', disabled: motionImportBusy, onClick: () => void removeMotionPack(pack) }, '卸载'),
+                ),
+              )),
+            ),
+          ),
         ) : null,
         activePanel === 'summary' ? React.createElement('div', { className: 'dva-memories' },
           React.createElement('strong', null, '长期相处摘要'),
