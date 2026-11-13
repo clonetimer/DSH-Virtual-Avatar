@@ -477,6 +477,18 @@ export function apply(ctx, config = {}) {
           return
         }
         const bytes = await readBinaryBody(req, 6 * 1024 * 1024)
+        if (motionUploadSessions.get(session.id) !== session || Date.now() - session.createdAt > motionUploadTtlMs) {
+          if (motionUploadSessions.get(session.id) === session) {
+            rmSync(session.directory, { recursive: true, force: true })
+            motionUploadSessions.delete(session.id)
+          }
+          json(res, 410, { ok: false, error: 'motion upload session was cancelled or expired', code: 'MOTION_UPLOAD_SESSION_EXPIRED' })
+          return
+        }
+        if (session.uploaded.has(framePath)) {
+          json(res, 409, { ok: false, error: 'frame has already been uploaded', code: 'MOTION_FRAME_DUPLICATE' })
+          return
+        }
         if (bytes.length < 8 || !Buffer.from([137,80,78,71,13,10,26,10]).equals(bytes.subarray(0,8))) {
           json(res, 400, { ok: false, error: 'uploaded frame is not a valid PNG', code: 'MOTION_FRAME_PNG_INVALID' })
           return
