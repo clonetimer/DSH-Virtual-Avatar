@@ -21,7 +21,7 @@ const binding = {
 
 test('native motion resolver uses the idle action as a safe fallback', () => {
   assert.equal(resolveBoundMotionAction(binding, {}), 'idle')
-  assert.equal(resolveBoundMotionAction({ ...binding, mapping: {} }, {}), null)
+  assert.equal(resolveBoundMotionAction({ ...binding, mapping: {} }, {}), 'idle')
   assert.equal(resolveBoundMotionAction({ ...binding, identityConfirmed: false }, {}), null)
 })
 
