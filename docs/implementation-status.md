@@ -489,3 +489,34 @@
 
 ### 手动验收
 - DSH Desktop 0.2.2-rc.1 安装 dev.17，按《功能使用与桌面验收指南》第 12 节完成滑块、预设、场景预览、保存、重启和恢复默认验收。
+
+
+## P5-C2：多角色运行时（dev.18）
+
+### C2-A — Persona Registry
+- 添加第二个真实的 PPL 参考 Persona `ZHUANG_FANGYI`，固定来源为 `clonetimer/PPL` 的指定提交；角色列表公开稳定 Persona ID、版本与可用展示能力。
+- Registry 保存两套独立 IR 和运行时实例；已注册角色按稳定 `characterId` 路由。
+- 第二角色使用中性标识与明确的「PPL 参考角色」说明，不冒用鲸鱼娘、Kitty 或其他人物素材。
+
+### C2-B — 隔离存储与安全路由
+- SQLite `character_states`、`memory_items`、`chat_model_selections`、`audit_events` 按角色稳定 ID 独立读写。
+- 新增 `companion_selection` 持久化当前选中角色，`character-select` 原子更新并记录审计。
+- 独立 Host 路由全部要求请求中的显式 `characterId`，禁止把全局当前角色作为对话或记忆的请求路由依据。
+- `domain_events` 幂等提交检查 `eventId + characterId + eventType + payloadHash`，跨角色重用编号会拒绝。
+- 原鲸鱼娘角色继续使用历史 `deepseek` 数据与原生桌宠链路；不迁移旧数据。
+
+### C2-C — 桌面角色切换
+- 新增「切换角色」下拉入口；重启后从 SQLite 选择表恢复。
+- 切换到 PPL 参考角色进入独立角色中心，支持聊天、场景、记忆、模型连接测试、人格调校和审计。
+- 无专属立绘的角色使用中性图形和文字说明，未把其他角色的素材误用为自己的外观。
+
+### C2-D — 配置与关系隔离
+- PPL 参考角色继承其官方 Persona IR 的实际 traits、style、rules、transitions 与 invariants，独立配置只开放 Float01 语义字段。
+- 配置采用版本化 schema、白名单与范围校验、四场景真实 PPL Runtime 预览、乐观版本控制和 SQLite 事务审计。
+- 模型选择按角色 ID 保存和测试；默认可跟随 DSH 模型，不修改主 Agent 或鲸鱼娘配置。
+
+### C2-E — 回归与交付
+- 核验两个不同 Persona IR 的注册、关系状态与会话隔离、角色记忆不可越权编辑、跨角色事件编号冲突、模型配置隔离、参数修改与重启恢复。
+- Host 集成覆盖角色列表、选择、对话及安全重试、记忆、模型与审计 API。
+- PPL 官方 Core 与参考角色测试继续参与双 Node 测试矩阵。
+- Windows DSH Desktop 0.2.2-rc.1 的实际交互与长期运行需独立验收；CI 通过不替代此门禁。
