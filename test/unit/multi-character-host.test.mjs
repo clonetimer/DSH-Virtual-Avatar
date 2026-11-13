@@ -44,7 +44,7 @@ test('P5-C2 DSH Host supports role selection and isolated PPL-native chat withou
     async listModels() { return [{ id: 'deepseek-v4-flash', name: 'DeepSeek Flash' }] },
     stream: async function* (input) {
       assert.equal(input.provider, 'deepseek-official')
-      if (input.system === 'Reply with exactly OK. Do not roleplay or use tools.') {
+      if (input.system === 'This is a connectivity test. Reply with exactly OK. Do not roleplay or use tools.') {
         assert.ok(input.messages.every(message => message.role === 'user' && !('id' in message) && !('source' in message)),
           'one-shot model probe must use identity-free RequestUserInput messages')
         if (input.model === 'deepseek-broken') {
