@@ -1143,6 +1143,7 @@ function Companion() {
             React.createElement('div', null, 'SQLite：' + diagnostics.storage.database.status + ' · ' + (diagnostics.storage.database.fileBytes ?? 0) + ' bytes'),
             React.createElement('div', null, '长期记忆：' + diagnostics.storage.memoryCount + ' 条（置顶 ' + diagnostics.storage.pinnedMemoryCount + '）'),
             React.createElement('div', null, '媒体资产：' + diagnostics.storage.mediaAssetCount + ' 个 · ' + diagnostics.storage.mediaBytes + ' bytes'),
+            React.createElement('div', null, '本地动作包：' + (diagnostics.storage.motionPackCount || 0) + ' 个 · ' + (diagnostics.storage.motionPackFrames || 0) + ' 帧 · ' + (diagnostics.storage.motionPackBytes || 0) + ' bytes'),
             React.createElement('div', null, '备份目录：' + diagnostics.storage.backupDirectory.files + ' 个文件'),
             React.createElement('h4', null, '陪伴状态'),
             React.createElement('div', null, 'Lv.' + diagnostics.companion.level + ' · 好感度 ' + diagnostics.companion.affection),
