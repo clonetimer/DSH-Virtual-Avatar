@@ -61,6 +61,8 @@ test('built client preserves companion features without bundling its own React',
   assert.match(artifact, /ppl-audit-history/)
   assert.match(artifact, /PPL 执行记录/)
   assert.match(artifact, /PPL 规则审计/)
+  assert.match(artifact, /效果执行轨迹/)
+  assert.match(artifact, /运行快照 SHA-256/)
   assert.doesNotMatch(artifact, /rgba\(4,15,29,\.88\)/)
   assert.match(artifact, /scene-set/)
   assert.match(artifact, /PRIVATE_HOME/)
