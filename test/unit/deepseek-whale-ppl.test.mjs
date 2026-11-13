@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { runSourceTests } from '../../src/ppl/vendor/pplc/runtime.js'
-import { createDeepseekWhaleRuntime, getDeepseekWhalePersona } from '../../src/ppl/index.mjs'
+import { createDeepseekWhaleRuntime, createPplRuntime, getDeepseekWhalePersona } from '../../src/ppl/index.mjs'
 
 test('DeepSeek Whale PPL 0.3 artifact loads and all embedded source tests pass', () => {
   const ir = getDeepseekWhalePersona()
@@ -45,4 +45,18 @@ test('PPL confession transition requires trust threshold and commits after the t
   assert.equal(prepared.resolution.pendingTransitions[0]?.to, 'lover')
   const after = runtime.finalize(before, prepared.resolution, 'completed')
   assert.equal(after.runtimeState.relationships.admin.stage, 'lover')
+})
+
+test('PPL resolution failures expose a stable code and machine-readable invariant diagnostics', () => {
+  const ir = getDeepseekWhalePersona()
+  ir.invariants[0].assertions = [{ kind: 'literal', value: false }]
+  const runtime = createPplRuntime({ persona: ir })
+  assert.throws(
+    () => runtime.resolve({
+      runtimeState: runtime.initialState('whale-invalid-invariant'),
+      event: { type: 'MESSAGE', actor: 'admin' },
+    }),
+    error => error.code === 'PPL_RESOLUTION_INVALID'
+      && error.diagnostics.some(item => item.code === 'PPL-R601' && item.severity === 'error'),
+  )
 })
