@@ -236,21 +236,25 @@ function Companion() {
   const [motionActionId, setMotionActionId] = useState('')
   const [motionPlaybackStep, setMotionPlaybackStep] = useState(0)
   const [motionPlaying, setMotionPlaying] = useState(false)
+  const motionRequestRef = React.useRef(0)
 
   const loadMotionPreview = async fileList => {
     const selected = Array.from(fileList || [])
     if (!selected.length) return
+    const requestId = ++motionRequestRef.current
     setMotionPreviewBusy(true)
     setMotionPreviewError('')
     setMotionPlaying(false)
     setMotionPreview(null)
     try {
       const folder = await readDyberPetPreviewFolder(selected)
+      if (requestId !== motionRequestRef.current) return
       const checked = await callApi('motion-preview-validate', {
         petConfig: folder.petConfig,
         actConfig: folder.actConfig,
         frameFiles: folder.frameFiles,
       })
+      if (requestId !== motionRequestRef.current) return
       if (!checked.previewOnly || !checked.catalog?.actions) throw new Error('动作预览校验返回格式异常。')
       const filesByPath = new Map(folder.frameEntries.map(item => [item.path, item.file]))
       const urls = {}
@@ -272,12 +276,16 @@ function Companion() {
         Object.values(urls).forEach(url => URL.revokeObjectURL(url))
         throw new Error('角色配置中没有可以播放的动作。')
       }
+      if (requestId !== motionRequestRef.current) {
+        Object.values(urls).forEach(url => URL.revokeObjectURL(url))
+        return
+      }
       setMotionPreview({ roleName: folder.roleName, catalog: checked.catalog, frameUrls: urls })
       setMotionActionId(checked.catalog.defaultAction || ids[0])
       setMotionPlaybackStep(0)
     } catch (error) {
-      setMotionPreviewError(error.message || String(error))
-    } finally { setMotionPreviewBusy(false) }
+      if (requestId === motionRequestRef.current) setMotionPreviewError(error.message || String(error))
+    } finally { if (requestId === motionRequestRef.current) setMotionPreviewBusy(false) }
   }
 
   const openUtilityPanel = panel => {
@@ -362,6 +370,8 @@ function Companion() {
 
   useEffect(() => {
     if (activePanel === 'motion') return
+    motionRequestRef.current += 1
+    setMotionPreviewBusy(false)
     setMotionPlaying(false)
     setMotionPreview(previous => previous ? null : previous)
   }, [activePanel])
