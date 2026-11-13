@@ -402,6 +402,6 @@
 - Client unit tests cover event ID shape and actionable error classification.
 - Classic DSH client regression checks that retry controls and direct guide navigation remain in the built script.
 - PR CI Run 43392486170 and push CI Run 43392443994: Node 24 and Node 24.9.0 both PASS; each reports 110 passed / 0 failed. PPL checks report 7 passed / 0 failed; npm package verification PASS.
-- Windows Web/Desktop dev.15 artifact: ZIP 3,543,995 bytes, SHA-256 4a887a4eb678feeb0f267e19aeba919e5096e8ba637e36a273e32234479a7ee3. Inner TGZ 3,542,304 bytes, SHA-256 962698f3c71dfbda51223a69ab54137ba0dcc3a5f8fcaaf532db69e1c1db2032; .sha256 and package-info.json match.
-- Existing private Google Drive file ID retained; readback is byte-identical to the PR CI artifact.
+- Windows Web/Desktop dev.15 artifact generated and verified: the archive contains the installable TGZ, its SHA-256 file and package-info.json; the TGZ digest, byte length and package version agree across all three.
+- The existing private Google Drive file ID is retained and updated from the final PR CI artifact; a subsequent readback is byte-identical.
 - DSH Desktop manual acceptance remains required for retry after simulated transport loss and each guide shortcut.
