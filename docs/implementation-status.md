@@ -337,3 +337,15 @@
 ### Acceptance boundary
 - Identity confirmation is explicit user attestation, not automatic image recognition. No unrelated character artwork should be bound as the Whale.
 - User accepted dev.9 desktop baseline. dev.12 native-frame binding and PPL switching require a fresh DSH Desktop 0.2.2-rc.1 visual test.
+
+### dev.12 CI and Windows artifact evidence (2026-11-13)
+- Workflow Run `43375930719`: Node 24 and Node 24.9.0 both PASS.
+- Full project tests: 102 passed / 0 failed on each matrix leg.
+- Storage/Host/Client tests cover identity confirmation, action mapping, PPL/interaction resolution, binding persistence, unbind, cascade uninstall, frame integrity, reduced-motion and classic DSH client loading.
+- PPL compilation, DSH classic-script client loader and npm package verification: PASS.
+- Windows artifact `0.1.0-dev.12`: ZIP 3,519,499 bytes; ZIP CRC PASS. Inner TGZ 3,517,804 bytes; SHA-256 `2e5501e1f3975e6262f0633bc41911d03966d967b8c849b8d937643f9caf711e`, verified against `.sha256` and `package-info.json`.
+- Private Google Drive file updated in place; existing file ID and URL retained.
+
+### Remaining manual gate
+- User accepted dev.9's DSH Desktop baseline. dev.12's explicit identity confirmation, action mapping, actual PPL-driven frame switching, collapsed desktop pet playback, reduced-motion, unbind and restart persistence still require real DSH Desktop 0.2.2-rc.1 verification.
+- No matching authorized multi-frame Whale art pack has been supplied in this development thread. Kitty/ChrisKitty assets remain format/playback test material, not Whale art.
