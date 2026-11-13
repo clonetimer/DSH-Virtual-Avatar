@@ -62,3 +62,7 @@ test('Whale model settings tests the selected draft before allowing save', () =>
   assert.match(source, /modelTestResult\?\.status !== 'success'.*modelTestResult\.provider !== modelDraftProvider.*modelTestResult\.model !== modelDraftModel\.trim\(\)/su)
   assert.doesNotMatch(source, /modelCatalog\.selection\.provider !== modelDraftProvider \|\| modelCatalog\.selection\.model !== modelDraftModel\.trim\(\)/u)
 })
+
+test('Whale utility overlay renders every settings panel reachable from More', () => {
+  assert.match(source, /\['summary', 'profile', 'diagnostics', 'backups', 'memories', 'motion', 'model', 'background', 'help', 'ppl-config'\]\.includes\(activePanel\)/u)
+})
