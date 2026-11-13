@@ -115,3 +115,56 @@ test('motion pack startup reconciliation restores an interrupted uninstall and r
     assert.deepEqual(f.store.readMotionPackFrame(imported.pack.id, 'action/stand_0.png').bytes, PNG)
   } finally { f.store.close(); rmSync(f.directory, { recursive: true, force: true }) }
 })
+
+
+test('Whale motion binding requires identity confirmation and persists validated action mappings', () => {
+  const f = fixture()
+  try {
+    const imported = f.store.importMotionPack({ displayName: 'Whale Art Pack', petConfig, actConfig, catalog, frames })
+    assert.throws(
+      () => f.store.setMotionPackBinding({ packId: imported.pack.id, identityConfirmed: false, mapping: { idle: 'idle' } }),
+      { code: 'MOTION_IDENTITY_CONFIRMATION_REQUIRED' },
+    )
+    assert.throws(
+      () => f.store.setMotionPackBinding({ packId: imported.pack.id, identityConfirmed: true, mapping: { idle: 'missing' } }),
+      { code: 'MOTION_BINDING_ACTION_INVALID' },
+    )
+    assert.throws(
+      () => f.store.setMotionPackBinding({ packId: imported.pack.id, identityConfirmed: true, mapping: { cheerful: 'idle' } }),
+      { code: 'MOTION_BINDING_IDLE_REQUIRED' },
+    )
+
+    const binding = f.store.setMotionPackBinding({
+      packId: imported.pack.id,
+      identityConfirmed: true,
+      mapping: { idle: 'idle', thinking: 'pat', cheerful: 'pat', patting: 'pat', angry: null },
+    })
+    assert.equal(binding.packId, imported.pack.id)
+    assert.equal(binding.identityConfirmed, true)
+    assert.deepEqual(binding.mapping, { idle: 'idle', thinking: 'pat', cheerful: 'pat', patting: 'pat' })
+    assert.equal(f.store.getMotionPackBinding().displayName, 'Whale Art Pack')
+
+    f.store.close()
+    f.store = new SqliteAvatarStore(f.filename, { assetDirectory: f.assetDirectory })
+    assert.deepEqual(f.store.getMotionPackBinding().mapping, binding.mapping)
+    const cleared = f.store.clearMotionPackBinding()
+    assert.equal(cleared.cleared, true)
+    assert.equal(f.store.getMotionPackBinding(), null)
+    assert.deepEqual(f.store.clearMotionPackBinding(), { cleared: false, reason: 'MOTION_BINDING_NOT_FOUND' })
+  } finally { f.store.close(); rmSync(f.directory, { recursive: true, force: true }) }
+})
+
+test('removing a motion pack also removes its active Whale binding', () => {
+  const f = fixture()
+  try {
+    const imported = f.store.importMotionPack({ displayName: 'Whale Pack', petConfig, actConfig, catalog, frames })
+    f.store.setMotionPackBinding({
+      packId: imported.pack.id,
+      identityConfirmed: true,
+      mapping: { idle: 'idle' },
+    })
+    const removed = f.store.deleteMotionPack(imported.pack.id, { confirmed: true })
+    assert.equal(removed.deleted, true)
+    assert.equal(f.store.getMotionPackBinding(), null)
+  } finally { f.store.close(); rmSync(f.directory, { recursive: true, force: true }) }
+})
