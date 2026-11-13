@@ -134,6 +134,8 @@ test('built client preserves companion features without bundling its own React',
   assert.match(artifact, /prefersReducedMotion/)
   assert.match(artifact, /matchMedia\?\.\('\(prefers-reduced-motion: reduce\)'\)/)
   assert.match(artifact, /frames\.slice\(0, 12\)/)
+  assert.match(artifact, /动作帧读取失败，已恢复原有鲸鱼娘立绘/)
+  assert.match(artifact, /Math\.max\(15, runtimeMotionAction\.frameIntervalMs\)/)
   assert.match(artifact, /动作已绑定到鲸鱼娘/)
   assert.match(artifact, /导入到本地动作库（不启用）/)
   assert.match(artifact, /本地动作库/)
